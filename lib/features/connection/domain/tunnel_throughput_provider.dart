@@ -1,0 +1,115 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../services/vpn/vpn_provider.dart';
+import '../../session/domain/session_controller.dart';
+import '../../session/domain/session_status.dart';
+
+/// Live throughput (Mbps) when connected. Polls tunnel stats every second.
+class TunnelThroughputState {
+  const TunnelThroughputState({
+    this.downloadMbps,
+    this.uploadMbps,
+  });
+
+  final double? downloadMbps;
+  final double? uploadMbps;
+}
+
+class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
+  TunnelThroughputNotifier(this._ref)
+      : super(const TunnelThroughputState()) {
+    _sub = _ref.listen(sessionControllerProvider, _onSessionChanged);
+  }
+
+  final Ref _ref;
+  ProviderSubscription<dynamic>? _sub;
+  Timer? _timer;
+  int _lastRxBytes = 0;
+  int _lastTxBytes = 0;
+  DateTime? _lastSampleTime;
+
+  static const _emaAlpha = 0.35;
+  static const _minMbps = 0.05;
+
+  void _onSessionChanged(dynamic prev, dynamic next) {
+    if (next.status == SessionStatus.connected) {
+      _startPolling();
+    } else {
+      _stopPolling();
+      state = const TunnelThroughputState();
+    }
+  }
+
+  void _startPolling() {
+    _stopPolling();
+    _lastRxBytes = 0;
+    _lastTxBytes = 0;
+    _lastSampleTime = null;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _poll());
+    _poll();
+  }
+
+  void _stopPolling() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  double? _smooth(double? previous, double sample) {
+    if (sample < _minMbps) {
+      return previous;
+    }
+    if (previous == null || previous < _minMbps) {
+      return sample;
+    }
+    return previous * (1 - _emaAlpha) + sample * _emaAlpha;
+  }
+
+  Future<void> _poll() async {
+    try {
+      final port = _ref.read(openVpnPortProvider);
+      final stats = await port.getTunnelStats();
+      final rx = _parseBytes(stats['byte_in'] ?? stats['rxBytes']);
+      final tx = _parseBytes(stats['byte_out'] ?? stats['txBytes']);
+      final now = DateTime.now();
+
+      if (_lastSampleTime != null && rx >= _lastRxBytes && tx >= _lastTxBytes) {
+        final elapsed = now.difference(_lastSampleTime!).inMilliseconds / 1000.0;
+        if (elapsed > 0.5) {
+          final rxDelta = (rx - _lastRxBytes) / elapsed;
+          final txDelta = (tx - _lastTxBytes) / elapsed;
+          final instantDl = (rxDelta * 8) / 1000000;
+          final instantUl = (txDelta * 8) / 1000000;
+          state = TunnelThroughputState(
+            downloadMbps: _smooth(state.downloadMbps, instantDl),
+            uploadMbps: _smooth(state.uploadMbps, instantUl),
+          );
+        }
+      }
+      _lastRxBytes = rx;
+      _lastTxBytes = tx;
+      _lastSampleTime = now;
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  static int _parseBytes(dynamic value) {
+    if (value == null) return 0;
+    if (value is num) return value.toInt();
+    final s = value.toString().trim().replaceAll(RegExp(r'[,\s]'), '');
+    return int.tryParse(s) ?? 0;
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    _sub?.close();
+    super.dispose();
+  }
+}
+
+final tunnelThroughputProvider =
+    StateNotifierProvider<TunnelThroughputNotifier, TunnelThroughputState>(
+        (ref) => TunnelThroughputNotifier(ref));

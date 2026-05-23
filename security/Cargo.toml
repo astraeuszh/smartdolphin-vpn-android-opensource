@@ -1,0 +1,28 @@
+[package]
+name = "sd-guard-android"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+name = "sd_guard_android"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "sd-guard"
+path = "src/main.rs"
+
+[dependencies]
+aes-gcm = "0.10"
+base64 = "0.22"
+bcrypt = "0.17"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+hex = "0.4"
+hkdf = "0.12"
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+
+# 平台适配：JNI 接入与 Android ID / Keystore 见 docs/SECURITY_RUST_SPEC.md

@@ -1,0 +1,21 @@
+// 国内 Maven 镜像（Gradle init 脚本，配合 GRADLE_USER_HOME 使用）
+allprojects {
+    buildscript {
+        repositories {
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/central' }
+            maven { url 'https://maven.aliyun.com/repository/public' }
+            maven { url 'https://storage.flutter-io.cn/download.flutter.io' }
+            google()
+            mavenCentral()
+        }
+    }
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://storage.flutter-io.cn/download.flutter.io' }
+        google()
+        mavenCentral()
+    }
+}

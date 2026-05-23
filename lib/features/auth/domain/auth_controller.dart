@@ -1,0 +1,235 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../services/remote/console_auth.dart';
+import '../../usage/data_usage_controller.dart';
+import '../data/auth_repository.dart';
+import 'account_session.dart';
+
+enum AuthStatus { unknown, loading, guest, authenticated, pending, banned, error }
+
+class AuthState {
+  const AuthState({
+    this.status = AuthStatus.unknown,
+    this.session,
+    this.message,
+    this.code,
+  });
+
+  final AuthStatus status;
+  final AccountSession? session;
+  final String? message;
+  final String? code;
+
+  AuthState copyWith({
+    AuthStatus? status,
+    AccountSession? session,
+    String? message,
+    String? code,
+  }) {
+    return AuthState(
+      status: status ?? this.status,
+      session: session ?? this.session,
+      message: message,
+      code: code,
+    );
+  }
+}
+
+final authControllerProvider =
+    StateNotifierProvider<AuthController, AuthState>((ref) {
+  return AuthController(ref);
+});
+
+class AuthController extends StateNotifier<AuthState> {
+  AuthController(this._ref) : super(const AuthState()) {
+    bootstrap();
+  }
+
+  final Ref _ref;
+
+  AuthRepository get _repo => _ref.read(authRepositoryProvider);
+
+  Future<void> bootstrap() async {
+    state = state.copyWith(status: AuthStatus.loading);
+    final saved = await _repo.loadSession();
+    if (saved == null || saved.username.isEmpty) {
+      state = const AuthState(status: AuthStatus.guest);
+      return;
+    }
+    try {
+      final updated = await _repo.refresh(saved);
+      _applySession(updated);
+    } on ConsoleAuthException catch (e) {
+      if (e.code == 'auth_failed' || e.code == 'E6008') {
+        await _repo.clearSession();
+        state = AuthState(status: AuthStatus.guest, code: e.code, message: e.message);
+        return;
+      }
+      state = AuthState(
+        status: e.code == 'banned' ? AuthStatus.banned : AuthStatus.error,
+        session: saved,
+        code: e.code,
+        message: e.message,
+      );
+    } catch (e) {
+      state = AuthState(
+        status: AuthStatus.error,
+        session: saved,
+        message: e.toString(),
+      );
+    }
+  }
+
+  Future<void> _syncTrafficPolicyLimit(AccountSession session) async {
+    final policy = session.trafficPolicy;
+    if (!policy.hasQuotaLimit) return;
+    final serverMax = policy.serverMaxLimitBytes;
+    if (serverMax == null || serverMax <= 0) return;
+
+    final localLimit = _ref.read(dataUsageControllerProvider).monthlyLimitBytes;
+    if (localLimit != null && localLimit < serverMax) {
+      return;
+    }
+    await _ref.read(dataUsageControllerProvider.notifier).setMonthlyLimit(serverMax);
+  }
+
+  void _applySession(AccountSession session) {
+    unawaited(_syncTrafficPolicyLimit(session));
+    if (session.banned) {
+      state = AuthState(status: AuthStatus.banned, session: session, message: '账户已封禁');
+      return;
+    }
+    if (session.isPending) {
+      state = AuthState(
+        status: AuthStatus.pending,
+        session: session,
+        message: '已注册，等待管理员开通 VPN',
+      );
+      return;
+    }
+    state = AuthState(status: AuthStatus.authenticated, session: session);
+  }
+
+  Future<void> login(String username, String password) async {
+    state = state.copyWith(status: AuthStatus.loading, message: null);
+    try {
+      final session = await _repo.login(username, password);
+      _applySession(session);
+    } on ConsoleAuthException catch (e) {
+      state = AuthState(status: AuthStatus.error, code: e.code, message: e.message);
+    } catch (e) {
+      state = AuthState(status: AuthStatus.error, message: e.toString());
+    }
+  }
+
+  Future<void> register({
+    required String displayName,
+    required String email,
+    required String password,
+    required String verificationCode,
+  }) async {
+    state = state.copyWith(status: AuthStatus.loading, message: null);
+    try {
+      final session = await _repo.register(
+        username: displayName,
+        password: password,
+        email: email,
+        verificationCode: verificationCode,
+      );
+      _applySession(session);
+    } on ConsoleAuthException catch (e) {
+      state = AuthState(status: AuthStatus.error, code: e.code, message: e.message);
+    } catch (e) {
+      state = AuthState(status: AuthStatus.error, message: e.toString());
+    }
+  }
+
+  Future<void> logout() async {
+    await _repo.clearSession();
+    state = const AuthState(status: AuthStatus.guest);
+  }
+
+  Future<void> refreshSession() async {
+    final saved = await _repo.loadSession() ?? state.session;
+    if (saved == null) return;
+    final updated = await _repo.refresh(saved);
+    _applySession(updated);
+  }
+
+  Future<void> applySessionUpdate(AccountSession session) async {
+    await _repo.saveSession(session);
+    _applySession(session);
+  }
+
+  Future<void> updateUsername({
+    required String oldUsername,
+    required String newUsername,
+    required String password,
+  }) async {
+    final updated = await _repo.updateUsername(
+      oldUsername: oldUsername,
+      newUsername: newUsername,
+      password: password,
+    );
+    _applySession(updated);
+  }
+
+  Future<void> updateEmail({
+    required String currentEmail,
+    required String newEmail,
+    required String password,
+  }) async {
+    final updated = await _repo.updateEmail(
+      currentEmail: currentEmail,
+      newEmail: newEmail,
+      password: password,
+    );
+    _applySession(updated);
+  }
+
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final updated = await _repo.changePassword(
+      oldPassword: oldPassword,
+      newPassword: newPassword,
+    );
+    _applySession(updated);
+  }
+
+  Future<void> resetPasswordWithCode({
+    required String email,
+    required String verificationCode,
+    required String newPassword,
+  }) async {
+    final updated = await _repo.resetPasswordWithCode(
+      email: email,
+      verificationCode: verificationCode,
+      newPassword: newPassword,
+    );
+    _applySession(updated);
+  }
+
+  Future<bool> ensureVpnAccess() async {
+    final s = state.session;
+    if (s == null) return false;
+    try {
+      final updated = await _repo.refresh(s);
+      _applySession(updated);
+      return updated.canUseVpn;
+    } on ConsoleAuthException catch (e) {
+      state = AuthState(
+        status: e.code == 'banned' ? AuthStatus.banned : AuthStatus.error,
+        session: s,
+        code: e.code,
+        message: e.message,
+      );
+      return false;
+    } catch (_) {
+      return s.canUseVpn;
+    }
+  }
+}
