@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 
 import 'package:characters/characters.dart';
 
@@ -32,25 +33,32 @@ class ServerTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final hostLabel =
-        (server.hostName?.isNotEmpty ?? false) ? server.hostName! : server.endpoint;
-    final ipLabel =
-        (server.ip?.isNotEmpty ?? false) ? server.ip! : server.endpoint.split(':').first;
+    final hostLabel = (server.hostName?.isNotEmpty ?? false)
+        ? server.hostName!
+        : server.endpoint;
+    final ipLabel = (server.ip?.isNotEmpty ?? false)
+        ? server.ip!
+        : server.endpoint.split(':').first;
     final locationSegments = [
       localizedCountryName(server.countryCode, l10n),
       localizedServerLocation(server, l10n),
     ];
     final locationLabel = locationSegments.join(' • ');
     final pingValue = latencyMs ?? server.pingMs;
-    final pingText = (pingValue != null && pingValue < 9999) ? '$pingValue ms' : '--';
+    final pingText =
+        (pingValue != null && pingValue < 9999) ? '$pingValue ms' : '--';
     final downloadValue = server.downloadSpeed ?? server.bandwidth;
     final uploadValue = server.uploadSpeed ?? downloadValue;
     final downloadText = cachedDownloadMbps != null
         ? '${cachedDownloadMbps!.toStringAsFixed(1)} Mbps'
-        : downloadValue != null ? _formatBandwidth(downloadValue) : '--';
+        : downloadValue != null
+            ? _formatBandwidth(downloadValue)
+            : '--';
     final uploadText = cachedUploadMbps != null
         ? '${cachedUploadMbps!.toStringAsFixed(1)} Mbps'
-        : uploadValue != null ? _formatBandwidth(uploadValue) : '--';
+        : uploadValue != null
+            ? _formatBandwidth(uploadValue)
+            : '--';
     final hasSessions = server.sessions != null;
 
     return ListTile(
@@ -79,14 +87,19 @@ class ServerTile extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Host: $hostLabel',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withOpacity(0.7),
             ),
           ),
           Text(
             'IP: $ipLabel',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withOpacity(0.7),
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
           const SizedBox(height: 6),

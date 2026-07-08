@@ -64,7 +64,8 @@ const _dismissedAnnouncementsKey = 'announcements.dismissed_ids';
 const _dismissedAnnouncementVersionsKey = 'announcements.dismissed_versions';
 const _lastSeenAnnouncementKey = 'announcements.last_seen_updated_at';
 
-class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
   final GlobalKey _serverCarouselKey = GlobalKey();
   final GlobalKey _connectKey = GlobalKey();
   final GlobalKey _statusKey = GlobalKey();
@@ -72,6 +73,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   int _tabIndex = 0;
   bool _navDragging = false;
   double? _navIndicatorLeft;
+
   /// 游戏模式全屏：底栏收起，入口为小球。
   bool _gameModeExpanded = false;
   bool _didSchedulePostFrameCallback = false;
@@ -116,7 +118,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         unawaited(ref.read(authControllerProvider.notifier).refreshSession());
         unawaited(_maybeShowAnnouncement());
         // 息屏/后台数小时后隧道可能已死；恢复前台时探测 Clash API 并按需硬重连。
-        unawaited(ref.read(sessionControllerProvider.notifier).checkTunnelHealthOnResume());
+        unawaited(ref
+            .read(sessionControllerProvider.notifier)
+            .checkTunnelHealthOnResume());
       });
     }
   }
@@ -168,17 +172,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
       );
     }
-    unawaited(_warmUpVpn());
+    Future<void>.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      unawaited(_warmUpVpn());
+    });
   }
 
-  Future<Map<int, int>> _loadDismissedAnnouncementVersions(PrefsStore prefs) async {
+  Future<Map<int, int>> _loadDismissedAnnouncementVersions(
+      PrefsStore prefs) async {
     final raw = prefs.getString(_dismissedAnnouncementVersionsKey);
     if (raw != null && raw.isNotEmpty) {
       try {
         final map = jsonDecode(raw) as Map<String, dynamic>;
         return {
           for (final e in map.entries)
-            if (int.tryParse(e.key) != null && int.tryParse('${e.value}') != null)
+            if (int.tryParse(e.key) != null &&
+                int.tryParse('${e.value}') != null)
               int.parse(e.key): int.parse('${e.value}'),
         };
       } catch (_) {}
@@ -237,7 +246,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
       final prefs = await ref.read(prefsStoreProvider.future);
       final dismissed = await _loadDismissedAnnouncementVersions(prefs);
-      final unseen = rows.where((row) => !_announcementSeen(row, dismissed)).toList()
+      final unseen = rows
+          .where((row) => !_announcementSeen(row, dismissed))
+          .toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       if (unseen.isEmpty || !mounted) return;
 
@@ -291,8 +302,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ref.read(openVpnPortProvider).setGameModeOverlayActive(v);
       unawaited(_syncGameModeLocalOverlay(v));
       if (v) {
-        final connected =
-            ref.read(sessionControllerProvider).status == SessionStatus.connected;
+        final connected = ref.read(sessionControllerProvider).status ==
+            SessionStatus.connected;
         if (connected) {
           unawaited(_safeDisconnect(ref));
         }
@@ -368,7 +379,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   void _onDataUsageChanged(DataUsageState? previous, DataUsageState next) {
     if (!mounted) return;
-    if (next.pendingTraffic90Dialog && !(previous?.pendingTraffic90Dialog ?? false)) {
+    if (next.pendingTraffic90Dialog &&
+        !(previous?.pendingTraffic90Dialog ?? false)) {
       final l10n = AppLocalizations.of(context);
       unawaited(
         showErrorDialog(
@@ -378,7 +390,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           title: l10n.homeTrafficUsageTitle,
           onClose: () {
             unawaited(
-              ref.read(dataUsageControllerProvider.notifier).clearTraffic90Dialog(),
+              ref
+                  .read(dataUsageControllerProvider.notifier)
+                  .clearTraffic90Dialog(),
             );
           },
         ),
@@ -388,11 +402,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(connectionQualityControllerProvider);
     ref.listen<SessionState>(sessionControllerProvider, _onSessionChanged);
-    ref.listen<DataUsageState>(dataUsageControllerProvider, _onDataUsageChanged);
+    ref.listen<DataUsageState>(
+        dataUsageControllerProvider, _onDataUsageChanged);
     final l10n = context.l10n;
     final theme = Theme.of(context);
+    final sessionState = ref.watch(sessionControllerProvider);
+    if (sessionState.status == SessionStatus.connected) {
+      ref.watch(connectionQualityControllerProvider);
+    }
     final blurSigma = ref.watch(deviceMemoryTierProvider).when(
           data: (t) => t == MemoryTier.low ? 0.0 : HiVpnGlass.blurSigmaNav,
           loading: () => HiVpnGlass.blurSigmaNav,
@@ -451,10 +469,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     AppLocalizations l10n, {
     required double blurSigma,
   }) {
-    return FrostedGlass(
+    return LiquidGlass(
       borderRadius: BorderRadius.circular(999),
       blurSigma: blurSigma,
-      surface: GlassSurface.nav,
+      liveBlur: true,
       child: SizedBox(
         height: 68,
         child: LayoutBuilder(
@@ -483,7 +501,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             }
 
             final pillWidth = slotWidth - 8;
-            final pillLeft = _navIndicatorLeft ?? (indicatorLeft(_tabIndex) + 4);
+            final pillLeft =
+                _navIndicatorLeft ?? (indicatorLeft(_tabIndex) + 4);
 
             void beginNavDrag() {
               setState(() {
@@ -550,81 +569,103 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(999),
-                        color: Colors.white,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.98),
+                            const Color(0xFFEAF3FF).withValues(alpha: 0.78),
+                          ],
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.98),
+                          width: 1,
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 5,
-                            offset: const Offset(0, 1),
+                            color: theme.colorScheme.primary
+                                .withValues(alpha: 0.2),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                            spreadRadius: -10,
+                          ),
+                          BoxShadow(
+                            color: Colors.white.withValues(alpha: 0.86),
+                            blurRadius: 12,
+                            offset: const Offset(-3, -4),
+                            spreadRadius: -7,
                           ),
                         ],
                       ),
                     ),
                   ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: hPad),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _bottomNavIcon(
-                          0,
-                          Icons.home_outlined,
-                          Icons.home_rounded,
-                          l10n.navHome,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: hPad),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _bottomNavIcon(
+                            0,
+                            Icons.home_outlined,
+                            Icons.home_rounded,
+                            l10n.navHome,
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: _bottomNavIcon(
-                          1,
-                          Icons.speed_outlined,
-                          Icons.speed,
-                          l10n.navSpeedTest,
-                          buttonKey: _speedTabKey,
+                        Expanded(
+                          child: _bottomNavIcon(
+                            1,
+                            Icons.speed_outlined,
+                            Icons.speed,
+                            l10n.navSpeedTest,
+                            buttonKey: _speedTabKey,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: gameGap),
-                      Expanded(
-                        child: _bottomNavIcon(
-                          2,
-                          Icons.dashboard_outlined,
-                          Icons.dashboard,
-                          l10n.navDashboard,
+                        const SizedBox(width: gameGap),
+                        Expanded(
+                          child: _bottomNavIcon(
+                            2,
+                            Icons.dashboard_outlined,
+                            Icons.dashboard,
+                            l10n.navDashboard,
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: _bottomNavIcon(
-                          3,
-                          Icons.settings_outlined,
-                          Icons.settings,
-                          l10n.navSettings,
+                        Expanded(
+                          child: _bottomNavIcon(
+                            3,
+                            Icons.settings_outlined,
+                            Icons.settings,
+                            l10n.navSettings,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: 8,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () {
-                        unawaited(ref.read(hapticsServiceProvider).impact());
-                        _setGameModeExpanded(true);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Icon(
-                          Icons.sports_esports_rounded,
-                          color: theme.colorScheme.onSurfaceVariant,
-                          size: 26,
+                  Positioned(
+                    top: 8,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () {
+                          unawaited(ref.read(hapticsServiceProvider).impact());
+                          _setGameModeExpanded(true);
+                        },
+                        child: LiquidGlass(
+                          borderRadius: BorderRadius.circular(999),
+                          blurSigma: blurSigma,
+                          liveBlur: false,
+                          padding: const EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.sports_esports_rounded,
+                            color: theme.colorScheme.primary,
+                            size: 25,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             );
           },
         ),
@@ -653,7 +694,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         });
       },
       icon: Icon(selected ? filled : outline, size: 26),
-      color: selected ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.88),
+      color:
+          selected ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.88),
     );
   }
 
@@ -664,7 +706,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     final liveThroughput = ref.watch(tunnelThroughputProvider);
     final speedCache = ref.watch(serverSpeedCacheProvider);
     final theme = Theme.of(context);
-    final titleBaseStyle = theme.textTheme.headlineSmall ?? const TextStyle(fontSize: 24);
+    final titleBaseStyle =
+        theme.textTheme.headlineSmall ?? const TextStyle(fontSize: 24);
     final titleStyle = titleBaseStyle.copyWith(fontWeight: FontWeight.w700);
 
     final isPreparing = session.status == SessionStatus.preparing;
@@ -734,7 +777,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   ),
                 ],
               ),
-              if (session.status == SessionStatus.error && session.errorMessage != null) ...[
+              if (session.status == SessionStatus.error &&
+                  session.errorMessage != null) ...[
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -744,7 +788,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline, color: theme.colorScheme.error, size: 24),
+                      Icon(Icons.error_outline,
+                          color: theme.colorScheme.error, size: 24),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -770,11 +815,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 const SizedBox(height: 23),
                 GestureDetector(
                   onTap: () => unawaited(_showServerPicker(context)),
-                  child: FrostedGlass(
+                  child: LiquidGlass(
                     margin: const EdgeInsets.symmetric(horizontal: 24),
                     borderRadius: BorderRadius.circular(22),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                    surface: GlassSurface.raised,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 14),
                     child: Row(
                       children: [
                         if (selectedServer != null)
@@ -789,7 +834,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                selectedServer?.name ?? l10n.selectServerToBegin,
+                                selectedServer?.name ??
+                                    l10n.selectServerToBegin,
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -802,7 +848,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                                     ? selectedServer.countryCode.toUpperCase()
                                     : l10n.noServerSelected,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.62),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -812,7 +859,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                         ),
                         Icon(
                           Icons.keyboard_arrow_down_rounded,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.45),
                         ),
                       ],
                     ),
@@ -835,7 +883,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                                 : isAttemptCancelable
                                     ? l10n.statusConnecting
                                     : l10n.connect,
-                            statusText: isAttemptCancelable ? l10n.tapToCancel : null,
+                            statusText:
+                                isAttemptCancelable ? l10n.tapToCancel : null,
                             onTap: () async {
                               await ref.read(hapticsServiceProvider).impact();
                               if (isConnected) {
@@ -845,17 +894,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                               } else {
                                 final server = selectedServer;
                                 if (server == null) {
-                                  showTopSnackBar(context, l10n.pleaseSelectServer);
+                                  showTopSnackBar(
+                                      context, l10n.pleaseSelectServer);
                                   return;
                                 }
                                 final ok = await ref
                                     .read(authControllerProvider.notifier)
                                     .ensureVpnAccess();
                                 if (!ok) {
-                                  final msg = ref.read(authControllerProvider).message ??
+                                  final currentAuth =
+                                      ref.read(authControllerProvider);
+                                  if (currentAuth.session != null &&
+                                      currentAuth.session?.banned != true) {
+                                    await ref
+                                        .read(
+                                            sessionControllerProvider.notifier)
+                                        .connect(
+                                            context: context, server: server);
+                                    return;
+                                  }
+                                  final msg = currentAuth.message ??
                                       l10n.homeLoginVpnRequired;
                                   if (context.mounted) {
-                                    showTopSnackBar(context, msg, isError: true);
+                                    showTopSnackBar(context, msg,
+                                        isError: true);
                                   }
                                   return;
                                 }
@@ -873,7 +935,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                           Text(
                             l10n.unlockSecureAccess,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.52),
                             ),
                           ),
                       ],
@@ -929,20 +992,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Future<void> _showServerPicker(BuildContext context) async {
     await ref.read(hapticsServiceProvider).selection();
-      showModalBottomSheet<void>(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => HiVpnSheetScaffold(
         child: DraggableScrollableSheet(
-        initialChildSize: 0.55,
-        minChildSize: 0.35,
-        maxChildSize: 0.92,
-        expand: false,
-        builder: (_, scrollController) => ServerPickerSheet(
-          scrollController: scrollController,
+          initialChildSize: 0.55,
+          minChildSize: 0.35,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (_, scrollController) => ServerPickerSheet(
+            scrollController: scrollController,
+          ),
         ),
-      ),
       ),
     );
   }
@@ -955,7 +1018,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }).join();
   }
 }
-
 
 class _HomeConnectionStats extends ConsumerWidget {
   const _HomeConnectionStats({
@@ -1002,7 +1064,8 @@ class _HomeConnectionStats extends ConsumerWidget {
         downloadText = '${cached.downloadMbps.toStringAsFixed(1)} Mbps';
         uploadText = '${cached.uploadMbps.toStringAsFixed(1)} Mbps';
       } else if (server != null) {
-        downloadText = _formatBandwidth(server!.downloadSpeed ?? server!.bandwidth);
+        downloadText =
+            _formatBandwidth(server!.downloadSpeed ?? server!.bandwidth);
         uploadText = _formatBandwidth(server!.uploadSpeed);
       }
     } else if (localStats != null) {
@@ -1014,17 +1077,15 @@ class _HomeConnectionStats extends ConsumerWidget {
       }
     }
 
-    final packetLossText = packetLoss != null
-        ? '${packetLoss.toStringAsFixed(1)}%'
-        : '--';
+    final packetLossText =
+        packetLoss != null ? '${packetLoss.toStringAsFixed(1)}%' : '--';
 
-    final ipText = (isConnected ? publicIp : null) ??
-        localStats?.ip ??
-        ipInfo?.ip ??
-        '--';
+    final ipText =
+        (isConnected ? publicIp : null) ?? localStats?.ip ?? ipInfo?.ip ?? '--';
 
     final latencyMs = systemLatency;
-    final latencyText = latencyMs != null && latencyMs > 0 ? '$latencyMs ms' : '--';
+    final latencyText =
+        latencyMs != null && latencyMs > 0 ? '$latencyMs ms' : '--';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1050,10 +1111,9 @@ class _HomeConnectionStats extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
-          FrostedGlass(
-            borderRadius: BorderRadius.circular(20),
+          LiquidGlass(
+            borderRadius: BorderRadius.circular(24),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            surface: GlassSurface.raised,
             child: Row(
               children: [
                 Expanded(
@@ -1061,6 +1121,7 @@ class _HomeConnectionStats extends ConsumerWidget {
                     label: l10n.speedTestIpLabel,
                     value: ipText,
                     theme: theme,
+                    singleLine: true,
                   ),
                 ),
                 _infoDivider(),
@@ -1097,7 +1158,8 @@ class _HomeConnectionStats extends ConsumerWidget {
     if (isConnected && server != null) {
       return englishServerAddress(server);
     }
-    final cc = (localStats?.countryCode ?? ipInfo?.countryCode ?? '').toUpperCase();
+    final cc =
+        (localStats?.countryCode ?? ipInfo?.countryCode ?? '').toUpperCase();
     if (_isCnLike(cc)) {
       return formatIpDisplayLocation(
         countryCode: cc,
@@ -1192,10 +1254,9 @@ class _HomeStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FrostedGlass(
+    return LiquidGlass(
       borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      surface: GlassSurface.raised,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1231,11 +1292,13 @@ class _HomeInfoCell extends StatelessWidget {
     required this.label,
     required this.value,
     required this.theme,
+    this.singleLine = false,
   });
 
   final String label;
   final String value;
   final ThemeData theme;
+  final bool singleLine;
 
   @override
   Widget build(BuildContext context) {
@@ -1258,17 +1321,20 @@ class _HomeInfoCell extends StatelessWidget {
           value,
           style: theme.textTheme.bodySmall?.copyWith(
             fontWeight: FontWeight.w700,
-            fontSize: 12,
+            fontSize: singleLine ? 10 : 12,
+            fontFeatures:
+                singleLine ? const [FontFeature.tabularFigures()] : null,
+            letterSpacing: 0,
           ),
           textAlign: TextAlign.center,
-          maxLines: 2,
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          softWrap: false,
         ),
       ],
     );
   }
 }
-
 
 class _CountryCardWidget extends StatelessWidget {
   const _CountryCardWidget({
@@ -1361,14 +1427,16 @@ class _CountryCardWidget extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                            color: theme.colorScheme.surfaceVariant
+                                .withOpacity(0.5),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             card.latencyLabel(l10n),
                             style: theme.textTheme.labelSmall?.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface.withOpacity(0.8),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.8),
                             ),
                           ),
                         ),
@@ -1441,7 +1509,9 @@ class _CountryCardWidget extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          card.server == null ? l10n.homeNoNodesAvailable : l10n.homeServerTimeoutLabel,
+                          card.server == null
+                              ? l10n.homeNoNodesAvailable
+                              : l10n.homeServerTimeoutLabel,
                           style: theme.textTheme.labelSmall?.copyWith(
                             fontWeight: FontWeight.w600,
                             color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -1568,7 +1638,8 @@ class _ServerCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                          color:
+                              theme.colorScheme.surfaceVariant.withOpacity(0.5),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -1608,6 +1679,7 @@ class _ServerCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -1618,17 +1690,17 @@ class _ServerCard extends StatelessWidget {
                         child: _MetricTile(
                           label: l10n.serverDownloadLabel,
                           value: downloadText,
-                          ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _MetricTile(
-                            label: l10n.serverUploadLabel,
-                            value: uploadText,
-                          ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MetricTile(
+                          label: l10n.serverUploadLabel,
+                          value: uploadText,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
                   if (sessionsValue != null) ...[
                     const SizedBox(height: 6),
                     Text(
@@ -1699,10 +1771,10 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return FrostedGlass(
+    return LiquidGlass(
       borderRadius: BorderRadius.circular(16),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      surface: GlassSurface.flat,
+      blurSigma: 10,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1793,7 +1865,8 @@ class _InfoRow extends StatelessWidget {
           flex: 3,
           child: Text(
             value,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
             textAlign: TextAlign.end,
             overflow: TextOverflow.ellipsis,
             maxLines: 2,

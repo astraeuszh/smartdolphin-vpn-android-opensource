@@ -45,32 +45,50 @@ class GameDecelTierSection extends ConsumerWidget {
           SizedBox(height: isDrawer ? 12 : 16),
         ],
         ...GameDecelTier.values.map(
-          (t) => RadioListTile<GameDecelTier>(
-            value: t,
-            groupValue: tier,
-            dense: isDrawer,
-            visualDensity:
-                isDrawer ? VisualDensity.compact : VisualDensity.standard,
-            contentPadding: EdgeInsets.zero,
-            title: Row(
-              children: [
-                Expanded(child: Text(_decelTierTitle(t, l10n))),
-                IconButton(
-                  tooltip: l10n.gameDecelTooltipHelp,
-                  icon: Icon(
-                    Icons.info_outline,
-                    size: isDrawer ? 20 : 22,
-                    color: cs.primary,
-                  ),
-                  onPressed: () => showDecelTierInfoDialog(context, ref, t, l10n),
+          (t) => Padding(
+            padding: EdgeInsets.only(bottom: isDrawer ? 8 : 10),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: isDrawer
+                    ? Colors.white.withValues(alpha: 0.78)
+                    : cs.surfaceContainerLow.withValues(alpha: 0.42),
+                borderRadius: BorderRadius.circular(isDrawer ? 16 : 18),
+                border: Border.all(
+                  color: cs.outline.withValues(alpha: 0.12),
                 ),
-              ],
+              ),
+              child: RadioListTile<GameDecelTier>(
+                value: t,
+                groupValue: tier,
+                dense: isDrawer,
+                visualDensity:
+                    isDrawer ? VisualDensity.compact : VisualDensity.standard,
+                contentPadding: const EdgeInsets.only(left: 6, right: 2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(isDrawer ? 16 : 18),
+                ),
+                title: Row(
+                  children: [
+                    Expanded(child: Text(_decelTierTitle(t, l10n))),
+                    IconButton(
+                      tooltip: l10n.gameDecelTooltipHelp,
+                      icon: Icon(
+                        Icons.info_outline,
+                        size: isDrawer ? 20 : 22,
+                        color: cs.primary,
+                      ),
+                      onPressed: () =>
+                          showDecelTierInfoDialog(context, ref, t, l10n),
+                    ),
+                  ],
+                ),
+                onChanged: (v) async {
+                  if (v == null) return;
+                  await ref.read(hapticsServiceProvider).selection();
+                  await ref.read(gameDecelTierProvider.notifier).setTier(v);
+                },
+              ),
             ),
-            onChanged: (v) async {
-              if (v == null) return;
-              await ref.read(hapticsServiceProvider).selection();
-              await ref.read(gameDecelTierProvider.notifier).setTier(v);
-            },
           ),
         ),
       ],

@@ -36,9 +36,9 @@ ThemeData buildHiVpnTheme({String accentSeed = 'ocean'}) {
   );
 
   final textTheme = ThemeData.light().textTheme.apply(
-    bodyColor: colorScheme.onSurface,
-    displayColor: colorScheme.onSurface,
-  );
+        bodyColor: colorScheme.onSurface,
+        displayColor: colorScheme.onSurface,
+      );
 
   return ThemeData(
     colorScheme: colorScheme,
@@ -62,7 +62,7 @@ ThemeData buildHiVpnTheme({String accentSeed = 'ocean'}) {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: HiVpnGlass.sheetBackground,
+      backgroundColor: HiVpnGlass.fillStrong,
       surfaceTintColor: Colors.transparent,
       titleTextStyle: TextStyle(
         color: colorScheme.onSurface,
@@ -100,10 +100,14 @@ ThemeData buildHiVpnTheme({String accentSeed = 'ocean'}) {
       ),
     ),
     cardTheme: CardThemeData(
-      color: HiVpnGlass.fill,
+      color: HiVpnGlass.fillStrong,
       elevation: 0,
+      shadowColor: const Color(0xFF64748B).withValues(alpha: 0.16),
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.88)),
+      ),
       margin: EdgeInsets.zero,
     ),
     navigationBarTheme: NavigationBarThemeData(
@@ -144,21 +148,22 @@ ThemeData buildHiVpnTheme({String accentSeed = 'ocean'}) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: HiVpnGlass.fillSubtle,
+      fillColor: Colors.white.withValues(alpha: 0.68),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: HiVpnColors.mutedGray.withValues(alpha: 0.55)),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.9)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: HiVpnColors.mutedGray.withValues(alpha: 0.55)),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.9)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
       ),
       labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-      hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8)),
+      hintStyle:
+          TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8)),
     ),
   );
 }

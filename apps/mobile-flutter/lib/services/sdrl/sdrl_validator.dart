@@ -28,7 +28,7 @@ class SdrlValidator {
       errors.add(const SdrlDiagnostic(
         severity: 'error',
         code: 'E001',
-        message: '缺少 version 声明（例如 version 1.0;）',
+        message: 'Missing version declaration (for example: version 1.0;)',
       ));
     }
 
@@ -47,7 +47,7 @@ class SdrlValidator {
           const SdrlDiagnostic(
             severity: 'error',
             code: 'E002',
-            message: '缺少 profile 或 rule 声明。',
+            message: 'Missing profile or rule declaration.',
           ),
         ],
       );
@@ -70,7 +70,8 @@ class SdrlValidator {
         return SdrlDiagnostic(
           severity: 'error',
           code: 'E010',
-          message: 'version 拼写或格式可能有误，应为 version 1.0;',
+          message:
+              'The version spelling or format looks invalid. Expected: version 1.0;',
           line: i + 1,
         );
       }
@@ -79,7 +80,7 @@ class SdrlValidator {
         return SdrlDiagnostic(
           severity: 'error',
           code: 'E011',
-          message: 'version 行末尾缺少分号 ;',
+          message: 'The version line is missing a trailing semicolon (;)',
           line: i + 1,
         );
       }
@@ -103,7 +104,7 @@ class SdrlValidator {
         out.add(SdrlDiagnostic(
           severity: 'warning',
           code: 'W001',
-          message: 'rule 行可能缺少分号或左大括号',
+          message: 'The rule line may be missing a semicolon or opening brace',
           line: i + 1,
         ));
       }
@@ -122,7 +123,7 @@ class SdrlValidator {
           return SdrlDiagnostic(
             severity: 'error',
             code: 'E003',
-            message: '大括号不匹配（多余的 }）',
+            message: 'Brace mismatch (extra })',
             line: _lineOf(text, i),
           );
         }
@@ -132,7 +133,7 @@ class SdrlValidator {
       return const SdrlDiagnostic(
         severity: 'error',
         code: 'E003',
-        message: '大括号不匹配（缺少 }）',
+        message: 'Brace mismatch (missing })',
       );
     }
     return null;
@@ -188,6 +189,5 @@ class SdrlValidationResult {
   List<SdrlDiagnostic> get errors =>
       diagnostics.where((d) => d.isError).toList();
 
-  String? get message =>
-      errors.isNotEmpty ? errors.first.displayLine : null;
+  String? get message => errors.isNotEmpty ? errors.first.displayLine : null;
 }

@@ -1,13 +1,9 @@
 import 'package:flutter/widgets.dart';
 
 import '../features/connection/domain/connection_quality.dart';
-import 'app_strings_de.dart';
 import 'app_strings_en.dart';
 import 'app_strings_es.dart';
-import 'app_strings_fr.dart';
 import 'app_strings_ja.dart';
-import 'app_strings_ko.dart';
-import 'app_strings_pt_br.dart';
 import 'app_strings_zh.dart';
 import 'app_strings_zh_hant.dart';
 
@@ -24,30 +20,23 @@ class AppLocalizations {
   static const LocalizationsDelegate<AppLocalizations> delegate =
       _AppLocalizationsDelegate();
 
-  /// 与 [localeDisplayName] / 设置内语言列表一致：简中、繁中、英、西、葡、德、法、日、韩。
+  /// Supported app languages shown in the language picker.
   static const supportedLocales = <Locale>[
     Locale('en'),
     Locale('zh'),
-    Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant', countryCode: 'TW'),
+    Locale.fromSubtags(
+        languageCode: 'zh', scriptCode: 'Hant', countryCode: 'TW'),
     Locale('es'),
-    Locale('pt', 'BR'),
-    Locale('de'),
-    Locale('fr'),
     Locale('ja'),
-    Locale('ko'),
   ];
 
-  /// 九种语言各见独立文件 [app_strings_*.dart]（由 tool/export_app_strings_dart.py 自英文/简繁与 JSON 合并生成）。
+  /// App strings live in one Dart map per language.
   static final Map<String, Map<String, String>> _coreLocales = {
     'en': kAppStringsEn,
     'zh': kAppStringsZh,
     'zh_Hant': kAppStringsZhHant,
     'es': kAppStringsEs,
-    'pt_BR': kAppStringsPtBr,
-    'de': kAppStringsDe,
-    'fr': kAppStringsFr,
     'ja': kAppStringsJa,
-    'ko': kAppStringsKo,
   };
 
   String _value(String key) {
@@ -66,7 +55,9 @@ class AppLocalizations {
         tag = full;
       }
     }
-    if (locale.scriptCode != null && locale.scriptCode!.isNotEmpty && tag == locale.languageCode) {
+    if (locale.scriptCode != null &&
+        locale.scriptCode!.isNotEmpty &&
+        tag == locale.languageCode) {
       final full = '${locale.languageCode}_${locale.scriptCode}';
       if (_coreLocales.containsKey(full)) {
         tag = full;
@@ -85,12 +76,14 @@ class AppLocalizations {
   }
 
   String get appTitle => _value('appTitle');
-  String get settingsFeatureInDevelopment => _value('settingsFeatureInDevelopment');
+  String get settingsFeatureInDevelopment =>
+      _value('settingsFeatureInDevelopment');
   // Account risk-control + custom DNS (extracted from hardcoded Chinese literals).
   String get riskTitle => _value('riskTitle');
-  String riskUnblockMessage(int violations, int limits) => _value('riskUnblockMessage')
-      .replaceAll('{violations}', '$violations')
-      .replaceAll('{limits}', '$limits');
+  String riskUnblockMessage(int violations, int limits) =>
+      _value('riskUnblockMessage')
+          .replaceAll('{violations}', '$violations')
+          .replaceAll('{limits}', '$limits');
   String get riskReported => _value('riskReported');
   String riskReportFailed(String error) =>
       _value('riskReportFailed').replaceAll('{error}', error);
@@ -113,7 +106,8 @@ class AppLocalizations {
   String get commonCancel => _value('cancel');
   String get commonOk => _value('ok');
   String get authLegalAgreementHint => _value('authLegalAgreementHint');
-  String get authLegalAgreementSeparator => _value('authLegalAgreementSeparator');
+  String get authLegalAgreementSeparator =>
+      _value('authLegalAgreementSeparator');
   String get settingsLegalAgreementHint => _value('settingsLegalAgreementHint');
   String get authLoginSubtitle => _value('authLoginSubtitle');
   String get authRegisterSubtitle => _value('authRegisterSubtitle');
@@ -241,10 +235,10 @@ class AppLocalizations {
   String get serverDownloadLabel => _value('serverDownloadLabel');
   String get serverUploadLabel => _value('serverUploadLabel');
   String serverSessionsLabel(int count) {
-    final key =
-        count == 1 ? 'serverSessionsSingular' : 'serverSessionsPlural';
+    final key = count == 1 ? 'serverSessionsSingular' : 'serverSessionsPlural';
     return _value(key).replaceAll('{count}', '$count');
   }
+
   String get searchLocations => _value('searchLocations');
   String showingLocations(int visible, int total) {
     return _value('showingLocations')
@@ -327,6 +321,22 @@ class AppLocalizations {
   String get settingsConnectOnBootSubtitle =>
       _value('settingsConnectOnBootSubtitle');
   String get settingsTrafficMode => _value('settingsTrafficMode');
+
+  String get settingsTrafficModeCustomRule =>
+      _value('settingsTrafficModeCustomRule');
+  String get settingsUsageTrackingNote => _value('settingsUsageTrackingNote');
+  String get settingsLimitActionChange => _value('settingsLimitActionChange');
+  String get settingsLimitActionSet => _value('settingsLimitActionSet');
+  String get settingsLimitUnitGb => _value('settingsLimitUnitGb');
+  String get settingsLimitServerThrottled =>
+      _value('settingsLimitServerThrottled');
+  String get commonClose => _value('commonClose');
+  String get commonConfirm => _value('commonConfirm');
+  String get sessionDataLimitMessage => _value('sessionDataLimitMessage');
+  String get sessionViolationThrottleMessage =>
+      _value('sessionViolationThrottleMessage');
+  String get sessionRuleModeEmpty => _value('sessionRuleModeEmpty');
+  String get sessionServiceErrorRestart => _value('sessionServiceErrorRestart');
   String get settingsTrafficModeGlobal => _value('settingsTrafficModeGlobal');
   String get settingsTrafficModeGlobalSubtitle =>
       _value('settingsTrafficModeGlobalSubtitle');
@@ -334,8 +344,10 @@ class AppLocalizations {
   String get settingsTrafficModeRuleSubtitle =>
       _value('settingsTrafficModeRuleSubtitle');
   String get settingsTrafficModeAuto => _value('settingsTrafficModeAuto');
-  String get settingsTrafficModeAutoHint => _value('settingsTrafficModeAutoHint');
-  String get settingsRuleEditorEmptyHint => _value('settingsRuleEditorEmptyHint');
+  String get settingsTrafficModeAutoHint =>
+      _value('settingsTrafficModeAutoHint');
+  String get settingsRuleEditorEmptyHint =>
+      _value('settingsRuleEditorEmptyHint');
   String settingsRuleEditorRuleCount(int count) =>
       _value('settingsRuleEditorRuleCount').replaceAll('{count}', '$count');
   String get settingsDnsServer => _value('settingsDnsServer');
@@ -385,7 +397,8 @@ class AppLocalizations {
       _value('settingsAppSelectAppsSubtitle');
   String get settingsAppPickerSearch => _value('settingsAppPickerSearch');
   String get settingsAppPickerClear => _value('settingsAppPickerClear');
-  String get settingsAppPickerLoadFailed => _value('settingsAppPickerLoadFailed');
+  String get settingsAppPickerLoadFailed =>
+      _value('settingsAppPickerLoadFailed');
   String get settingsAppPickerEmpty => _value('settingsAppPickerEmpty');
   String get settingsTunnelMode => _value('settingsTunnelMode');
   String get settingsTunnelModeTun => _value('settingsTunnelModeTun');
@@ -411,7 +424,8 @@ class AppLocalizations {
   String get settingsLimitErrorMinMb => _value('settingsLimitErrorMinMb');
   String get settingsLimitErrorExceedsServer =>
       _value('settingsLimitErrorExceedsServer');
-  String get settingsLimitErrorExceedsMax => _value('settingsLimitErrorExceedsMax');
+  String get settingsLimitErrorExceedsMax =>
+      _value('settingsLimitErrorExceedsMax');
   String get settingsRuleSource => _value('settingsRuleSource');
   String get settingsRuleSourceBuiltIn => _value('settingsRuleSourceBuiltIn');
   String get settingsRuleSourceBuiltInSubtitle =>
@@ -423,8 +437,7 @@ class AppLocalizations {
   String get settingsRuleEditorHint => _value('settingsRuleEditorHint');
   String get settingsRuleEditorSdrlHintPrefix =>
       _value('settingsRuleEditorSdrlHintPrefix');
-  String get settingsRuleEditorHintBody =>
-      _value('settingsRuleEditorHintBody');
+  String get settingsRuleEditorHintBody => _value('settingsRuleEditorHintBody');
   String get settingsRuleEditorHintSuffix =>
       _value('settingsRuleEditorHintSuffix');
   String get settingsRuleEditorSdrlHintLink =>
@@ -515,7 +528,8 @@ class AppLocalizations {
   String get dashboardLabelUpload => _value('dashboardLabelUpload');
   String get dashboardLabelDownload => _value('dashboardLabelDownload');
   String get dashboardLabelMemory => _value('dashboardLabelMemory');
-  String get dashboardLabelDownloadTotal => _value('dashboardLabelDownloadTotal');
+  String get dashboardLabelDownloadTotal =>
+      _value('dashboardLabelDownloadTotal');
   String get dashboardLabelUploadTotal => _value('dashboardLabelUploadTotal');
   String get dashboardUsageStats => _value('dashboardUsageStats');
   String get dashboardPeriodToday => _value('dashboardPeriodToday');
@@ -550,27 +564,34 @@ class AppLocalizations {
   String get settingsNameServerPolicy => _value('settingsNameServerPolicy');
   String get settingsDnsPolicy => _value('settingsDnsPolicy');
   String get settingsForceResolve => _value('settingsForceResolve');
-  String get settingsForceResolveSubtitle => _value('settingsForceResolveSubtitle');
+  String get settingsForceResolveSubtitle =>
+      _value('settingsForceResolveSubtitle');
   String get settingsForceDnsMapping => _value('settingsForceDnsMapping');
-  String get settingsForceDnsMappingSubtitle => _value('settingsForceDnsMappingSubtitle');
+  String get settingsForceDnsMappingSubtitle =>
+      _value('settingsForceDnsMappingSubtitle');
   String get settingsResolvePureIp => _value('settingsResolvePureIp');
-  String get settingsResolvePureIpSubtitle => _value('settingsResolvePureIpSubtitle');
+  String get settingsResolvePureIpSubtitle =>
+      _value('settingsResolvePureIpSubtitle');
   String get settingsFakeipFilter => _value('settingsFakeipFilter');
-  String get settingsFakeipFilterSubtitle => _value('settingsFakeipFilterSubtitle');
+  String get settingsFakeipFilterSubtitle =>
+      _value('settingsFakeipFilterSubtitle');
   String get settingsSectionAdvanced => _value('settingsSectionAdvanced');
   String get settingsStackMode => _value('settingsStackMode');
   String get settingsStackModeSubtitle => _value('settingsStackModeSubtitle');
   String get settingsH3Priority => _value('settingsH3Priority');
   String get settingsH3PrioritySubtitle => _value('settingsH3PrioritySubtitle');
   String get settingsTlsSniffOverride => _value('settingsTlsSniffOverride');
-  String get settingsTlsSniffOverrideSubtitle => _value('settingsTlsSniffOverrideSubtitle');
+  String get settingsTlsSniffOverrideSubtitle =>
+      _value('settingsTlsSniffOverrideSubtitle');
   String get settingsTcpConcurrent => _value('settingsTcpConcurrent');
-  String get settingsTcpConcurrentSubtitle => _value('settingsTcpConcurrentSubtitle');
+  String get settingsTcpConcurrentSubtitle =>
+      _value('settingsTcpConcurrentSubtitle');
   String get settingsAutoSwitch => _value('settingsAutoSwitch');
   String get settingsAutoSwitchSubtitle => _value('settingsAutoSwitchSubtitle');
   String get settingsHaptics => _value('settingsHaptics');
   String get settingsHapticsSubtitle => _value('settingsHapticsSubtitle');
-  String get settingsPreciseSessionTimer => _value('settingsPreciseSessionTimer');
+  String get settingsPreciseSessionTimer =>
+      _value('settingsPreciseSessionTimer');
   String get settingsPreciseSessionTimerSubtitle =>
       _value('settingsPreciseSessionTimerSubtitle');
   String get settingsUsage => _value('settingsUsage');
@@ -589,19 +610,19 @@ class AppLocalizations {
   String get settingsAddReferral => _value('settingsAddReferral');
   String get settingsLanguage => _value('settingsLanguage');
 
-  /// Keys whose value differs from English (real translation), 0–100. English is always 100.
+  /// Percentage of keys present for a locale. English is always 100.
   static int localeCoveragePercent(String tag) {
     final en = kAppStringsEn;
     if (tag == 'en') return 100;
     final loc = _coreLocales[tag];
     if (loc == null || en.isEmpty) return 0;
-    var translated = 0;
+    var present = 0;
     for (final key in en.keys) {
       final v = loc[key];
       if (v == null || v.trim().isEmpty) continue;
-      if (v != en[key]) translated++;
+      present++;
     }
-    return ((translated / en.length) * 100).round();
+    return ((present / en.length) * 100).round();
   }
 
   static String localeTagFor(Locale locale) {
@@ -631,20 +652,17 @@ class AppLocalizations {
     final tag = localeTagFor(locale);
     const names = {
       'en': 'English',
-      'zh': '简体中文',
-      'zh_Hant': '繁體中文',
-      'es': 'Español',
-      'pt_BR': 'Português',
-      'de': 'Deutsch',
-      'fr': 'Français',
-      'ja': '日本語',
-      'ko': '한국어',
+      'zh': '????',
+      'zh_Hant': '????',
+      'es': 'Espa?ol',
+      'ja': '???',
     };
     final name = names[tag] ?? tag;
     // Coverage percentage intentionally not shown to users (looked unfinished);
     // missing keys fall back to English so every locale stays functional.
     return name;
   }
+
   String get settingsLanguageSubtitle => _value('settingsLanguageSubtitle');
   String get settingsLanguageSystem => _value('settingsLanguageSystem');
   String get settingsAppearance => _value('settingsAppearance');
@@ -692,19 +710,16 @@ class AppLocalizations {
   String get serverTileSessionsPrefix => _value('serverTileSessionsPrefix');
   String get privacyPolicyDialogTitle => _value('privacyPolicyDialogTitle');
   String get privacyPolicyAgreeButton => _value('privacyPolicyAgreeButton');
-  String get privacyPolicyCheckboxLabel =>
-      _value('privacyPolicyCheckboxLabel');
+  String get privacyPolicyCheckboxLabel => _value('privacyPolicyCheckboxLabel');
   String get privacyPolicyAvailableInSettings =>
       _value('privacyPolicyAvailableInSettings');
   String get privacyPolicyScrollHintAction =>
       _value('privacyPolicyScrollHintAction');
   String get privacyPolicyScrollHint => _value('privacyPolicyScrollHint');
-  String get privacyPolicyScrollWarning =>
-      _value('privacyPolicyScrollWarning');
+  String get privacyPolicyScrollWarning => _value('privacyPolicyScrollWarning');
   String get privacyPolicyAgreementRequired =>
       _value('privacyPolicyAgreementRequired');
-  String get privacyPolicyCheckboxReady =>
-      _value('privacyPolicyCheckboxReady');
+  String get privacyPolicyCheckboxReady => _value('privacyPolicyCheckboxReady');
   String get speedTestCardTitle => _value('speedTestCardTitle');
   String get speedTestCardStart => _value('speedTestCardStart');
   String get speedTestCardRetest => _value('speedTestCardRetest');
@@ -714,18 +729,13 @@ class AppLocalizations {
       _value('speedTestCardDownloadWarmup');
   String get speedTestCardDownloadMeasure =>
       _value('speedTestCardDownloadMeasure');
-  String get speedTestCardUploadWarmup =>
-      _value('speedTestCardUploadWarmup');
-  String get speedTestCardUploadMeasure =>
-      _value('speedTestCardUploadMeasure');
+  String get speedTestCardUploadWarmup => _value('speedTestCardUploadWarmup');
+  String get speedTestCardUploadMeasure => _value('speedTestCardUploadMeasure');
   String get speedTestCardComplete => _value('speedTestCardComplete');
   String get speedTestCardError => _value('speedTestCardError');
-  String get speedTestCardDownloadLabel =>
-      _value('speedTestCardDownloadLabel');
-  String get speedTestCardUploadLabel =>
-      _value('speedTestCardUploadLabel');
-  String get speedTestCardLatencyLabel =>
-      _value('speedTestCardLatencyLabel');
+  String get speedTestCardDownloadLabel => _value('speedTestCardDownloadLabel');
+  String get speedTestCardUploadLabel => _value('speedTestCardUploadLabel');
+  String get speedTestCardLatencyLabel => _value('speedTestCardLatencyLabel');
   String get speedTestCardLossLabel => _value('speedTestCardLossLabel');
   String get speedTestCardServerLabel => _value('speedTestCardServerLabel');
   String get speedTestErrorTimeout => _value('speedTestErrorTimeout');
@@ -760,16 +770,22 @@ class AppLocalizations {
   String get speedTestWhatLooksGood => _value('speedTestWhatLooksGood');
   String get speedTestCouldBeBetter => _value('speedTestCouldBeBetter');
   String get speedTestIpLabel => _value('speedTestIpLabel');
-  String get speedTestInsightDownloadExcellent => _value('speedTestInsightDownloadExcellent');
+  String get speedTestInsightDownloadExcellent =>
+      _value('speedTestInsightDownloadExcellent');
   String get speedTestInsightDownloadHd => _value('speedTestInsightDownloadHd');
-  String get speedTestInsightDownloadStruggle => _value('speedTestInsightDownloadStruggle');
+  String get speedTestInsightDownloadStruggle =>
+      _value('speedTestInsightDownloadStruggle');
   String get speedTestInsightUploadGood => _value('speedTestInsightUploadGood');
-  String get speedTestInsightUploadImpact => _value('speedTestInsightUploadImpact');
+  String get speedTestInsightUploadImpact =>
+      _value('speedTestInsightUploadImpact');
   String get speedTestInsightLatencyLow => _value('speedTestInsightLatencyLow');
-  String get speedTestInsightLatencyReasonable => _value('speedTestInsightLatencyReasonable');
-  String get speedTestInsightLatencyHigh => _value('speedTestInsightLatencyHigh');
+  String get speedTestInsightLatencyReasonable =>
+      _value('speedTestInsightLatencyReasonable');
+  String get speedTestInsightLatencyHigh =>
+      _value('speedTestInsightLatencyHigh');
   String get speedTestInsightIpDetected => _value('speedTestInsightIpDetected');
-  String get speedTestInsightIpNotDetected => _value('speedTestInsightIpNotDetected');
+  String get speedTestInsightIpNotDetected =>
+      _value('speedTestInsightIpNotDetected');
   String speedTestNetworkScoreLabel(int score) =>
       _value('speedTestNetworkScoreLabel').replaceAll('{score}', '$score');
 
@@ -794,15 +810,19 @@ class AppLocalizations {
   String get commonNo => _value('commonNo');
   String get commonLater => _value('commonLater');
   String get retry => _value('retry');
-  String get settingsUpdateAvailableTitle => _value('settingsUpdateAvailableTitle');
-  String get settingsUpdateAvailableBody => _value('settingsUpdateAvailableBody');
+  String get settingsUpdateAvailableTitle =>
+      _value('settingsUpdateAvailableTitle');
+  String get settingsUpdateAvailableBody =>
+      _value('settingsUpdateAvailableBody');
   String get settingsAppInfo => _value('settingsAppInfo');
   String settingsVersionLabel(String version) =>
       _value('settingsVersionLabel').replaceAll('{version}', version);
   String get settingsCheckUpdate => _value('settingsCheckUpdate');
   String get settingsCheckingUpdate => _value('settingsCheckingUpdate');
-  String get settingsKillSwitchPromptTitle => _value('settingsKillSwitchPromptTitle');
-  String get settingsKillSwitchPromptBody => _value('settingsKillSwitchPromptBody');
+  String get settingsKillSwitchPromptTitle =>
+      _value('settingsKillSwitchPromptTitle');
+  String get settingsKillSwitchPromptBody =>
+      _value('settingsKillSwitchPromptBody');
   String get settingsOpenVpnSettings => _value('settingsOpenVpnSettings');
   String get snackbarTrafficReset => _value('snackbarTrafficReset');
   String get homeAnnouncementAck => _value('homeAnnouncementAck');
@@ -826,29 +846,38 @@ class AppLocalizations {
   String get onboardingGetStarted => _value('onboardingGetStarted');
   String get onboardingLearnHowItWorks => _value('onboardingLearnHowItWorks');
   String get onboardingPrivacyPolicy => _value('onboardingPrivacyPolicy');
-  String get onboardingSlideServersTitle => _value('onboardingSlideServersTitle');
+  String get onboardingSlideServersTitle =>
+      _value('onboardingSlideServersTitle');
   String get onboardingSlideTunnelTitle => _value('onboardingSlideTunnelTitle');
-  String get onboardingSlideAccountTitle => _value('onboardingSlideAccountTitle');
+  String get onboardingSlideAccountTitle =>
+      _value('onboardingSlideAccountTitle');
   String get onboardingSpeedTestTitle => _value('onboardingSpeedTestTitle');
   String get onboardingSpeedTestBody => _value('onboardingSpeedTestBody');
-  String get onboardingSpeedTestDisclaimer => _value('onboardingSpeedTestDisclaimer');
+  String get onboardingSpeedTestDisclaimer =>
+      _value('onboardingSpeedTestDisclaimer');
   String get onboardingLearnMore => _value('onboardingLearnMore');
   String get onboardingSpeedTestOptIn => _value('onboardingSpeedTestOptIn');
-  String get onboardingSpeedTestUnavailable => _value('onboardingSpeedTestUnavailable');
+  String get onboardingSpeedTestUnavailable =>
+      _value('onboardingSpeedTestUnavailable');
   String get onboardingDismiss => _value('onboardingDismiss');
   String get onboardingCancelTest => _value('onboardingCancelTest');
   String get onboardingSectionServer => _value('onboardingSectionServer');
   String get onboardingBestServerAuto => _value('onboardingBestServerAuto');
-  String get onboardingBrowseCommunityList => _value('onboardingBrowseCommunityList');
+  String get onboardingBrowseCommunityList =>
+      _value('onboardingBrowseCommunityList');
   String get onboardingImportOvpn => _value('onboardingImportOvpn');
   String get onboardingSectionOptions => _value('onboardingSectionOptions');
   String get onboardingAutoReconnect => _value('onboardingAutoReconnect');
   String get onboardingAlwaysOnVpn => _value('onboardingAlwaysOnVpn');
-  String get onboardingAlwaysOnVpnSubtitle => _value('onboardingAlwaysOnVpnSubtitle');
-  String get onboardingSectionPermissions => _value('onboardingSectionPermissions');
+  String get onboardingAlwaysOnVpnSubtitle =>
+      _value('onboardingAlwaysOnVpnSubtitle');
+  String get onboardingSectionPermissions =>
+      _value('onboardingSectionPermissions');
   String get onboardingVpnPermission => _value('onboardingVpnPermission');
-  String get onboardingVpnPermissionSubtitle => _value('onboardingVpnPermissionSubtitle');
-  String get onboardingNotificationsTitle => _value('onboardingNotificationsTitle');
+  String get onboardingVpnPermissionSubtitle =>
+      _value('onboardingVpnPermissionSubtitle');
+  String get onboardingNotificationsTitle =>
+      _value('onboardingNotificationsTitle');
   String get onboardingEnable => _value('onboardingEnable');
   String get onboardingAllowAndConnect => _value('onboardingAllowAndConnect');
   String get onboardingCancelConnection => _value('onboardingCancelConnection');
@@ -864,30 +893,40 @@ class AppLocalizations {
       _value('onboardingRemoteLabel').replaceAll('{remote}', remote);
   String onboardingCipherLabel(String cipher) =>
       _value('onboardingCipherLabel').replaceAll('{cipher}', cipher);
-  String get onboardingAboutSpeedTestTitle => _value('onboardingAboutSpeedTestTitle');
-  String get onboardingAboutSpeedTestBullet1 => _value('onboardingAboutSpeedTestBullet1');
-  String get onboardingAboutSpeedTestBullet2 => _value('onboardingAboutSpeedTestBullet2');
-  String get onboardingAboutSpeedTestBullet3 => _value('onboardingAboutSpeedTestBullet3');
+  String get onboardingAboutSpeedTestTitle =>
+      _value('onboardingAboutSpeedTestTitle');
+  String get onboardingAboutSpeedTestBullet1 =>
+      _value('onboardingAboutSpeedTestBullet1');
+  String get onboardingAboutSpeedTestBullet2 =>
+      _value('onboardingAboutSpeedTestBullet2');
+  String get onboardingAboutSpeedTestBullet3 =>
+      _value('onboardingAboutSpeedTestBullet3');
   String get onboardingRisksTitle => _value('onboardingRisksTitle');
   String get onboardingRisksBullet1 => _value('onboardingRisksBullet1');
   String get onboardingRisksBullet2 => _value('onboardingRisksBullet2');
   String get onboardingRisksBullet3 => _value('onboardingRisksBullet3');
   String get onboardingConnectionFailed => _value('onboardingConnectionFailed');
   String get onboardingTryAgain => _value('onboardingTryAgain');
-  String get onboardingChooseServerFirst => _value('onboardingChooseServerFirst');
-  String get onboardingConnectionCancelled => _value('onboardingConnectionCancelled');
+  String get onboardingChooseServerFirst =>
+      _value('onboardingChooseServerFirst');
+  String get onboardingConnectionCancelled =>
+      _value('onboardingConnectionCancelled');
   String onboardingUnableCancelConnection(String error) =>
       _value('onboardingUnableCancelConnection').replaceAll('{error}', error);
-  String get onboardingNotificationsOptional => _value('onboardingNotificationsOptional');
+  String get onboardingNotificationsOptional =>
+      _value('onboardingNotificationsOptional');
   String onboardingUnableRequestNotifications(String error) =>
-      _value('onboardingUnableRequestNotifications').replaceAll('{error}', error);
-  String get onboardingAlwaysOnVpnAndroidOnly => _value('onboardingAlwaysOnVpnAndroidOnly');
+      _value('onboardingUnableRequestNotifications')
+          .replaceAll('{error}', error);
+  String get onboardingAlwaysOnVpnAndroidOnly =>
+      _value('onboardingAlwaysOnVpnAndroidOnly');
   String onboardingUnableOpenVpnSettings(String error) =>
       _value('onboardingUnableOpenVpnSettings').replaceAll('{error}', error);
   String get onboardingUnableReadFile => _value('onboardingUnableReadFile');
   String onboardingUnableImportConfig(String error) =>
       _value('onboardingUnableImportConfig').replaceAll('{error}', error);
-  String get onboardingOvpnMissingRemote => _value('onboardingOvpnMissingRemote');
+  String get onboardingOvpnMissingRemote =>
+      _value('onboardingOvpnMissingRemote');
   String get onboardingRemoteMustIncludeHostPort =>
       _value('onboardingRemoteMustIncludeHostPort');
   String onboardingUnableOpenUrl(String url) =>
@@ -895,10 +934,13 @@ class AppLocalizations {
   String get onboardingLabelDownload => _value('onboardingLabelDownload');
   String get onboardingLabelUpload => _value('onboardingLabelUpload');
   String get onboardingLabelLatency => _value('onboardingLabelLatency');
-  String get onboardingSpeedTestCollecting => _value('onboardingSpeedTestCollecting');
-  String get onboardingSpeedTestMeasuring => _value('onboardingSpeedTestMeasuring');
+  String get onboardingSpeedTestCollecting =>
+      _value('onboardingSpeedTestCollecting');
+  String get onboardingSpeedTestMeasuring =>
+      _value('onboardingSpeedTestMeasuring');
   String get onboardingSpeedTestPending => _value('onboardingSpeedTestPending');
-  String get onboardingSpeedTestChecking => _value('onboardingSpeedTestChecking');
+  String get onboardingSpeedTestChecking =>
+      _value('onboardingSpeedTestChecking');
   String get onboardingSpeedTestUnavailableShort =>
       _value('onboardingSpeedTestUnavailableShort');
   String get onboardingSpeedTestReady => _value('onboardingSpeedTestReady');
@@ -907,16 +949,20 @@ class AppLocalizations {
       _value('errorDialogCodeLabel').replaceAll('{code}', formattedCode);
   String get authLoginRequired => _value('authLoginRequired');
   String get onboardingHowItWorksTitle => _value('onboardingHowItWorksTitle');
-  String get onboardingHowItWorksServersDesc => _value('onboardingHowItWorksServersDesc');
-  String get onboardingHowItWorksTunnelDesc => _value('onboardingHowItWorksTunnelDesc');
-  String get onboardingHowItWorksAccountDesc => _value('onboardingHowItWorksAccountDesc');
+  String get onboardingHowItWorksServersDesc =>
+      _value('onboardingHowItWorksServersDesc');
+  String get onboardingHowItWorksTunnelDesc =>
+      _value('onboardingHowItWorksTunnelDesc');
+  String get onboardingHowItWorksAccountDesc =>
+      _value('onboardingHowItWorksAccountDesc');
   String get onboardingContinue => _value('onboardingContinue');
   String get onboardingRunQuickTest => _value('onboardingRunQuickTest');
   String get onboardingImportedServer => _value('onboardingImportedServer');
   String get onboardingConnectTitle => _value('onboardingConnectTitle');
-  String onboardingBaseline(String down, String up) => _value('onboardingBaseline')
-      .replaceAll('{down}', down)
-      .replaceAll('{up}', up);
+  String onboardingBaseline(String down, String up) =>
+      _value('onboardingBaseline')
+          .replaceAll('{down}', down)
+          .replaceAll('{up}', up);
   String get onboardingNotificationsEnabledSubtitle =>
       _value('onboardingNotificationsEnabledSubtitle');
   String get onboardingNotificationsDeniedSubtitle =>
@@ -925,9 +971,11 @@ class AppLocalizations {
       _value('onboardingNotificationsRecommendedSubtitle');
   String get onboardingNotificationsDisabledForNow =>
       _value('onboardingNotificationsDisabledForNow');
-  String get onboardingVpnGateDisclaimer => _value('onboardingVpnGateDisclaimer');
+  String get onboardingVpnGateDisclaimer =>
+      _value('onboardingVpnGateDisclaimer');
   String get onboardingSpeedTestTesting => _value('onboardingSpeedTestTesting');
-  String get onboardingSpeedTestResultReady => _value('onboardingSpeedTestResultReady');
+  String get onboardingSpeedTestResultReady =>
+      _value('onboardingSpeedTestResultReady');
   String get commonRemove => _value('commonRemove');
   String get featureUnstableDisclaimer => _value('featureUnstableDisclaimer');
   String get proxyShareScreenTitle => _value('proxyShareScreenTitle');
@@ -961,7 +1009,8 @@ class AppLocalizations {
   String get proxyShareManualPortHint => _value('proxyShareManualPortHint');
   String get proxyShareManualKeyHint => _value('proxyShareManualKeyHint');
   String get proxyShareConnect => _value('proxyShareConnect');
-  String get proxyShareManualConnectMock => _value('proxyShareManualConnectMock');
+  String get proxyShareManualConnectMock =>
+      _value('proxyShareManualConnectMock');
   String get proxyShareP2pTitle => _value('proxyShareP2pTitle');
   String get proxyShareP2pStart => _value('proxyShareP2pStart');
   String get proxyShareP2pTrying => _value('proxyShareP2pTrying');
@@ -983,14 +1032,23 @@ class AppLocalizations {
   String get authBannedBanner => _value('authBannedBanner');
   String authTrialBanner(String remaining) =>
       _value('authTrialBanner').replaceAll('{remaining}', remaining);
-  String authTrialRemaining(int hours, int minutes, int seconds) => _value('authTrialRemaining')
-      .replaceAll('{hours}', '$hours')
-      .replaceAll('{minutes}', '$minutes')
-      .replaceAll('{seconds}', '$seconds');
+  String authTrialRemaining(int hours, int minutes, int seconds) =>
+      _value('authTrialRemaining')
+          .replaceAll('{hours}', '$hours')
+          .replaceAll('{minutes}', '$minutes')
+          .replaceAll('{seconds}', '$seconds');
   String authTrialAccountHint(String remaining) =>
       _value('authTrialAccountHint').replaceAll('{remaining}', remaining);
   String authTrialRemainingShort(String remaining) =>
       _value('authTrialRemainingShort').replaceAll('{remaining}', remaining);
+  String get accountViolationSpeedLimitNotice =>
+      _value('accountViolationSpeedLimitNotice');
+  String accountQuotaExceededNotice(double quotaGb) =>
+      _value('accountQuotaExceededNotice')
+          .replaceAll('{quotaGb}', quotaGb.toStringAsFixed(0));
+  String accountQuotaPlanTitle(double quotaGb) =>
+      _value('accountQuotaPlanTitle')
+          .replaceAll('{quotaGb}', quotaGb.toStringAsFixed(0));
   String get accountSubscriptionTitle => _value('accountSubscriptionTitle');
   String get accountSubscriptionIntro => _value('accountSubscriptionIntro');
   String get accountSubscriptionUid => _value('accountSubscriptionUid');
@@ -999,9 +1057,10 @@ class AppLocalizations {
   String get accountSubscriptionExpires => _value('accountSubscriptionExpires');
   String get accountDateTimeNone => _value('accountDateTimeNone');
   String get accountDateTimePermanent => _value('accountDateTimePermanent');
-  String riskMenuSummary(int violations, int limits) => _value('riskMenuSummary')
-      .replaceAll('{violations}', '$violations')
-      .replaceAll('{limits}', '$limits');
+  String riskMenuSummary(int violations, int limits) =>
+      _value('riskMenuSummary')
+          .replaceAll('{violations}', '$violations')
+          .replaceAll('{limits}', '$limits');
 
   /// Resolve auth status messages from codes; server text wins when provided.
   String resolveAuthMessage({String? code, String? serverMessage}) {
@@ -1042,7 +1101,7 @@ class AppLocalizations {
     required double upload,
     required int ping,
   }) {
-    return '↓ ${download.toStringAsFixed(1)} Mbps · ↑ ${upload.toStringAsFixed(1)} Mbps · ${ping}ms';
+    return '鈫?${download.toStringAsFixed(1)} Mbps 路 鈫?${upload.toStringAsFixed(1)} Mbps 路 ${ping}ms';
   }
 
   String connectedCountdownLabel(String countdown) {
@@ -1060,7 +1119,7 @@ class AppLocalizations {
   String usageSummaryText(double usedGb, double? limitGb) {
     final used = usedGb.toStringAsFixed(2);
     if (limitGb == null) {
-      return '$used GB · ${settingsUsageNoLimit}';
+      return '$used GB 路 ${settingsUsageNoLimit}';
     }
     final limit = limitGb.toStringAsFixed(2);
     return '$used GB / $limit GB';

@@ -12,8 +12,8 @@ const String kWgLocalAddr = '10.7.0.2/32';
 
 const List<String> kNodeIpCidrs = [
   '206.245.157.199/32',
-  '166.88.197.246/32',
-  '192.124.176.24/32',
+  '23.27.134.86/32',
+  '194.87.10.236/32',
   '2605:e440:16::334/128',
 ];
 
@@ -59,14 +59,17 @@ const List<SdNode> kNodes = [
   ),
   SdNode(
     tag: 'United States',
-    host: '166.88.197.246',
-    h2Sni: 'smartdolphin.top',
+    host: '23.27.134.86',
+    h2Sni: 'smartdolphinvpn.com',
     realityPort: 8444,
     flag: 'US',
   ),
   SdNode(
     tag: 'Singapore',
-    host: '2605:e440:16::334',
+    host: '194.87.10.236',
+    // smartdolphin.top still resolves to an old VPS, so Let's Encrypt cannot
+    // issue/renew that certificate on the Singapore node yet. The server is
+    // currently configured with the shared smartdolphinvpn.com certificate.
     h2Sni: 'smartdolphinvpn.com',
     realityPort: 8444,
     flag: 'SG',
@@ -82,13 +85,18 @@ SdNode nodeForHostOrCountry(String? host, String? country) {
   if (country != null && country.isNotEmpty) {
     final c = country.toLowerCase();
     if (c.contains('us') || c.contains('united') || c.contains('america')) {
-      return kNodes.firstWhere((n) => n.flag == 'US', orElse: () => kNodes.first);
+      return kNodes.firstWhere((n) => n.flag == 'US',
+          orElse: () => kNodes.first);
     }
-    if (c.contains('nl') || c.contains('netherlands') || c.contains('holland')) {
-      return kNodes.firstWhere((n) => n.flag == 'NL', orElse: () => kNodes.first);
+    if (c.contains('nl') ||
+        c.contains('netherlands') ||
+        c.contains('holland')) {
+      return kNodes.firstWhere((n) => n.flag == 'NL',
+          orElse: () => kNodes.first);
     }
     if (c.contains('sg') || c.contains('singapore')) {
-      return kNodes.firstWhere((n) => n.flag == 'SG', orElse: () => kNodes.first);
+      return kNodes.firstWhere((n) => n.flag == 'SG',
+          orElse: () => kNodes.first);
     }
   }
   return kNodes.first;
@@ -126,7 +134,7 @@ Map<String, dynamic> _remoteDnsServer(bool forceDnsThroughTunnel) {
   if (forceDnsThroughTunnel) {
     return {
       'tag': 'remote-dns',
-      'address': 'https://8.8.8.8/dns-query',
+      'address': 'https://dns.google/dns-query',
       'address_resolver': 'local-dns',
       'detour': 'proxy',
     };
@@ -230,13 +238,25 @@ String buildSingBoxConfig({
       {'ip_cidr': kNodeIpCidrs, 'outbound': 'direct'},
       {'ip_cidr': _localDnsResolverIps, 'outbound': 'direct'},
       {
-        'domain': ['astraeuszhao.com', 'smartdolphin.top', 'smartdolphinvpn.com'],
+        'domain': [
+          'astraeuszhao.com',
+          'smartdolphin.top',
+          'smartdolphinvpn.com'
+        ],
         'outbound': 'direct',
       },
-      {'ip_cidr': ['127.0.0.0/8'], 'outbound': 'direct'},
+      {
+        'ip_cidr': ['127.0.0.0/8'],
+        'outbound': 'direct'
+      },
       if (bypassLan)
         {
-          'ip_cidr': ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16'],
+          'ip_cidr': [
+            '10.0.0.0/8',
+            '172.16.0.0/12',
+            '192.168.0.0/16',
+            '169.254.0.0/16'
+          ],
           'outbound': 'direct',
         },
       if (!globalMode)
@@ -278,7 +298,8 @@ String buildSingBoxConfig({
         'sniff_override_destination': true,
         'endpoint_independent_nat': true,
         if (includePackages.isNotEmpty) 'include_package': includePackages,
-        if (includePackages.isEmpty && excludePackages.isNotEmpty) 'exclude_package': excludePackages,
+        if (includePackages.isEmpty && excludePackages.isNotEmpty)
+          'exclude_package': excludePackages,
       },
     ],
     'outbounds': [

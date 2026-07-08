@@ -62,7 +62,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       children: [
         Text(
           l10n.settingsTitle,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(context)
+              .textTheme
+              .headlineSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 24),
         _buildAccountSection(context),
@@ -99,7 +102,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
         final info = snapshot.data;
-        final versionLabel = info?.version ?? '—';
+        final versionLabel = info?.version ?? '-';
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,13 +122,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: _checkingUpdate || info == null ? null : () => _checkForUpdate(context),
+              onTap: _checkingUpdate || info == null
+                  ? null
+                  : () => _checkForUpdate(context),
               child: Text(
-                _checkingUpdate ? l10n.settingsCheckingUpdate : l10n.settingsCheckUpdate,
+                _checkingUpdate
+                    ? l10n.settingsCheckingUpdate
+                    : l10n.settingsCheckUpdate,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.primary,
                   decoration: TextDecoration.underline,
-                  decorationColor: theme.colorScheme.primary.withValues(alpha: 0.6),
+                  decorationColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -149,8 +157,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: Text(l10n.settingsUpdateAvailableTitle),
           content: Text(l10n.settingsUpdateAvailableBody),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l10n.commonNo)),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l10n.commonYes)),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(l10n.commonNo)),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(l10n.commonYes)),
           ],
         );
       },
@@ -185,11 +197,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildSectionTitle(BuildContext context, String title) {
     return Text(
       title,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+      style: Theme.of(context)
+          .textTheme
+          .titleMedium
+          ?.copyWith(fontWeight: FontWeight.w700),
     );
   }
 
-  Widget _buildValueTile(BuildContext context, String title, String value, {VoidCallback? onTap}) {
+  Widget _buildValueTile(BuildContext context, String title, String value,
+      {VoidCallback? onTap}) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -206,13 +222,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(title,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
-                    Text(value, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7))),
+                    Text(value,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.7))),
                   ],
                 ),
               ),
-              Icon(Icons.keyboard_arrow_down_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.6), size: 24),
+              Icon(Icons.keyboard_arrow_down_rounded,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  size: 24),
             ],
           ),
         ),
@@ -250,13 +273,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(title,
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
-                      Text(value, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7))),
+                      Text(value,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.7))),
                     ],
                   ),
                 ),
-                Icon(Icons.lock_outline, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.55)),
+                Icon(Icons.lock_outline,
+                    size: 18,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55)),
               ],
             ),
           ),
@@ -279,14 +309,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         contentPadding: EdgeInsets.zero,
         onTap: _showInDevelopmentHint,
         leading: Icon(icon, color: theme.colorScheme.primary),
-        title: Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-        subtitle: Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.65))),
-        trailing: Icon(Icons.lock_outline, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.55)),
+        title: Text(title,
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.65))),
+        trailing: Icon(Icons.lock_outline,
+            size: 18,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.55)),
       ),
     );
   }
 
-  Widget _buildConnectionSection(BuildContext context, PreferencesState preferences) {
+  Widget _buildConnectionSection(
+      BuildContext context, PreferencesState preferences) {
     final l10n = context.l10n;
     final settings = ref.watch(settingsControllerProvider);
     final autoConnect = settings.autoConnect;
@@ -307,7 +344,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onChanged: (v) {
               unawaited(() async {
                 await ref.read(hapticsServiceProvider).selection();
-                await ref.read(settingsControllerProvider.notifier).setAutoConnect(onLaunch: v);
+                await ref
+                    .read(settingsControllerProvider.notifier)
+                    .setAutoConnect(onLaunch: v);
               }());
             },
           ),
@@ -320,7 +359,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onChanged: (v) {
               unawaited(() async {
                 await ref.read(hapticsServiceProvider).selection();
-                await ref.read(settingsControllerProvider.notifier).setAutoConnect(onNetworkChange: v);
+                await ref
+                    .read(settingsControllerProvider.notifier)
+                    .setAutoConnect(onNetworkChange: v);
               }());
             },
           ),
@@ -333,7 +374,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onChanged: (v) {
               unawaited(() async {
                 await ref.read(hapticsServiceProvider).selection();
-                await ref.read(settingsControllerProvider.notifier).setAutoConnect(onBoot: v);
+                await ref
+                    .read(settingsControllerProvider.notifier)
+                    .setAutoConnect(onBoot: v);
               }());
             },
           ),
@@ -348,7 +391,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (value) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(preferencesControllerProvider.notifier).toggleAutoServerSwitch(value);
+              await ref
+                  .read(preferencesControllerProvider.notifier)
+                  .toggleAutoServerSwitch(value);
             }());
           },
         ),
@@ -361,7 +406,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (value) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(preferencesControllerProvider.notifier).toggleHaptics(value);
+              await ref
+                  .read(preferencesControllerProvider.notifier)
+                  .toggleHaptics(value);
             }());
           },
         ),
@@ -407,13 +454,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               options: [
                 SettingsPickerOption(
                   value: TrafficMode.global.name,
-                  label:
-                      '${l10n.settingsTrafficModeGlobal} — ${l10n.settingsTrafficModeGlobalSubtitle}',
+                  label: l10n.settingsTrafficModeGlobal,
                 ),
                 SettingsPickerOption(
                   value: TrafficMode.auto.name,
-                  label:
-                      '${l10n.settingsTrafficModeAuto} — ${l10n.settingsTrafficModeAutoHint}',
+                  label: l10n.settingsTrafficModeRule,
+                ),
+                SettingsPickerOption(
+                  value: 'custom_rule_disabled',
+                  label: l10n.settingsTrafficModeCustomRule,
                 ),
               ],
               currentValue: routing.mode == TrafficMode.auto
@@ -422,22 +471,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               isSelected: (a, b) => a == b,
             );
             if (!mounted || result == null) return;
+            if (result == 'custom_rule_disabled') {
+              _showInDevelopmentHint();
+              return;
+            }
             final mode = result == TrafficMode.auto.name
                 ? TrafficMode.auto
                 : TrafficMode.global;
-            await ref.read(settingsControllerProvider.notifier).setTrafficMode(mode);
+            await ref
+                .read(settingsControllerProvider.notifier)
+                .setTrafficMode(mode);
             if (mounted &&
                 ref.read(sessionControllerProvider).status ==
                     SessionStatus.connected) {
               showTopSnackBar(context, l10n.settingsRuleEditorReconnectHint);
             }
           },
-        ),
-        const SizedBox(height: 8),
-        _lockedPickerTile(
-          context,
-          title: l10n.settingsTrafficModeRule,
-          value: l10n.settingsFeatureInDevelopment,
         ),
         const SizedBox(height: 8),
         _buildPickerTile(
@@ -513,7 +562,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setAutoRouteSystem(v);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setAutoRouteSystem(v);
             }());
           },
         ),
@@ -526,7 +577,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setBypassLan(v);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setBypassLan(v);
             }());
           },
         ),
@@ -557,7 +610,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               context: context,
               title: l10n.settingsDnsServer,
               options: VpnDnsOption.values
-                  .map((o) => SettingsPickerOption(value: o.name, label: o.labelFor(l10n)))
+                  .map((o) => SettingsPickerOption(
+                      value: o.name, label: o.labelFor(l10n)))
                   .toList(),
               currentValue: protocol.dnsOption.name,
               isSelected: (a, b) => a == b,
@@ -567,10 +621,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             if (option == VpnDnsOption.custom) {
               final ip = await showCustomDnsDialog(context);
               if (!mounted || ip == null) return;
-              await ref.read(settingsControllerProvider.notifier).setCustomDns(ip);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setCustomDns(ip);
               return;
             }
-            await ref.read(settingsControllerProvider.notifier).setDnsOption(option);
+            await ref
+                .read(settingsControllerProvider.notifier)
+                .setDnsOption(option);
           },
         ),
         _buildSwitchTile(
@@ -582,15 +640,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setForceDnsThroughTunnel(v);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setForceDnsThroughTunnel(v);
             }());
           },
         ),
-        _lockedSwitchTile(
+        _buildSwitchTile(
           context,
+          value: advanced.blockLocalDns,
           title: l10n.settingsBlockLocalDns,
           subtitle: l10n.settingsBlockLocalDnsSubtitle,
           icon: Icons.block_outlined,
+          onChanged: (v) {
+            unawaited(() async {
+              await ref.read(hapticsServiceProvider).selection();
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setBlockLocalDns(v);
+            }());
+          },
         ),
         _buildSwitchTile(
           context,
@@ -601,7 +670,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setBlockIpv6Dns(v);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setBlockIpv6Dns(v);
             }());
           },
         ),
@@ -614,7 +685,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setDisableIpv6WhenConnected(v);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setDisableIpv6WhenConnected(v);
             }());
           },
         ),
@@ -654,11 +727,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 SettingsPickerOption(
                   value: KillSwitchMode.strict.name,
-                  label: l10n.settingsKillSwitchStrict,
+                  label: '严格模式',
                 ),
                 SettingsPickerOption(
                   value: KillSwitchMode.smart.name,
-                  label: l10n.settingsKillSwitchSmart,
+                  label: '智能模式',
                 ),
               ],
               currentValue: advanced.killSwitchMode.name,
@@ -669,11 +742,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               (m) => m.name == result,
               orElse: () => KillSwitchMode.off,
             );
-            await ref.read(settingsControllerProvider.notifier).setKillSwitchMode(mode);
+            await ref
+                .read(settingsControllerProvider.notifier)
+                .setKillSwitchMode(mode);
             if (!mounted) return;
             if (mode == KillSwitchMode.strict) {
-              final alwaysOn = await isAlwaysOnVpnEnabled();
-              if (!alwaysOn && mounted) {
+              final ready = await isStrictKillSwitchReady();
+              if (!ready && mounted) {
                 await _promptKillSwitchAlwaysOn(context);
               }
             }
@@ -725,7 +800,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setNetworkQuality(v);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setNetworkQuality(v);
             }());
           },
         ),
@@ -738,7 +815,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setBatterySaver(v);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setBatterySaver(v);
             }());
           },
         ),
@@ -752,14 +831,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setLogEnabled(v);
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setLogEnabled(v);
             }());
           },
         ),
         if (settings.logConfig.enabled) ...[
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.primary),
+            leading: Icon(Icons.delete_outline,
+                color: Theme.of(context).colorScheme.primary),
             title: Text(l10n.settingsClearLogs),
             subtitle: Text(l10n.settingsClearLogsSubtitle),
             trailing: const Icon(Icons.chevron_right),
@@ -789,7 +871,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       } on PlatformException catch (e) {
         if (mounted) {
-          showTopSnackBar(context, e.message ?? context.l10n.settingsLogPathCopied);
+          showTopSnackBar(
+              context, e.message ?? context.l10n.settingsLogPathCopied);
         }
       }
     }
@@ -818,8 +901,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         future: logger.logDirectory,
         builder: (context, snapshot) {
           final path = snapshot.data ?? '';
-          final displayPath =
-              path.isEmpty ? l10n.settingsLogPathLoading : path;
+          final displayPath = path.isEmpty ? l10n.settingsLogPathLoading : path;
           return FrostedGlass(
             borderRadius: BorderRadius.circular(16),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -852,8 +934,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         child: Text(
                           displayPath,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface
-                                .withOpacity(0.7),
+                            color: theme.colorScheme.onSurface.withOpacity(0.7),
                             fontFamily: 'monospace',
                           ),
                           maxLines: 3,
@@ -898,7 +979,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final zh = Localizations.localeOf(context).languageCode.startsWith('zh');
     return switch (p) {
       'reality' => zh ? '（轻量稳定，日常推荐）' : ' (Lightweight, daily use)',
-      'hysteria2' => zh ? '（弱网/高丢包更佳）' : ' (Weak network / lossy links)',
+      'hysteria2' => zh ? '（弱网和高丢包链路）' : ' (Weak network / lossy links)',
       'wireguard' => zh ? '（低延迟，适合游戏）' : ' (Low latency, gaming)',
       _ => '',
     };
@@ -912,6 +993,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     };
   }
 
+  Route<T> _instantRoute<T>(Widget page) {
+    return PageRouteBuilder<T>(
+      pageBuilder: (_, __, ___) => page,
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+    );
+  }
+
   Widget _buildProtocolSection(BuildContext context) {
     final l10n = context.l10n;
     final coreProtocol = ref.watch(preferencesControllerProvider).coreProtocol;
@@ -923,7 +1012,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildPickerTile(
           context,
           title: l10n.settingsTransportProtocol,
-          value: '${_coreProtocolLabel(coreProtocol)}${_coreProtocolHint(coreProtocol)}',
+          value:
+              '${_coreProtocolLabel(coreProtocol)}${_coreProtocolHint(coreProtocol)}',
           onTap: () async {
             await ref.read(hapticsServiceProvider).selection();
             final result = await SettingsPickerSheet.show<String>(
@@ -932,22 +1022,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               options: [
                 SettingsPickerOption(
                   value: 'reality',
-                  label: '${_coreProtocolLabel('reality')}${_coreProtocolHint('reality')}',
+                  label:
+                      '${_coreProtocolLabel('reality')}${_coreProtocolHint('reality')}',
                 ),
                 SettingsPickerOption(
                   value: 'hysteria2',
-                  label: '${_coreProtocolLabel('hysteria2')}${_coreProtocolHint('hysteria2')}',
+                  label:
+                      '${_coreProtocolLabel('hysteria2')}${_coreProtocolHint('hysteria2')}',
                 ),
                 SettingsPickerOption(
                   value: 'wireguard',
-                  label: '${_coreProtocolLabel('wireguard')}${_coreProtocolHint('wireguard')}',
+                  label:
+                      '${_coreProtocolLabel('wireguard')}${_coreProtocolHint('wireguard')}',
                 ),
               ],
               currentValue: coreProtocol,
               isSelected: (a, b) => a == b,
             );
             if (!mounted || result == null) return;
-            await ref.read(preferencesControllerProvider.notifier).setCoreProtocol(result);
+            await ref
+                .read(preferencesControllerProvider.notifier)
+                .setCoreProtocol(result);
             if (mounted &&
                 ref.read(sessionControllerProvider).status ==
                     SessionStatus.connected) {
@@ -1002,7 +1097,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     };
   }
 
-  String _transportProtocolLabel(TransportProtocol protocol, AppLocalizations l10n) {
+  String _transportProtocolLabel(
+      TransportProtocol protocol, AppLocalizations l10n) {
     final locale = Localizations.localeOf(context);
     if (locale.languageCode == 'zh') {
       return protocol.labelZh();
@@ -1018,7 +1114,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? usage.monthlyLimitBytes! / (1024 * 1024 * 1024)
         : null;
     final summary = l10n.usageSummaryText(usedGb, limitGb);
-    final progress = usage.hasLimit ? usage.utilization.clamp(0, 1).toDouble() : null;
+    final progress =
+        usage.hasLimit ? usage.utilization.clamp(0, 1).toDouble() : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1026,7 +1123,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildSectionTitle(context, l10n.settingsUsage),
         const SizedBox(height: 12),
         Text(
-          l10n.settingsUsageSubtitle,
+          l10n.settingsUsageTrackingNote,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurface.withOpacity(0.7),
           ),
@@ -1043,7 +1140,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 12),
         Text(
           summary,
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -1052,14 +1150,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             FilledButton.tonal(
-              onPressed: () => _handleLimitTap(context, usage.monthlyLimitBytes),
+              onPressed: () =>
+                  _handleLimitTap(context, usage.monthlyLimitBytes),
               child: Text(
-                usage.hasLimit ? l10n.settingsUsageLimit : l10n.settingsRechargeTraffic,
+                usage.hasLimit
+                    ? l10n.settingsLimitActionChange
+                    : l10n.settingsLimitActionSet,
               ),
-            ),
-            OutlinedButton(
-              onPressed: _handleResetUsage,
-              child: Text(l10n.settingsResetUsage),
             ),
             if (usage.limitExceeded)
               Chip(
@@ -1119,17 +1216,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.manage_accounts_outlined),
             title: Text(l10n.settingsAccountManageTitle),
-            subtitle: Text(username.isEmpty ? '—' : username),
+            subtitle: Text(username.isEmpty ? '-' : username),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.of(context).push<void>(
-                PageRouteBuilder<void>(
-                  opaque: true,
-                  pageBuilder: (_, __, ___) => const AccountSettingsScreen(),
-                  transitionsBuilder: (_, animation, __, child) =>
-                      FadeTransition(opacity: animation, child: child),
-                  transitionDuration: const Duration(milliseconds: 200),
-                ),
+                _instantRoute<void>(const AccountSettingsScreen()),
               );
             },
           ),
@@ -1154,7 +1245,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildLanguageSection(BuildContext context, PreferencesState preferences) {
+  Widget _buildLanguageSection(
+      BuildContext context, PreferencesState preferences) {
     final l10n = context.l10n;
     final locales = AppLocalizations.supportedLocales;
     final langOptions = locales
@@ -1180,11 +1272,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               context: context,
               title: l10n.settingsLanguage,
               options: langOptions,
-              currentValue: preferences.localeCode ?? PreferencesState.defaultLocaleCode,
+              currentValue:
+                  preferences.localeCode ?? PreferencesState.defaultLocaleCode,
               isSelected: (a, b) => a == b,
             );
             if (!mounted || result == null) return;
-            await ref.read(preferencesControllerProvider.notifier).setLocale(result);
+            await ref
+                .read(preferencesControllerProvider.notifier)
+                .setLocale(result);
           },
         ),
       ],
@@ -1192,7 +1287,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   String _languageDisplayValue(String? code, AppLocalizations l10n) {
-    final locale = parseLocaleFromTag(code ?? PreferencesState.defaultLocaleCode);
+    final locale =
+        parseLocaleFromTag(code ?? PreferencesState.defaultLocaleCode);
     return AppLocalizations.localeDisplayNameWithCoverage(locale);
   }
 
@@ -1213,40 +1309,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           surface: GlassSurface.flat,
           child: Row(
-          children: [
-            Expanded(
-              child: title != null
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          title,
-                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          value,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.7),
+            children: [
+              Expanded(
+                child: title != null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            value,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        value,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface,
                         ),
-                      ],
-                    )
-                  : Text(
-                      value,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.onSurface,
                       ),
-                    ),
-            ),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
-              size: 24,
-            ),
-          ],
-        ),
+              ),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                size: 24,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1268,7 +1366,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       contentPadding: EdgeInsets.zero,
       title: Text(
         title,
-        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        style:
+            theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
       ),
       subtitle: Text(
         subtitle,
@@ -1281,7 +1380,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   int? _serverMaxLimitBytes() {
-    return ref.read(authControllerProvider).session?.trafficPolicy.serverMaxLimitBytes;
+    return ref
+        .read(authControllerProvider)
+        .session
+        ?.trafficPolicy
+        .serverMaxLimitBytes;
   }
 
   Future<void> _promptKillSwitchAlwaysOn(BuildContext context) async {
@@ -1293,7 +1396,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: Text(l10n.settingsKillSwitchPromptTitle),
           content: Text(l10n.settingsKillSwitchPromptBody),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l10n.commonLater)),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(l10n.commonLater)),
             FilledButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
@@ -1307,13 +1412,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<_LimitDialogResult?> _showLimitDialog(BuildContext context, int? currentLimit) async {
+  Future<_LimitDialogResult?> _showLimitDialog(
+      BuildContext context, int? currentLimit) async {
     final l10n = context.l10n;
     final serverMax = _serverMaxLimitBytes();
-    final maxGb = serverMax != null
-        ? serverMax / (1024 * 1024 * 1024)
-        : 10000.0;
-    final minGb = 1.0;
+    final maxGb =
+        serverMax != null ? serverMax / (1024 * 1024 * 1024) : 10000.0;
+    final minGb = 0.01;
     final formKey = GlobalKey<FormState>();
     final controller = TextEditingController(
       text: currentLimit != null
@@ -1349,10 +1454,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: controller,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
-                    hintText: l10n.settingsLimitHint,
-                    helperText: l10n.settingsLimitHelper,
+                    hintText: '0.01 - 10000',
+                    helperText: l10n.settingsLimitUnitGb,
                   ),
                   validator: (value) {
                     final trimmed = value?.trim() ?? '';
@@ -1368,7 +1474,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     }
                     final bytes = (parsed * 1024 * 1024 * 1024).round();
                     if (serverMax != null && bytes > serverMax) {
-                      return l10n.settingsLimitErrorExceedsServer;
+                      return l10n.settingsLimitServerThrottled;
                     }
                     if (serverMax == null && parsed > maxGb) {
                       return l10n.settingsLimitErrorExceedsMax;
@@ -1377,35 +1483,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                Row(
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.end,
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: Text(l10n.close),
-                      ),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: Text(l10n.commonClose),
                     ),
-                    if (currentLimit != null) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(ctx).pop(const _LimitDialogResult.clear()),
-                          child: Text(l10n.settingsRemoveLimit),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () {
-                          if (formKey.currentState?.validate() ?? false) {
-                            final parsed = double.parse(controller.text.trim());
-                            final bytes = (parsed * 1024 * 1024 * 1024).round();
-                            Navigator.of(ctx).pop(_LimitDialogResult(bytes));
-                          }
-                        },
-                        child: Text(l10n.ok),
-                      ),
+                    FilledButton(
+                      onPressed: () {
+                        if (formKey.currentState?.validate() ?? false) {
+                          final parsed = double.parse(controller.text.trim());
+                          final bytes = (parsed * 1024 * 1024 * 1024).round();
+                          Navigator.of(ctx).pop(_LimitDialogResult(bytes));
+                        }
+                      },
+                      child: Text(l10n.commonConfirm),
                     ),
                   ],
                 ),
@@ -1484,7 +1579,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       options: saved
           .map((r) => SettingsPickerOption(value: r.name, label: r.name))
           .toList(),
-      currentValue: ref.read(settingsControllerProvider).routing.ruleDb.savedRuleName,
+      currentValue:
+          ref.read(settingsControllerProvider).routing.ruleDb.savedRuleName,
       isSelected: (a, b) => a == b,
     );
     if (!mounted || picked == null) return;

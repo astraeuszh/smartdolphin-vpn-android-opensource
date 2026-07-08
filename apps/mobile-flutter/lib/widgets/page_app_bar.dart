@@ -12,11 +12,14 @@ class HiVpnPageAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       title: Text(
         title,
-        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        style:
+            theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
       ),
       centerTitle: false,
       elevation: 0,
-      backgroundColor: theme.colorScheme.surface,
+      scrolledUnderElevation: 0,
+      shadowColor: Colors.transparent,
+      backgroundColor: Colors.transparent,
       foregroundColor: theme.colorScheme.onSurface,
       surfaceTintColor: Colors.transparent,
       actions: actions,

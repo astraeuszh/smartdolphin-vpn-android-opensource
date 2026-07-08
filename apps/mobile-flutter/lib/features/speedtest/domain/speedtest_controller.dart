@@ -29,7 +29,7 @@ double rollingAverage(List<double> values, {int window = 5}) {
   return sum / slice.length;
 }
 
-double _smoothMbps(double previous, double sample, {double alpha = 0.35}) {
+double _smoothMbps(double previous, double sample, {double alpha = 0.18}) {
   sample = _sanitizeMbps(sample);
   if (sample <= 0.05) {
     return previous;
@@ -55,7 +55,8 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   Future<void> run({required bool isVpnTest}) async {
-    if (state.status == SpeedTestStatus.running || state.status == SpeedTestStatus.preparing) {
+    if (state.status == SpeedTestStatus.running ||
+        state.status == SpeedTestStatus.preparing) {
       return;
     }
     state = state.copyWith(
@@ -83,7 +84,8 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
       _connectivitySubscription?.cancel();
       _connectivitySubscription = null;
       if (!isVpnTest) {
-        _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+        _connectivitySubscription =
+            Connectivity().onConnectivityChanged.listen((results) {
           final hasNetwork = results.isNotEmpty &&
               !results.every((r) => r == ConnectivityResult.none);
           if (!hasNetwork && state.status == SpeedTestStatus.running) {
@@ -123,7 +125,8 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
             state = state.copyWith(
               phase: SpeedTestPhase.download,
               downloadSeries: List<double>.from(downloadSeries),
-              downloadMbps: smoothed > 0 ? smoothed : rollingAverage(downloadSeries),
+              downloadMbps:
+                  smoothed > 0 ? smoothed : rollingAverage(downloadSeries),
               liveMbps: _smoothMbps(state.liveMbps, mbps),
               errorMessage: null,
             );
@@ -136,7 +139,8 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
             state = state.copyWith(
               phase: SpeedTestPhase.upload,
               uploadSeries: List<double>.from(uploadSeries),
-              uploadMbps: smoothed > 0 ? smoothed : rollingAverage(uploadSeries),
+              uploadMbps:
+                  smoothed > 0 ? smoothed : rollingAverage(uploadSeries),
               liveMbps: _smoothMbps(state.liveMbps, mbps),
               errorMessage: null,
             );
@@ -154,7 +158,8 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
               liveMbps: 0,
             );
           },
-          onCompleted: ({required downloadMbps, required uploadMbps, required pingMs}) {
+          onCompleted: (
+              {required downloadMbps, required uploadMbps, required pingMs}) {
             _connectivitySubscription?.cancel();
             _connectivitySubscription = null;
             completionTimestamp = DateTime.now().toUtc();
@@ -168,7 +173,9 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
               status: SpeedTestStatus.complete,
               phase: SpeedTestPhase.idle,
               downloadMbps: _sanitizeMbps(
-                downloadMbps > 0 ? downloadMbps : rollingAverage(downloadSeries),
+                downloadMbps > 0
+                    ? downloadMbps
+                    : rollingAverage(downloadSeries),
               ),
               uploadMbps: _sanitizeMbps(
                 uploadMbps > 0 ? uploadMbps : rollingAverage(uploadSeries),
@@ -212,7 +219,8 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
         lastRun: completionTimestamp ?? state.lastRun ?? DateTime.now().toUtc(),
       );
       state = updated;
-      await prefs.setString('speedtest_last', jsonEncode(_serializeResult(updated)));
+      await prefs.setString(
+          'speedtest_last', jsonEncode(_serializeResult(updated)));
       final history = _ref.read(speedTestHistoryProvider.notifier);
       unawaited(history.addRecord(
         SpeedTestRecord(
@@ -230,14 +238,16 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
           updated.uploadMbps > 0) {
         final prefsRepo = _ref.read(serverPreferencesRepositoryProvider);
         if (prefsRepo != null) {
-          unawaited(prefsRepo.saveServerSpeedCache(
+          unawaited(prefsRepo
+              .saveServerSpeedCache(
             server.id,
             ServerSpeedCache(
               downloadMbps: updated.downloadMbps,
               uploadMbps: updated.uploadMbps,
               pingMs: updated.ping?.inMilliseconds,
             ),
-          ).then((_) {
+          )
+              .then((_) {
             _ref.invalidate(serverSpeedCacheProvider);
           }));
         }
@@ -264,7 +274,9 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
       final data = jsonDecode(raw) as Map<String, dynamic>;
       state = SpeedTestState(
         status: SpeedTestStatus.complete,
-        ping: data['pingMs'] != null ? Duration(milliseconds: data['pingMs'] as int) : null,
+        ping: data['pingMs'] != null
+            ? Duration(milliseconds: data['pingMs'] as int)
+            : null,
         downloadMbps: (data['download'] as num?)?.toDouble() ?? 0,
         uploadMbps: (data['upload'] as num?)?.toDouble() ?? 0,
         ip: data['ip'] as String?,
@@ -274,7 +286,9 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
         uploadSeries: ((data['uploadSeries'] as List<dynamic>?) ?? [])
             .map((e) => (e as num).toDouble())
             .toList(),
-        lastRun: data['lastRun'] != null ? DateTime.parse(data['lastRun'] as String) : null,
+        lastRun: data['lastRun'] != null
+            ? DateTime.parse(data['lastRun'] as String)
+            : null,
         isVpnTest: data['isVpnTest'] as bool? ?? false,
       );
     } catch (_) {
@@ -311,7 +325,9 @@ String _friendlyPluginError(String message) {
   if (normalized.contains('cancel')) {
     return 'Speed test was cancelled. Tap start to try again.';
   }
-  return message.isEmpty ? 'The speed test encountered an unexpected error.' : message;
+  return message.isEmpty
+      ? 'The speed test encountered an unexpected error.'
+      : message;
 }
 
 String _friendlyException(Object error) {

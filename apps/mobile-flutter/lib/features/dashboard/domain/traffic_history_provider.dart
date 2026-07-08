@@ -39,7 +39,7 @@ class TrafficHistoryNotifier extends StateNotifier<TrafficHistoryState> {
 
   void _startSampling() {
     _stopSampling();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _sample());
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _sample());
   }
 
   void _stopSampling() {
@@ -55,12 +55,15 @@ class TrafficHistoryNotifier extends StateNotifier<TrafficHistoryState> {
     var uploadList = [...state.uploadSamples, upload];
     var downloadList = [...state.downloadSamples, download];
     if (uploadList.length > TrafficHistoryState.maxSamples) {
-      uploadList = uploadList.sublist(uploadList.length - TrafficHistoryState.maxSamples);
+      uploadList = uploadList
+          .sublist(uploadList.length - TrafficHistoryState.maxSamples);
     }
     if (downloadList.length > TrafficHistoryState.maxSamples) {
-      downloadList = downloadList.sublist(downloadList.length - TrafficHistoryState.maxSamples);
+      downloadList = downloadList
+          .sublist(downloadList.length - TrafficHistoryState.maxSamples);
     }
-    state = TrafficHistoryState(uploadSamples: uploadList, downloadSamples: downloadList);
+    state = TrafficHistoryState(
+        uploadSamples: uploadList, downloadSamples: downloadList);
   }
 
   @override

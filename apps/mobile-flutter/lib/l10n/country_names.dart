@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../features/servers/data/all_countries.dart';
 
-/// 与 [allCountries] 中文名并行，供非中文界面显示。
+/// English country names used as fallback for node and IP displays.
 const Map<String, String> kCountryNamesEn = {
   'HK': 'Hong Kong',
   'US': 'United States',
@@ -152,103 +152,166 @@ const Map<String, String> kCountryNamesEn = {
   'BT': 'Bhutan',
 };
 
+final Map<String, String> kCountryNamesZhHant = {
+  ...kCountryNamesEn,
+  'HK': '??',
+  'US': '??',
+  'TW': '??',
+  'CN': '??',
+  'JP': '??',
+  'KR': '??',
+  'SG': '???',
+  'TH': '??',
+  'VN': '??',
+  'ID': '??',
+  'MY': '????',
+  'PH': '???',
+  'IN': '??',
+  'AE': '????????',
+  'SA': '??????',
+  'IL': '???',
+  'TR': '???',
+  'RU': '???',
+  'DE': '??',
+  'FR': '??',
+  'GB': '??',
+  'IT': '???',
+  'ES': '???',
+  'NL': '??',
+  'PL': '??',
+  'SE': '??',
+  'NO': '??',
+  'FI': '??',
+  'CA': '???',
+  'AU': '??',
+  'NZ': '???',
+  'BR': '??',
+  'MX': '???',
+  'AR': '???',
+  'CL': '??',
+  'CO': '????',
+  'ZA': '??',
+  'EG': '??',
+  'NG': '????',
+  'KE': '??',
+  'MA': '???',
+};
+
 final Map<String, String> kCountryNamesJa = {
   ...kCountryNamesEn,
-  'HK': '香港',
-  'US': 'アメリカ合衆国',
-  'SG': 'シンガポール',
-  'TW': '台湾',
-  'CN': '中国',
-  'JP': '日本',
-  'KR': '韓国',
-  'TH': 'タイ',
-  'VN': 'ベトナム',
-  'MY': 'マレーシア',
-  'PH': 'フィリピン',
-  'ID': 'インドネシア',
-  'IN': 'インド',
-  'AU': 'オーストラリア',
-  'GB': 'イギリス',
-  'DE': 'ドイツ',
-  'FR': 'フランス',
-  'RU': 'ロシア',
-  'CA': 'カナダ',
-  'BR': 'ブラジル',
-};
-
-final Map<String, String> kCountryNamesKo = {
-  ...kCountryNamesEn,
-  'HK': '홍콩',
-  'US': '미국',
-  'SG': '싱가포르',
-  'TW': '대만',
-  'CN': '중국',
-  'JP': '일본',
-  'KR': '한국',
-  'TH': '태국',
-  'VN': '베트남',
-  'MY': '말레이시아',
-  'PH': '필리핀',
-  'ID': '인도네시아',
-  'IN': '인도',
-  'AU': '호주',
-  'GB': '영국',
-  'DE': '독일',
-  'FR': '프랑스',
-  'RU': '러시아',
-  'CA': '캐나다',
-  'BR': '브라질',
-};
-
-final Map<String, String> kCountryNamesDe = {
-  ...kCountryNamesEn,
-  'US': 'Vereinigte Staaten',
-  'GB': 'Vereinigtes Königreich',
-  'HK': 'Hongkong',
-};
-
-final Map<String, String> kCountryNamesFr = {
-  ...kCountryNamesEn,
-  'US': 'États-Unis',
-  'GB': 'Royaume-Uni',
-  'HK': 'Hong Kong',
+  'HK': '??',
+  'US': '???????',
+  'TW': '??',
+  'CN': '??',
+  'JP': '??',
+  'KR': '??',
+  'SG': '??????',
+  'TH': '??',
+  'VN': '????',
+  'ID': '??????',
+  'MY': '?????',
+  'PH': '?????',
+  'IN': '???',
+  'AE': '????????',
+  'SA': '???????',
+  'IL': '?????',
+  'TR': '???',
+  'RU': '???',
+  'DE': '???',
+  'FR': '????',
+  'GB': '????',
+  'IT': '????',
+  'ES': '????',
+  'NL': '????',
+  'PL': '?????',
+  'SE': '??????',
+  'NO': '?????',
+  'FI': '??????',
+  'CA': '???',
+  'AU': '???????',
+  'NZ': '????????',
+  'BR': '????',
+  'MX': '????',
+  'AR': '??????',
+  'CL': '??',
+  'CO': '?????',
+  'ZA': '?????',
+  'EG': '????',
+  'NG': '??????',
+  'KE': '???',
+  'MA': '????',
 };
 
 final Map<String, String> kCountryNamesEs = {
   ...kCountryNamesEn,
+  'HK': 'Hong Kong',
   'US': 'Estados Unidos',
+  'TW': 'Taiw?n',
+  'CN': 'China',
+  'JP': 'Jap?n',
+  'KR': 'Corea del Sur',
+  'SG': 'Singapur',
+  'TH': 'Tailandia',
+  'VN': 'Vietnam',
+  'ID': 'Indonesia',
+  'MY': 'Malasia',
+  'PH': 'Filipinas',
+  'IN': 'India',
+  'AE': 'Emiratos ?rabes Unidos',
+  'SA': 'Arabia Saudita',
+  'IL': 'Israel',
+  'TR': 'Turqu?a',
+  'RU': 'Rusia',
+  'DE': 'Alemania',
+  'FR': 'Francia',
   'GB': 'Reino Unido',
-};
-
-final Map<String, String> kCountryNamesPt = {
-  ...kCountryNamesEn,
-  'US': 'Estados Unidos',
-  'GB': 'Reino Unido',
+  'IT': 'Italia',
+  'ES': 'Espa?a',
+  'NL': 'Pa?ses Bajos',
+  'PL': 'Polonia',
+  'SE': 'Suecia',
+  'NO': 'Noruega',
+  'FI': 'Finlandia',
+  'CA': 'Canad?',
+  'AU': 'Australia',
+  'NZ': 'Nueva Zelanda',
+  'BR': 'Brasil',
+  'MX': 'M?xico',
+  'AR': 'Argentina',
+  'CL': 'Chile',
+  'CO': 'Colombia',
+  'ZA': 'Sud?frica',
+  'EG': 'Egipto',
+  'NG': 'Nigeria',
+  'KE': 'Kenia',
+  'MA': 'Marruecos',
 };
 
 final Map<String, String> _zhNames = {
   for (final e in allCountries) e.$1: e.$2,
 };
 
-/// 简/繁界面用中文名；其它语言用对应本地化名称（无翻译时回退英文）。
+/// Simplified/Traditional Chinese use Chinese names; other supported languages
+/// use localized names and fall back to English when a code has no translation.
 String countryDisplayName(Locale locale, String code) {
   final c = code.toUpperCase();
   if (locale.languageCode == 'zh') {
+    if (locale.scriptCode == 'Hant' ||
+        locale.countryCode == 'TW' ||
+        locale.countryCode == 'HK') {
+      return kCountryNamesZhHant[c] ?? _zhNames[c] ?? kCountryNamesEn[c] ?? c;
+    }
     return _zhNames[c] ?? kCountryNamesEn[c] ?? c;
   }
   final localized = switch (locale.languageCode) {
     'ja' => kCountryNamesJa[c],
-    'ko' => kCountryNamesKo[c],
-    'de' => kCountryNamesDe[c],
-    'fr' => kCountryNamesFr[c],
     'es' => kCountryNamesEs[c],
-    'pt' => kCountryNamesPt[c],
     _ => null,
   };
   return localized ?? kCountryNamesEn[c] ?? c;
 }
 
-/// 搜索节点：匹配国家码、英文名、中文名（用户用任意语言输入都能搜）。
+/// Search nodes by code, English, Chinese, Japanese, or Spanish names.
 bool countryMatchesSearch(String queryLower, String countryCode) {
   final q = queryLower.trim();
   if (q.isEmpty) return true;
@@ -256,7 +319,12 @@ bool countryMatchesSearch(String queryLower, String countryCode) {
   if (code.toLowerCase().startsWith(q)) return true;
   final en = (kCountryNamesEn[code] ?? '').toLowerCase();
   final zh = (_zhNames[code] ?? '').toLowerCase();
-  final ja = (kCountryNamesJa[code] ?? '').toLowerCase();
-  final ko = (kCountryNamesKo[code] ?? '').toLowerCase();
-  return en.contains(q) || zh.contains(q) || ja.contains(q) || ko.contains(q);
+  final zhHant = (kCountryNamesZhHant[code] ?? '').toLowerCase();
+  final jaName = (kCountryNamesJa[code] ?? '').toLowerCase();
+  final esName = (kCountryNamesEs[code] ?? '').toLowerCase();
+  return en.contains(q) ||
+      zh.contains(q) ||
+      zhHant.contains(q) ||
+      jaName.contains(q) ||
+      esName.contains(q);
 }

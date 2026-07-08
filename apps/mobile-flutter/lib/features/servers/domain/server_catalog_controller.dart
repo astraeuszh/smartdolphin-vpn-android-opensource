@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../platform/android/network_stats_channel.dart';
 import 'server.dart';
 import '../../../l10n/country_names.dart';
 import '../../settings/domain/preferences_controller.dart';
@@ -57,16 +58,13 @@ class ServerCatalogState {
     }
     final sorted = [...filtered];
     sorted.sort((a, b) {
-      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      if (a.isPinned && b.isPinned) {
-        final pa = _pinPriority(a.countryCode);
-        final pb = _pinPriority(b.countryCode);
-        if (pa != pb) return pa.compareTo(pb);
-      }
-      if (a.isConnectable != b.isConnectable) return a.isConnectable ? -1 : 1;
-      final la = a.latencyMs ?? 9999;
-      final lb = b.latencyMs ?? 9999;
-      return la.compareTo(lb);
+      final ra = _cardSortRank(a);
+      final rb = _cardSortRank(b);
+      if (ra != rb) return ra.compareTo(rb);
+      final la = _effectiveLatency(a);
+      final lb = _effectiveLatency(b);
+      if (la != lb) return la.compareTo(lb);
+      return a.countryName.compareTo(b.countryName);
     });
     return sorted;
   }
@@ -97,17 +95,22 @@ class ServerCatalogState {
 const _sentinel = Object();
 
 /// 置顶顺序：香港 → 美国 → 新加坡
-int _pinPriority(String countryCode) {
-  switch (countryCode.toUpperCase()) {
-    case 'HK':
-      return 0;
-    case 'US':
-      return 1;
-    case 'SG':
-      return 2;
-    default:
-      return 99;
-  }
+bool _isSmartDolphinNode(CountryCard c) {
+  return c.server?.id.toLowerCase().startsWith('smartdolphin-') ?? false;
+}
+
+int _effectiveLatency(CountryCard c) {
+  final ms = c.latencyMs ?? c.server?.pingMs;
+  if (ms == null || ms <= 0) return 9998;
+  return ms;
+}
+
+int _cardSortRank(CountryCard c) {
+  if (_isSmartDolphinNode(c) && c.isConnectable) return 0;
+  if (c.isConnectable) return 1;
+  if (_isSmartDolphinNode(c)) return 2;
+  if (c.server != null) return 3;
+  return 4;
 }
 
 List<CountryCard> _initialCountryCards() {
@@ -149,7 +152,9 @@ List<CountryCard> _mergeWithInitialCards(List<CountryCard> fromApi) {
     byCode[c.countryCode.toUpperCase()] = c;
   }
   return allCountries
-      .map((e) => byCode[e.$1] ?? CountryCard(
+      .map((e) =>
+          byCode[e.$1] ??
+          CountryCard(
             countryCode: e.$1,
             countryName: e.$2,
             server: null,
@@ -165,7 +170,8 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
           isLoading: false,
         )) {
     print('ServerCatalogController constructor called!');
-    developer.log(' ServerCatalogController constructor called!', name: 'ServerCatalogController');
+    developer.log(' ServerCatalogController constructor called!',
+        name: 'ServerCatalogController');
     _init();
   }
 
@@ -173,17 +179,22 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
   Timer? _latencyTimer;
   bool _measurementInProgress = false;
   bool _latencyPaused = false;
-  static const _latencyRefreshInterval = Duration(seconds: 45);
-  static const _latencyMeasureConcurrency = 4;
+  static const _latencyRefreshInterval = Duration(seconds: 90);
+  static const _latencyMeasureConcurrency = 2;
 
   Future<void> _init() async {
     print('ServerCatalogController._init() called');
-    developer.log(' ServerCatalogController._init() called', name: 'ServerCatalogController');
+    developer.log(' ServerCatalogController._init() called',
+        name: 'ServerCatalogController');
     try {
-      developer.log(' Calling ServerRepository.loadCountryCards()', name: 'ServerCatalogController');
-      final cards = await _ref.read(serverRepositoryProvider).loadCountryCards();
-      print('Received ${cards.length} country cards from repository (expected ${allCountries.length})');
-      developer.log(' Received ${cards.length} country cards (expected ${allCountries.length})',
+      developer.log(' Calling ServerRepository.loadCountryCards()',
+          name: 'ServerCatalogController');
+      final cards =
+          await _ref.read(serverRepositoryProvider).loadCountryCards();
+      print(
+          'Received ${cards.length} country cards from repository (expected ${allCountries.length})');
+      developer.log(
+          ' Received ${cards.length} country cards (expected ${allCountries.length})',
           name: 'ServerCatalogController');
 
       // 确保始终有全部国家卡片，避免只显示 2 个
@@ -198,7 +209,8 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
         favorites: favorites,
         isLoading: false,
       );
-      developer.log('✅State updated with ${mergedCards.length} cards', name: 'ServerCatalogController');
+      developer.log('✅State updated with ${mergedCards.length} cards',
+          name: 'ServerCatalogController');
 
       await _measureLatency(fullScan: true);
       _latencyTimer = Timer.periodic(_latencyRefreshInterval, (_) {
@@ -207,7 +219,10 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
       });
     } catch (error, stackTrace) {
       print(' ServerCatalogController._init error: $error');
-      developer.log('Error in _init()', name: 'ServerCatalogController', error: error, stackTrace: stackTrace);
+      developer.log('Error in _init()',
+          name: 'ServerCatalogController',
+          error: error,
+          stackTrace: stackTrace);
       state = state.copyWith(
         isLoading: false,
         error: error.toString(),
@@ -265,7 +280,7 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
     final selectedId =
         _ref.read(serverPreferencesRepositoryProvider)?.loadLastServerId();
     final connectedId = state.connectedServerId;
-    final pinnedCodes = {'HK', 'US', 'SG'};
+    final pinnedCodes = {'NL', 'US', 'SG'};
     final picked = <String, Server>{};
     for (final server in servers) {
       if (pinnedCodes.contains(server.countryCode.toUpperCase())) {
@@ -311,8 +326,9 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
         case SdProtocol.reality:
           return node.realityPort;
         case SdProtocol.hysteria2:
-        case SdProtocol.wireguard:
           return 443;
+        case SdProtocol.wireguard:
+          return 51820;
       }
     }
     final parts = server.endpoint.split(':');
@@ -320,9 +336,12 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
   }
 
   Future<MapEntry<String, int>> _probeServerLatency(Server server) async {
+    final host = server.ip ?? server.endpoint.split(':').first;
+    final nodePing = await NetworkStatsChannel.pingMs(host, count: 3);
+    if (nodePing != null && nodePing > 0) {
+      return MapEntry(server.id, nodePing);
+    }
     try {
-      final parts = server.endpoint.split(':');
-      final host = parts.first;
       final port = _probePortFor(server);
       final stopwatch = Stopwatch()..start();
       final socket = await Socket.connect(
@@ -375,11 +394,14 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
 
   /// Refresh country cards from API
   Future<void> refreshServers() async {
-    developer.log('Refreshing country cards...', name: 'ServerCatalogController');
+    developer.log('Refreshing country cards...',
+        name: 'ServerCatalogController');
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final cards = await _ref.read(serverRepositoryProvider).loadCountryCards();
-      developer.log('Refreshed ${cards.length} country cards', name: 'ServerCatalogController');
+      final cards =
+          await _ref.read(serverRepositoryProvider).loadCountryCards();
+      developer.log('Refreshed ${cards.length} country cards',
+          name: 'ServerCatalogController');
 
       final mergedCards = cards.length >= allCountries.length
           ? cards
@@ -396,7 +418,10 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
       await _measureLatency(fullScan: true);
     } catch (error, stackTrace) {
       print(' ServerCatalogController.refreshServers error: $error');
-      developer.log(' Error refreshing', name: 'ServerCatalogController', error: error, stackTrace: stackTrace);
+      developer.log(' Error refreshing',
+          name: 'ServerCatalogController',
+          error: error,
+          stackTrace: stackTrace);
       state = state.copyWith(
         isLoading: false,
         error: error.toString(),

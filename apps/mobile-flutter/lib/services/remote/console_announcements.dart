@@ -37,7 +37,8 @@ class ConsoleAnnouncement {
 }
 
 class ConsoleAnnouncements {
-  ConsoleAnnouncements({http.Client? client}) : _client = client ?? http.Client();
+  ConsoleAnnouncements({http.Client? client})
+      : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -48,16 +49,18 @@ class ConsoleAnnouncements {
     try {
       data = jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (_) {
-      throw Exception('服务器响应无效');
+      throw Exception('Invalid server response');
     }
     if (data['ok'] != true) {
-      throw Exception((data['error'] as String?) ?? '公告加载失败');
+      throw Exception(
+          (data['error'] as String?) ?? 'Failed to load announcements');
     }
     final rows = data['announcements'];
     if (rows is! List) return const [];
     return rows
         .whereType<Map>()
-        .map((row) => ConsoleAnnouncement.fromJson(Map<String, dynamic>.from(row)))
+        .map((row) =>
+            ConsoleAnnouncement.fromJson(Map<String, dynamic>.from(row)))
         .where((row) => row.published && row.title.isNotEmpty)
         .toList();
   }

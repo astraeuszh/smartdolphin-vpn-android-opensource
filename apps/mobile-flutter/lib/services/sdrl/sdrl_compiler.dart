@@ -19,8 +19,10 @@ class SdrlCompiler {
   static void Function(Pointer<Utf8>)? _freeFn;
 
   static const irFileName = SdrlRuleStore.irFileName;
-  static const binFileName = '${SdrlRuleStore.activeBase}${SdrlRuleStore.sdrbExt}';
-  static const sourceFileName = '${SdrlRuleStore.activeBase}${SdrlRuleStore.sdrlExt}';
+  static const binFileName =
+      '${SdrlRuleStore.activeBase}${SdrlRuleStore.sdrbExt}';
+  static const sourceFileName =
+      '${SdrlRuleStore.activeBase}${SdrlRuleStore.sdrlExt}';
 
   static Future<SdrlCompileResult> compile(String source) async {
     final trimmed = source.trim();
@@ -37,7 +39,8 @@ class SdrlCompiler {
     final native = _compileNative(trimmed);
     if (native != null) return native;
 
-    if (!kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
+    if (!kIsWeb &&
+        (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
       final cli = await _compileViaCli(trimmed);
       if (cli != null) return cli;
     }
@@ -48,7 +51,7 @@ class SdrlCompiler {
           severity: 'error',
           code: 'E000',
           message:
-              'SDRL 编译器不可用。请更新应用或联系支持（缺少 libsdrl_ffi.so）。',
+              'SDRL compiler is unavailable. Update the app or contact support (missing libsdrl_ffi.so).',
         ),
       ],
     );
@@ -61,7 +64,8 @@ class SdrlCompiler {
     return result;
   }
 
-  static Future<void> persistResult(SdrlCompileResult result, String source) async {
+  static Future<void> persistResult(
+      SdrlCompileResult result, String source) async {
     final dir = await _sdrlDir();
     await dir.create(recursive: true);
     await File('${dir.path}/$sourceFileName').writeAsString(source);
@@ -78,7 +82,8 @@ class SdrlCompiler {
                   'priority': r.priority,
                   'source_line': r.sourceLine,
                   'matchers': r.matchers
-                      .map((m) => {'type': m.type, 'value': m.value, 'op': m.op})
+                      .map(
+                          (m) => {'type': m.type, 'value': m.value, 'op': m.op})
                       .toList(),
                   'action': {'type': r.action},
                 },
@@ -105,7 +110,8 @@ class SdrlCompiler {
     final file = File('${(await _sdrlDir()).path}/$irFileName');
     if (!await file.exists()) return null;
     try {
-      final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final json =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       final ir = SdrlIrDocument.fromJson(json);
       if (expectedHash != null &&
           expectedHash.isNotEmpty &&
@@ -134,7 +140,9 @@ class SdrlCompiler {
               SdrlDiagnostic(
                 severity: 'error',
                 code: 'E000',
-                message: code == 2 ? 'SDRL 编译参数无效' : 'SDRL 编译失败',
+                message: code == 2
+                    ? 'Invalid SDRL compile arguments'
+                    : 'SDRL compile failed',
               ),
             ],
           );
@@ -202,7 +210,8 @@ class SdrlCompiler {
       final irJson =
           jsonDecode(await irOut.readAsString()) as Map<String, dynamic>;
       final ir = SdrlIrDocument.fromJson(irJson);
-      final binary = await binOut.exists() ? await binOut.readAsBytes() : Uint8List(0);
+      final binary =
+          await binOut.exists() ? await binOut.readAsBytes() : Uint8List(0);
       await irOut.delete().catchError((_) => irOut);
       await binOut.delete().catchError((_) => binOut);
       return SdrlCompileResult.ok(
@@ -230,9 +239,7 @@ class SdrlCompiler {
     final irJson = root['ir'] as Map<String, dynamic>?;
     final ir = irJson == null ? null : SdrlIrDocument.fromJson(irJson);
     final binaryB64 = root['binary_b64'] as String? ?? '';
-    final binary = binaryB64.isEmpty
-        ? Uint8List(0)
-        : base64Decode(binaryB64);
+    final binary = binaryB64.isEmpty ? Uint8List(0) : base64Decode(binaryB64);
     const maxSdrbBytes = 128 * 1024;
     if (binary.length > maxSdrbBytes) {
       return SdrlCompileResult.failure(
@@ -262,7 +269,7 @@ class SdrlCompiler {
         SdrlDiagnostic(
           severity: 'error',
           code: 'E000',
-          message: 'SDRL 校验失败',
+          message: 'SDRL validation failed',
         ),
       ];
     }
@@ -272,7 +279,8 @@ class SdrlCompiler {
         .map(
           (line) => SdrlDiagnostic(
             severity: line.startsWith('warning') ? 'warning' : 'error',
-            code: RegExp(r'\[([A-Z]\d+)\]').firstMatch(line)?.group(1) ?? 'E000',
+            code:
+                RegExp(r'\[([A-Z]\d+)\]').firstMatch(line)?.group(1) ?? 'E000',
             message: line,
           ),
         )
@@ -372,5 +380,5 @@ class SdrlCompileResult {
       diagnostics.where((d) => !d.isError).toList();
 
   String get firstErrorMessage =>
-      errors.isNotEmpty ? errors.first.displayLine : 'SDRL 编译失败';
+      errors.isNotEmpty ? errors.first.displayLine : 'SDRL compile failed';
 }

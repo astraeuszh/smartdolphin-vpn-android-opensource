@@ -21,8 +21,9 @@ class AuthGateScreen extends ConsumerWidget {
           body: Center(child: CircularProgressIndicator()),
         );
       case AuthStatus.guest:
-      case AuthStatus.error:
         return const _LoginGate();
+      case AuthStatus.error:
+        return auth.session == null ? const _LoginGate() : const _AuthedShell();
       case AuthStatus.authenticated:
       case AuthStatus.pending:
       case AuthStatus.banned:

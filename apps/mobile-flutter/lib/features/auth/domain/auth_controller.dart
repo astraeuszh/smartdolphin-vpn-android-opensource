@@ -9,7 +9,15 @@ import '../../session/domain/session_controller.dart';
 import '../data/auth_repository.dart';
 import 'account_session.dart';
 
-enum AuthStatus { unknown, loading, guest, authenticated, pending, banned, error }
+enum AuthStatus {
+  unknown,
+  loading,
+  guest,
+  authenticated,
+  pending,
+  banned,
+  error
+}
 
 class AuthState {
   const AuthState({
@@ -53,6 +61,8 @@ class AuthController extends StateNotifier<AuthState> {
 
   AuthRepository get _repo => _ref.read(authRepositoryProvider);
 
+  bool _isBannedAuthError(String code) => code == 'banned';
+
   Future<void> bootstrap() async {
     state = state.copyWith(status: AuthStatus.loading);
     final saved = await _repo.loadSession();
@@ -64,20 +74,21 @@ class AuthController extends StateNotifier<AuthState> {
       final updated = await _repo.refresh(saved);
       _applySession(updated);
     } on ConsoleAuthException catch (e) {
-      if (e.code == 'auth_failed' || e.code == 'E6008') {
-        await _repo.clearSession();
-        state = AuthState(status: AuthStatus.guest, code: e.code);
-        return;
-      }
       state = AuthState(
-        status: e.code == 'banned' ? AuthStatus.banned : AuthStatus.error,
+        status: _isBannedAuthError(e.code)
+            ? AuthStatus.banned
+            : saved.isPending
+                ? AuthStatus.pending
+                : AuthStatus.authenticated,
         session: saved,
         code: e.code,
-        message: e.code == 'banned' && e.message.isNotEmpty ? e.message : null,
+        message: _isBannedAuthError(e.code) && e.message.isNotEmpty
+            ? e.message
+            : null,
       );
     } catch (e) {
       state = AuthState(
-        status: AuthStatus.error,
+        status: saved.isPending ? AuthStatus.pending : AuthStatus.authenticated,
         session: saved,
         message: e.toString(),
       );
@@ -118,7 +129,8 @@ class AuthController extends StateNotifier<AuthState> {
       final session = await _repo.login(username, password);
       _applySession(session);
     } on ConsoleAuthException catch (e) {
-      state = AuthState(status: AuthStatus.error, code: e.code, message: e.message);
+      state =
+          AuthState(status: AuthStatus.error, code: e.code, message: e.message);
     } catch (e) {
       state = AuthState(status: AuthStatus.error, message: e.toString());
     }
@@ -140,7 +152,8 @@ class AuthController extends StateNotifier<AuthState> {
       );
       _applySession(session);
     } on ConsoleAuthException catch (e) {
-      state = AuthState(status: AuthStatus.error, code: e.code, message: e.message);
+      state =
+          AuthState(status: AuthStatus.error, code: e.code, message: e.message);
     } catch (e) {
       state = AuthState(status: AuthStatus.error, message: e.toString());
     }
@@ -158,12 +171,7 @@ class AuthController extends StateNotifier<AuthState> {
       final updated = await _repo.refresh(saved);
       _applySession(updated);
     } on ConsoleAuthException catch (e) {
-      if (e.code == 'auth_failed' || e.code == 'E6008') {
-        await logout();
-        state = AuthState(status: AuthStatus.guest, code: e.code);
-        return;
-      }
-      if (e.code == 'banned') {
+      if (_isBannedAuthError(e.code)) {
         _applySession(
           saved.copyWithRemote({
             'banned': true,
@@ -172,7 +180,11 @@ class AuthController extends StateNotifier<AuthState> {
         );
         return;
       }
-      rethrow;
+      state = AuthState(
+        status: saved.isPending ? AuthStatus.pending : AuthStatus.authenticated,
+        session: saved,
+        code: e.code,
+      );
     }
   }
 
@@ -234,24 +246,28 @@ class AuthController extends StateNotifier<AuthState> {
   Future<bool> ensureVpnAccess() async {
     final s = state.session;
     if (s == null) return false;
+    if (s.banned) return false;
+    if (s.sessionToken.isNotEmpty) {
+      unawaited(refreshSession());
+      return s.canUseVpn;
+    }
     try {
       final updated = await _repo.refresh(s);
       _applySession(updated);
       return updated.canUseVpn;
     } on ConsoleAuthException catch (e) {
-      if (e.code == 'banned') {
+      if (_isBannedAuthError(e.code)) {
         _applySession(
           s.copyWithRemote({'banned': true, 'ban_reason': e.message}),
         );
         return false;
       }
       state = AuthState(
-        status: e.code == 'banned' ? AuthStatus.banned : AuthStatus.error,
+        status: s.isPending ? AuthStatus.pending : AuthStatus.authenticated,
         session: s,
         code: e.code,
-        message: e.message,
       );
-      return false;
+      return s.canUseVpn;
     } catch (_) {
       if (s.banned) return false;
       return s.canUseVpn;
@@ -280,7 +296,8 @@ class AuthController extends StateNotifier<AuthState> {
       _applySession(session);
     } on ConsoleAuthException catch (e) {
       if (e.code == 'qr_pending') return;
-      state = AuthState(status: AuthStatus.error, code: e.code, message: e.message);
+      state =
+          AuthState(status: AuthStatus.error, code: e.code, message: e.message);
     } catch (e) {
       state = AuthState(status: AuthStatus.error, message: e.toString());
     }

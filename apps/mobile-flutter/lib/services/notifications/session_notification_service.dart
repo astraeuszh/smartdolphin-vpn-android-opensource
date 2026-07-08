@@ -31,7 +31,8 @@ class SessionNotificationService {
     playSound: false,
   );
 
-  Future<void> initialize({Future<void> Function(String action)? onAction}) async {
+  Future<void> initialize(
+      {Future<void> Function(String action)? onAction}) async {
     if (_initialized) {
       _onAction = onAction;
       return;
@@ -54,17 +55,16 @@ class SessionNotificationService {
       },
     );
 
-    final androidImpl =
-        _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     await androidImpl?.createNotificationChannel(_channel);
 
     _initialized = true;
   }
 
   Future<bool> requestPermission() async {
-    final androidImpl =
-        _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     if (androidImpl == null) {
       return true;
     }
@@ -183,13 +183,13 @@ class SessionNotificationService {
     _currentServerId = null;
   }
 
-  /// 断网保护：以独立通知告知用户 VPN 已断开（替代覆盖 UI 的方式）。
+  /// Kill-switch alert: notify the user that VPN disconnected.
   Future<void> showKillSwitchAlert() async {
     if (!_initialized) return;
     await _plugin.show(
       _killSwitchNotificationId,
-      '断网保护：VPN 已断开',
-      '为保护隐私已停止网络访问，请打开 SmartDolphinVPN 重新连接或开启「始终开启 VPN」。',
+      'Kill switch: VPN disconnected',
+      'Network access was stopped for privacy. Open SmartDolphinVPN to reconnect or enable Always-on VPN.',
       NotificationDetails(
         android: AndroidNotificationDetails(
           _channel.id,
@@ -247,7 +247,8 @@ class SessionNotificationService {
     );
   }
 
-  String _buildBody({required Duration remaining, required SessionState state}) {
+  String _buildBody(
+      {required Duration remaining, required SessionState state}) {
     final safeRemaining = remaining.isNegative ? Duration.zero : remaining;
     final elapsed = _elapsed(state);
     final elapsedLabel = formatNotificationDuration(elapsed);
@@ -273,7 +274,8 @@ class SessionNotificationService {
   }
 }
 
-final sessionNotificationServiceProvider = Provider<SessionNotificationService>((ref) {
+final sessionNotificationServiceProvider =
+    Provider<SessionNotificationService>((ref) {
   final plugin = FlutterLocalNotificationsPlugin();
   final service = SessionNotificationService(plugin);
   ref.onDispose(() {

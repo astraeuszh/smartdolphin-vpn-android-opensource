@@ -40,7 +40,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _trialTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _trialTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       final session = ref.read(authControllerProvider).session;
       if (session?.isTrial == true && mounted) setState(() {});
     });
@@ -60,7 +60,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
       await ref.read(authControllerProvider.notifier).refreshSession();
     } catch (_) {
       if (mounted) {
-        showTopSnackBar(context, context.l10n.accountRefreshFailed, isError: true);
+        showTopSnackBar(context, context.l10n.accountRefreshFailed,
+            isError: true);
       }
     } finally {
       if (mounted) setState(() => _refreshing = false);
@@ -71,7 +72,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final uri = Uri.parse(_websiteUrl);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        showTopSnackBar(context, context.l10n.accountOpenWebsiteFailed, isError: true);
+        showTopSnackBar(context, context.l10n.accountOpenWebsiteFailed,
+            isError: true);
       }
     }
   }
@@ -127,19 +129,22 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     TextField(
                       controller: oldCtrl,
                       obscureText: true,
-                      decoration: InputDecoration(labelText: l10n.accountOldPassword),
+                      decoration:
+                          InputDecoration(labelText: l10n.accountOldPassword),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: newCtrl,
                       obscureText: true,
-                      decoration: InputDecoration(labelText: l10n.accountNewPassword),
+                      decoration:
+                          InputDecoration(labelText: l10n.accountNewPassword),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: confirmCtrl,
                       obscureText: true,
-                      decoration: InputDecoration(labelText: l10n.accountConfirmPassword),
+                      decoration: InputDecoration(
+                          labelText: l10n.accountConfirmPassword),
                     ),
                     const SizedBox(height: 8),
                     Align(
@@ -176,7 +181,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                           }
                           setDialogState(() => _busy = true);
                           try {
-                            await ref.read(authControllerProvider.notifier).changePassword(
+                            await ref
+                                .read(authControllerProvider.notifier)
+                                .changePassword(
                                   oldPassword: oldCtrl.text,
                                   newPassword: newCtrl.text,
                                 );
@@ -392,7 +399,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final session = auth.session;
     final theme = Theme.of(context);
     final policy = session?.trafficPolicy ?? const TrafficPolicy();
-    final localeTag = ref.watch(preferencesControllerProvider).localeCode ?? 'en';
+    final localeTag =
+        ref.watch(preferencesControllerProvider).localeCode ?? 'en';
 
     return Scaffold(
       appBar: AppBar(
@@ -480,7 +488,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     theme,
                     policy.throttleMessage.isNotEmpty
                         ? policy.throttleMessage
-                        : '您因违反用户规则，暂时对您的账户进行限速处理，但连接仍可用，请遵循使用规范。',
+                        : l10n.accountViolationSpeedLimitNotice,
                     color: Colors.red.shade600,
                   ),
                 ],
@@ -488,14 +496,14 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                   const SizedBox(height: 16),
                   _warnCard(
                     theme,
-                    '本月流量已用完（${policy.monthlyQuotaGb.toStringAsFixed(0)} GB 上限）',
+                    l10n.accountQuotaExceededNotice(policy.monthlyQuotaGb),
                     color: Colors.red.shade700,
                   ),
                 ],
                 if (policy.hasQuotaLimit && !policy.isQuotaExceeded) ...[
                   const SizedBox(height: 24),
                   Text(
-                    '流量套餐：${policy.monthlyQuotaGb.toStringAsFixed(0)} GB / 月',
+                    l10n.accountQuotaPlanTitle(policy.monthlyQuotaGb),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -620,7 +628,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon),
-      title: Text(title, style: titleColor != null ? TextStyle(color: titleColor) : null),
+      title: Text(title,
+          style: titleColor != null ? TextStyle(color: titleColor) : null),
       subtitle: subtitle == null ? null : Text(subtitle),
       isThreeLine: subtitle != null,
       trailing: const Icon(Icons.chevron_right),

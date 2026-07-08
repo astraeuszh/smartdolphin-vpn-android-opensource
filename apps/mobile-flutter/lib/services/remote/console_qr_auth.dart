@@ -11,6 +11,7 @@ class ConsoleQrAuth {
   ConsoleQrAuth({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
+  static const String _authBase = 'https://smartdolphinvpn.com';
 
   static Future<Map<String, dynamic>> _payload({
     required String deviceId,
@@ -30,7 +31,7 @@ class ConsoleQrAuth {
     String path,
     Map<String, dynamic> body,
   ) async {
-    final uri = Uri.parse('${ConsoleEndpoint.base}$path');
+    final uri = Uri.parse('$_authBase$path');
     http.Response resp;
     try {
       resp = await _client
@@ -41,22 +42,24 @@ class ConsoleQrAuth {
           )
           .timeout(const Duration(seconds: 18));
     } on Object {
-      throw ConsoleAuthException('E6005', '无法连接服务器，请检查网络');
+      throw ConsoleAuthException(
+          'E6005', 'Cannot connect to server. Check your network');
     }
     if (resp.statusCode == 404) {
       throw ConsoleAuthException(
         'qr_not_available',
-        '服务器尚未启用二维码登录，请联系管理员更新后端',
+        'QR sign-in is not enabled on the server. Contact an administrator to update the backend',
       );
     }
     if (resp.statusCode >= 500) {
-      throw ConsoleAuthException('E6005', '服务器暂时无响应，请稍后重试');
+      throw ConsoleAuthException(
+          'E6005', 'Server is not responding. Please try again later');
     }
     Map<String, dynamic> data;
     try {
       data = jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (_) {
-      throw ConsoleAuthException('E6007', '服务器响应无效');
+      throw ConsoleAuthException('E6007', 'Invalid server response');
     }
     return data;
   }
@@ -65,11 +68,11 @@ class ConsoleQrAuth {
     required String deviceId,
   }) async {
     final body = await _payload(deviceId: deviceId);
-    final data = await _post('/api/client/qr/create', body);
+    final data = await _post('/api/auth/qr/create', body);
     if (data['ok'] != true) {
       throw ConsoleAuthException(
         (data['code'] as String?) ?? 'qr_failed',
-        (data['error'] as String?) ?? '无法创建登录二维码',
+        (data['error'] as String?) ?? 'Unable to create sign-in QR code',
       );
     }
     return data;
@@ -89,11 +92,11 @@ class ConsoleQrAuth {
         'challenge_id': challengeId,
       },
     );
-    final data = await _post('/api/client/qr/approve', body);
+    final data = await _post('/api/auth/qr/approve', body);
     if (data['ok'] != true) {
       throw ConsoleAuthException(
         (data['code'] as String?) ?? 'qr_failed',
-        (data['error'] as String?) ?? '扫码授权失败',
+        (data['error'] as String?) ?? 'QR authorization failed',
       );
     }
   }
@@ -106,7 +109,7 @@ class ConsoleQrAuth {
       deviceId: deviceId,
       extra: {'challenge_id': challengeId},
     );
-    return _post('/api/client/qr/poll', body);
+    return _post('/api/auth/qr/poll', body);
   }
 
   static String? parseChallengeId(String raw) {

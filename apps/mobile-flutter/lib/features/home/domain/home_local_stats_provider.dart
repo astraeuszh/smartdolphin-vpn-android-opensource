@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../platform/android/network_stats_channel.dart';
 import '../../../services/vpn/clash_api_client.dart';
 import '../../dashboard/domain/ip_info_provider.dart';
+import '../../servers/domain/server_providers.dart';
 import '../../session/domain/session_controller.dart';
 import '../../session/domain/session_status.dart';
 
@@ -29,14 +30,30 @@ class HomeLocalStats {
 }
 
 const _ipRefreshInterval = Duration(seconds: 300);
-const _tickInterval = Duration(seconds: 1);
+const _tickInterval = Duration(seconds: 4);
 
 Future<int?> _measureLocalPing() => NetworkStatsChannel.pingMs('8.8.8.8');
 
+String? _activeNodeHost(Ref ref) {
+  final session = ref.read(sessionControllerProvider);
+  final serverId = session.serverId;
+  final catalog = ref.read(serverCatalogProvider);
+  if (serverId != null) {
+    for (final server in catalog.servers) {
+      if (server.id == serverId) {
+        return server.ip ?? server.endpoint.split(':').first;
+      }
+    }
+  }
+  final selected = ref.read(selectedServerProvider);
+  return selected?.ip ?? selected?.endpoint.split(':').first;
+}
+
 double? _smoothMbps(double? previous, double sample) {
-  const minMbps = 0.01;
-  const alpha = 0.55;
-  if (sample < minMbps) {
+  const minMbps = 0.05;
+  const maxReasonableMobileMbps = 1000.0;
+  const alpha = 0.3;
+  if (sample < minMbps || sample > maxReasonableMobileMbps) {
     return previous;
   }
   if (previous == null || previous < minMbps) {
@@ -46,8 +63,10 @@ double? _smoothMbps(double? previous, double sample) {
 }
 
 /// Local IP / geo / latency / throughput while VPN is disconnected.
-/// IP & location refresh every 300s; latency & throughput every 1s.
-final homeLocalStatsPeriodicProvider = StreamProvider.autoDispose<HomeLocalStats>((ref) async* {
+/// IP & location refresh every 300s; latency & throughput use a light cadence
+/// to avoid constant radio wakeups while disconnected.
+final homeLocalStatsPeriodicProvider =
+    StreamProvider.autoDispose<HomeLocalStats>((ref) async* {
   if (ref.watch(sessionControllerProvider).status == SessionStatus.connected) {
     yield const HomeLocalStats();
     return;
@@ -81,15 +100,18 @@ final homeLocalStatsPeriodicProvider = StreamProvider.autoDispose<HomeLocalStats
 
     final totals = await NetworkStatsChannel.getTotals();
     final now = DateTime.now();
-    if (totals != null && lastSampleTime != null && lastRx != null && lastTx != null) {
+    if (totals != null &&
+        lastSampleTime != null &&
+        lastRx != null &&
+        lastTx != null) {
       final elapsed = now.difference(lastSampleTime).inMilliseconds / 1000.0;
-      if (elapsed >= 0.5 &&
-          totals.rx >= lastRx &&
-          totals.tx >= lastTx) {
+      if (elapsed >= 0.5 && totals.rx >= lastRx && totals.tx >= lastTx) {
         final rxDelta = (totals.rx - lastRx) / elapsed;
         final txDelta = (totals.tx - lastTx) / elapsed;
-        downloadMbps = _smoothMbps(downloadMbps, (rxDelta * 8) / 1000000) ?? downloadMbps;
-        uploadMbps = _smoothMbps(uploadMbps, (txDelta * 8) / 1000000) ?? uploadMbps;
+        downloadMbps =
+            _smoothMbps(downloadMbps, (rxDelta * 8) / 1000000) ?? downloadMbps;
+        uploadMbps =
+            _smoothMbps(uploadMbps, (txDelta * 8) / 1000000) ?? uploadMbps;
       }
     }
     if (totals != null) {
@@ -104,8 +126,8 @@ final homeLocalStatsPeriodicProvider = StreamProvider.autoDispose<HomeLocalStats
       city: ipInfo.city,
       countryCode: ipInfo.countryCode,
       latencyMs: latencyMs,
-      downloadMbps: downloadMbps > 0.01 ? downloadMbps : null,
-      uploadMbps: uploadMbps > 0.01 ? uploadMbps : null,
+      downloadMbps: downloadMbps > 0.05 ? downloadMbps : null,
+      uploadMbps: uploadMbps > 0.05 ? uploadMbps : null,
     );
 
     await Future<void>.delayed(_tickInterval);
@@ -113,7 +135,8 @@ final homeLocalStatsPeriodicProvider = StreamProvider.autoDispose<HomeLocalStats
   }
 });
 
-final homeLocalStatsProvider = FutureProvider.autoDispose<HomeLocalStats>((ref) async {
+final homeLocalStatsProvider =
+    FutureProvider.autoDispose<HomeLocalStats>((ref) async {
   final ipInfo = await ref.watch(ipInfoProvider.future);
   final ping = await _measureLocalPing();
   return HomeLocalStats(
@@ -125,19 +148,27 @@ final homeLocalStatsProvider = FutureProvider.autoDispose<HomeLocalStats>((ref) 
   );
 });
 
-/// Latency in ms, refreshed every 2s. When connected, ICMP can't traverse the
-/// sing-box tunnel, so the REAL latency is measured via the Clash API
-/// (`/proxies/proxy/delay`); when disconnected, a plain ICMP ping is used.
-final homeSystemLatencyProvider = StreamProvider.autoDispose<int?>((ref) async* {
+/// Latency in ms, refreshed periodically.
+///
+/// When connected, display the selected node RTT instead of the Clash proxy
+/// delay target. The proxy delay includes route rules, target reachability and
+/// protocol retries, so it can falsely show 1000-2500ms while the node itself
+/// is actually reachable in the 200-400ms range.
+final homeSystemLatencyProvider =
+    StreamProvider.autoDispose<int?>((ref) async* {
   while (true) {
     final connected =
         ref.read(sessionControllerProvider).status == SessionStatus.connected;
     if (connected) {
-      yield await ClashApiClient.proxyDelayMs(timeoutMs: 4000);
+      final host = _activeNodeHost(ref);
+      final nodePing = host != null
+          ? await NetworkStatsChannel.pingMs(host, count: 3)
+          : null;
+      yield nodePing ?? await ClashApiClient.proxyDelayMs(timeoutMs: 2500);
     } else {
       yield await NetworkStatsChannel.pingMs('8.8.8.8');
     }
-    // 3s (was 2s): fewer probes + fewer widget rebuilds = smoother UI.
-    await Future<void>.delayed(const Duration(seconds: 3));
+    // 5s: fewer probes + fewer widget rebuilds = smoother UI and lower power.
+    await Future<void>.delayed(const Duration(seconds: 5));
   }
 });

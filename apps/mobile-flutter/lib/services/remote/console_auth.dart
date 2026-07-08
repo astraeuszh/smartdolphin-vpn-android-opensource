@@ -52,9 +52,40 @@ class ConsoleAuth {
     try {
       data = jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (_) {
-      throw ConsoleAuthException('E6007', '服务器响应无效');
+      throw ConsoleAuthException('E6007', 'Invalid server response');
     }
+    _throwForHttpStatus(resp.statusCode);
     return data;
+  }
+
+  Future<Map<String, dynamic>> _getWithToken(
+    String path,
+    String token,
+  ) async {
+    final uri = Uri.parse('${ConsoleEndpoint.base}$path');
+    final resp = await _client.get(
+      uri,
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 18));
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(resp.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw ConsoleAuthException('E6007', 'Invalid server response');
+    }
+    _throwForHttpStatus(resp.statusCode);
+    return data;
+  }
+
+  void _throwForHttpStatus(int statusCode) {
+    if (statusCode == 401 || statusCode == 403) {
+      throw ConsoleAuthException(
+          'unauthorized', 'Authentication expired. Please sign in again.');
+    }
+    if (statusCode >= 500) {
+      throw ConsoleAuthException(
+          'server_unavailable', 'Server is temporarily unavailable');
+    }
   }
 
   void _throwIfFailed(Map<String, dynamic> data) {
@@ -62,18 +93,21 @@ class ConsoleAuth {
     final code = (data['code'] as String?) ?? 'auth_failed';
     var msg = (data['error'] as String?) ??
         (data['message'] as String?) ??
-        '认证失败';
+        'Authentication failed';
     if (msg.contains('device registration limit reached')) {
       if (msg.contains('per day')) {
-        msg = '此设备今日注册次数已达上限（每天最多 3 个账户）';
+        msg =
+            "This device has reached today's registration limit (up to 3 accounts per day)";
       } else if (msg.contains('per year')) {
-        msg = '此设备本年度注册次数已达上限（每年最多 3 个账户）';
+        msg =
+            "This device has reached this year's registration limit (up to 3 accounts per year)";
       } else {
-        msg = '此设备注册次数已达上限';
+        msg = 'This device has reached the registration limit';
       }
     } else if (msg.contains('hardware device id required') ||
         msg.contains('invalid hardware device id')) {
-      msg = '无法识别设备硬件标识，请更新客户端后重试';
+      msg =
+          'Device hardware identifier cannot be recognized. Please update the client and try again';
     }
     throw ConsoleAuthException(code, msg);
   }
@@ -86,11 +120,11 @@ class ConsoleAuth {
     final body = await _clientPayload(
       deviceId: deviceId,
       extra: {
-        'username': username.trim(),
+        'identifier': username.trim(),
         'password': password,
       },
     );
-    final data = await _post('/api/client/login', body);
+    final data = await _post('/api/auth/login', body);
     if (data['ok'] != true) {
       if (data['code'] == 'pending' && data['uid'] != null) {
         return AccountSession.fromJson(
@@ -125,12 +159,7 @@ class ConsoleAuth {
     required String email,
     required String deviceId,
   }) async {
-    final body = await _clientPayload(
-      deviceId: deviceId,
-      extra: {'email': email.trim().toLowerCase()},
-    );
-    final data = await _post('/api/client/register/send-code', body);
-    _throwIfFailed(data);
+    return;
   }
 
   Future<AccountSession> register({
@@ -145,13 +174,14 @@ class ConsoleAuth {
       deviceId: deviceId,
       extra: {
         'username': username.trim(),
+        'displayName': username.trim(),
         'password': password,
         'email': email.trim().toLowerCase(),
         'verification_code': verificationCode.trim(),
         'hardware_device_id': hardwareDeviceId,
       },
     );
-    final data = await _post('/api/client/register', body);
+    final data = await _post('/api/auth/register', body);
     _throwIfFailed(data);
     return AccountSession.fromJson(
       username: username.trim(),
@@ -162,16 +192,8 @@ class ConsoleAuth {
   }
 
   Future<AccountSession> checkSession(AccountSession session) async {
-    final body = await _clientPayload(
-      deviceId: session.deviceId,
-      extra: {
-        'uid': session.uid,
-        'session_token': session.sessionToken,
-        'username': session.username,
-        'password': session.password,
-      },
-    );
-    final data = await _post('/api/client/check', body);
+    final data =
+        await _getWithToken('/api/auth/account-status', session.sessionToken);
     if (data['banned'] == true || data['code'] == 'banned') {
       return AccountSession.fromJson(
         username: session.username,
@@ -280,6 +302,7 @@ class ConsoleAuth {
 
   static ConsoleAuthException mapNetwork(Object e) {
     debugPrint('[ConsoleAuth] network error: $e');
-    return ConsoleAuthException('E6005', '无法连接控制台，请检查网络');
+    return ConsoleAuthException(
+        'E6005', 'Cannot connect to console. Check your network');
   }
 }

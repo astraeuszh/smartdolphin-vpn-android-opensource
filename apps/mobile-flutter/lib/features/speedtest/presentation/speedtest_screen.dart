@@ -24,7 +24,9 @@ class SpeedTestScreen extends ConsumerWidget {
     ref.listen<SpeedTestState>(speedTestControllerProvider, (prev, next) {
       if (prev?.status == SpeedTestStatus.running ||
           prev?.status == SpeedTestStatus.preparing) {
-        if (next.status == SpeedTestStatus.error && next.errorMessage != null && context.mounted) {
+        if (next.status == SpeedTestStatus.error &&
+            next.errorMessage != null &&
+            context.mounted) {
           showErrorDialog(
             context,
             message: next.errorMessage!,
@@ -47,13 +49,13 @@ class SpeedTestScreen extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(24, 32, 24, 160),
           children: [
             Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      _ModeBadge(state: state, l10n: l10n),
-                      const SizedBox(height: 16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _ModeBadge(state: state, l10n: l10n),
+                    const SizedBox(height: 16),
                     _GaugePanel(
                       state: state,
                       gaugeLabel: gaugeLabel,
@@ -61,8 +63,9 @@ class SpeedTestScreen extends ConsumerWidget {
                       l10n: l10n,
                       onRun: buttonInfo.enabled
                           ? () {
-                              final isVpn = ref.read(sessionControllerProvider).status ==
-                                  SessionStatus.connected;
+                              final isVpn =
+                                  ref.read(sessionControllerProvider).status ==
+                                      SessionStatus.connected;
                               controller.run(isVpnTest: isVpn);
                             }
                           : null,
@@ -82,7 +85,8 @@ class SpeedTestScreen extends ConsumerWidget {
                       duration: const Duration(milliseconds: 300),
                       child: state.hasResult
                           ? _ScoreView(
-                              key: ValueKey(state.lastRun ?? state.downloadMbps),
+                              key:
+                                  ValueKey(state.lastRun ?? state.downloadMbps),
                               state: state,
                               l10n: l10n,
                             )
@@ -155,7 +159,8 @@ class _GaugePanel extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: onRun,
               style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
               ),
               icon: Icon(buttonInfo.icon),
               label: Text(buttonInfo.label),
@@ -174,7 +179,9 @@ class _GaugePanel extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    state.isVpnTest ? l10n.speedTestPreparingTunnel : l10n.speedTestPreparingLocal,
+                    state.isVpnTest
+                        ? l10n.speedTestPreparingTunnel
+                        : l10n.speedTestPreparingLocal,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withOpacity(0.7),
                     ),
@@ -191,7 +198,8 @@ class _GaugePanel extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-          ] else if (state.status == SpeedTestStatus.complete && state.downloadMbps <= 0) ...[
+          ] else if (state.status == SpeedTestStatus.complete &&
+              state.downloadMbps <= 0) ...[
             const SizedBox(height: 14),
             Text(
               l10n.speedTestRunToGetValues,
@@ -261,7 +269,9 @@ class _MetricGrid extends StatelessWidget {
                 title: l10n.speedTestIpLabel,
                 value: state.ip != null && state.ip!.isNotEmpty
                     ? state.ip!
-                    : (state.isBusy ? l10n.speedTestDetecting : l10n.speedTestNotAvailable),
+                    : (state.isBusy
+                        ? l10n.speedTestDetecting
+                        : l10n.speedTestNotAvailable),
                 icon: Icons.language,
               ),
             ),
@@ -382,7 +392,7 @@ class _PhaseChip extends StatelessWidget {
         ? theme.colorScheme.primary
         : done
             ? theme.colorScheme.primary.withValues(alpha: 0.65)
-            : theme.colorScheme.onSurface.withValues(alpha: 0.45);
+            : theme.colorScheme.onSurface.withValues(alpha: 0.68);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -401,7 +411,7 @@ class _PhaseChip extends StatelessWidget {
           label,
           style: theme.textTheme.labelSmall?.copyWith(
             color: color,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w600,
             fontSize: 10,
           ),
           textAlign: TextAlign.center,
@@ -460,7 +470,8 @@ class _PrimaryButtonInfo {
   final IconData icon;
   final bool enabled;
 
-  factory _PrimaryButtonInfo.fromState(SpeedTestState state, AppLocalizations l10n) {
+  factory _PrimaryButtonInfo.fromState(
+      SpeedTestState state, AppLocalizations l10n) {
     switch (state.status) {
       case SpeedTestStatus.preparing:
         return _PrimaryButtonInfo(
@@ -541,7 +552,8 @@ class _ScoreView extends StatelessWidget {
         children: [
           Text(
             l10n.speedTestNetworkScoreLabel(score),
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(
@@ -616,4 +628,3 @@ class _MetricCard extends StatelessWidget {
     );
   }
 }
-

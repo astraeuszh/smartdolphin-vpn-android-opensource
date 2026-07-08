@@ -49,7 +49,7 @@ class _CustomDnsDialogState extends State<_CustomDnsDialog> {
   Future<void> _confirm() async {
     final l10n = AppLocalizations.of(context);
     final ip = _assembledIp();
-    if (ip == null || !DnsProbe.isValidIpv4(ip)) {
+    if (ip == null || !DnsProbe.isValidPublicResolverIpv4(ip)) {
       setState(() => _status = l10n.dnsEnterFullIpv4);
       return;
     }
@@ -62,7 +62,15 @@ class _CustomDnsDialogState extends State<_CustomDnsDialog> {
     setState(() => _status = l10n.dnsCheckingConnectivity);
     // Do not probe TCP/53 — many public DNS servers block it, and the probe
     // fails over mobile/VPN even when DoH through the tunnel would work fine.
+    final reachable = await DnsProbe.checkReachable(ip);
     if (!mounted) return;
+    if (!reachable) {
+      setState(() {
+        _checking = false;
+        _status = l10n.dnsSetFailed;
+      });
+      return;
+    }
     Navigator.of(context).pop(ip);
     showTopSnackBar(context, l10n.dnsSetSuccess);
   }

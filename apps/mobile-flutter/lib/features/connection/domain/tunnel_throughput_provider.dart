@@ -6,7 +6,8 @@ import '../../../services/vpn/vpn_provider.dart';
 import '../../session/domain/session_controller.dart';
 import '../../session/domain/session_status.dart';
 
-/// Live throughput (Mbps) when connected. Polls tunnel stats every second.
+/// Live throughput (Mbps) when connected. Polls tunnel stats at a UI-friendly,
+/// battery-aware cadence instead of every frame/second.
 class TunnelThroughputState {
   const TunnelThroughputState({
     this.downloadMbps,
@@ -18,8 +19,7 @@ class TunnelThroughputState {
 }
 
 class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
-  TunnelThroughputNotifier(this._ref)
-      : super(const TunnelThroughputState()) {
+  TunnelThroughputNotifier(this._ref) : super(const TunnelThroughputState()) {
     _sub = _ref.listen(sessionControllerProvider, _onSessionChanged);
   }
 
@@ -30,8 +30,9 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
   int _lastTxBytes = 0;
   DateTime? _lastSampleTime;
 
-  static const _emaAlpha = 0.35;
-  static const _minMbps = 0.01;
+  static const _emaAlpha = 0.28;
+  static const _minMbps = 0.05;
+  static const _maxReasonableMbps = 1000.0;
 
   void _onSessionChanged(dynamic prev, dynamic next) {
     if (next.status == SessionStatus.connected) {
@@ -47,7 +48,7 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
     _lastRxBytes = 0;
     _lastTxBytes = 0;
     _lastSampleTime = null;
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _poll());
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) => _poll());
     _poll();
   }
 
@@ -57,7 +58,7 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
   }
 
   double? _smooth(double? previous, double sample) {
-    if (sample < _minMbps) {
+    if (sample < _minMbps || sample > _maxReasonableMbps) {
       return previous;
     }
     if (previous == null || previous < _minMbps) {
@@ -68,6 +69,7 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
 
   /// EMA that also tracks downward (toward 0), for the live instantaneous rate.
   double _ema(double? previous, double sample) {
+    if (sample > _maxReasonableMbps) return previous ?? 0;
     if (previous == null) return sample;
     return previous * (1 - _emaAlpha) + sample * _emaAlpha;
   }
@@ -98,7 +100,8 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
       final now = DateTime.now();
 
       if (_lastSampleTime != null && rx >= _lastRxBytes && tx >= _lastTxBytes) {
-        final elapsed = now.difference(_lastSampleTime!).inMilliseconds / 1000.0;
+        final elapsed =
+            now.difference(_lastSampleTime!).inMilliseconds / 1000.0;
         if (elapsed > 0.5) {
           final rxDelta = (rx - _lastRxBytes) / elapsed;
           final txDelta = (tx - _lastTxBytes) / elapsed;

@@ -5,8 +5,8 @@ class LogConfig extends Equatable {
   const LogConfig({
     this.enabled = false,
     this.level = 'info',
-    this.sizeLimitMb = 500,
-    this.countLimit = 50,
+    this.sizeLimitMb = 64,
+    this.countLimit = 12,
   });
 
   final bool enabled;
@@ -39,14 +39,15 @@ class LogConfig extends Equatable {
     return LogConfig(
       enabled: json['enabled'] as bool? ?? false,
       level: json['level'] as String? ?? 'info',
-      sizeLimitMb: (json['sizeLimitMb'] as num?)?.toInt() ?? 500,
-      countLimit: (json['countLimit'] as num?)?.toInt() ?? 50,
+      sizeLimitMb: (json['sizeLimitMb'] as num?)?.toInt() ?? 64,
+      countLimit: (json['countLimit'] as num?)?.toInt() ?? 12,
     );
   }
 
   bool get shouldLogDebug => enabled && (level == 'debug');
   bool get shouldLogInfo => enabled && ['debug', 'info'].contains(level);
-  bool get shouldLogWarn => enabled && ['debug', 'info', 'warn'].contains(level);
+  bool get shouldLogWarn =>
+      enabled && ['debug', 'info', 'warn'].contains(level);
   bool get shouldLogError => enabled;
 
   @override

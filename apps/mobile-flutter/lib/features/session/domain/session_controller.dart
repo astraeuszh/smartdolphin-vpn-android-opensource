@@ -55,9 +55,10 @@ import 'session_status.dart';
 const _sessionMetaPrefsKey = 'session_meta_v1';
 
 const sessionDuration = kMaxSessionWallDuration;
-const _dataLimitMessage = '本月可用流量已用完，请下月再试或联系管理员';
+const _dataLimitMessage =
+    'Monthly data quota is exhausted. Try again next month or contact an administrator.';
 const _violationThrottleMessage =
-    '当前账户因违反社区规则已被限制流量使用，请遵循社区规则';
+    'This account has traffic limits due to community rule violations. Please follow the community rules.';
 const _connectionTimeoutDuration = Duration(seconds: 30);
 
 class SessionController extends StateNotifier<SessionState> {
@@ -66,11 +67,10 @@ class SessionController extends StateNotifier<SessionState> {
         _clock = _ref.read(sessionClockProvider),
         _settings = _ref.read(settingsControllerProvider.notifier),
         _vpnLogger = _ref.read(vpnLoggerProvider),
-        _notificationService =
-            _ref.read(sessionNotificationServiceProvider),
+        _notificationService = _ref.read(sessionNotificationServiceProvider),
         super(SessionState.initial()) {
-    _speedSubscription =
-        _ref.listen<SpeedTestState>(speedTestControllerProvider, _onSpeedUpdate);
+    _speedSubscription = _ref.listen<SpeedTestState>(
+        speedTestControllerProvider, _onSpeedUpdate);
     // Web: flutter_local_notifications initialize() may never complete; skip.
     if (!kIsWeb) {
       unawaited(
@@ -128,11 +128,13 @@ class SessionController extends StateNotifier<SessionState> {
     _vpnLogger.info('[Session] $message');
   }
 
-  void _setError(int code, {String? details, Object? cause, String? displayMessage}) {
+  void _setError(int code,
+      {String? details, Object? cause, String? displayMessage}) {
     final wasConnected = state.status == SessionStatus.connected;
     final wasConnecting = state.status == SessionStatus.connecting ||
         state.status == SessionStatus.preparing;
-    final err = AppError(code, details: details ?? '', cause: cause, displayMessage: displayMessage);
+    final err = AppError(code,
+        details: details ?? '', cause: cause, displayMessage: displayMessage);
     logAppError(err, 'SessionController');
     state = state.copyWith(
       status: SessionStatus.error,
@@ -157,11 +159,13 @@ class SessionController extends StateNotifier<SessionState> {
           _pendingConnection == null) {
         return;
       }
-      _log('Connection timed out after ${_connectionTimeoutDuration.inSeconds}s');
+      _log(
+          'Connection timed out after ${_connectionTimeoutDuration.inSeconds}s');
       _stopConnectivityWatch();
       final pending = _pendingConnection;
       _pendingConnection = null;
-      _setError(ecNodeConnTimeout, details: 'timeout ${_connectionTimeoutDuration.inSeconds}s');
+      _setError(ecNodeConnTimeout,
+          details: 'timeout ${_connectionTimeoutDuration.inSeconds}s');
       unawaited(_notificationService.clear());
       if (pending != null) {
         unawaited(_vpnPort.disconnect());
@@ -176,19 +180,24 @@ class SessionController extends StateNotifier<SessionState> {
 
   void _startConnectivityWatch() {
     _stopConnectivityWatch();
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((results) {
       final hasNetwork = results.isNotEmpty &&
           !results.every((r) => r == ConnectivityResult.none);
       if (!hasNetwork) {
         _networkWasLost = true;
-        if (state.status == SessionStatus.connecting && _pendingConnection != null) {
+        if (state.status == SessionStatus.connecting &&
+            _pendingConnection != null) {
           _log('Network lost during connection');
           _abortConnectionForNetworkLost();
         }
         return;
       }
       if (_networkWasLost &&
-          _ref.read(settingsControllerProvider).autoConnect.reconnectOnNetworkChange) {
+          _ref
+              .read(settingsControllerProvider)
+              .autoConnect
+              .reconnectOnNetworkChange) {
         _networkWasLost = false;
         final server = _currentServer;
         if (server != null &&
@@ -208,7 +217,8 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   void _abortConnectionForNetworkLost() {
-    if (state.status != SessionStatus.connecting || _pendingConnection == null) return;
+    if (state.status != SessionStatus.connecting || _pendingConnection == null)
+      return;
     _cancelConnectionTimeout();
     _stopConnectivityWatch();
     final pending = _pendingConnection;
@@ -286,7 +296,8 @@ class SessionController extends StateNotifier<SessionState> {
           return;
         }
         if (stage == VPNStage.disconnected) {
-          _log('Ignoring disconnected (teardown of previous session) during connect');
+          _log(
+              'Ignoring disconnected (teardown of previous session) during connect');
           return;
         }
       }
@@ -311,7 +322,7 @@ class SessionController extends StateNotifier<SessionState> {
         await _handleRemoteDisconnect();
       }
     }
-    
+
     // Add logging for all stage changes
     _log('VPN stage changed to: $stage');
   }
@@ -433,9 +444,15 @@ class SessionController extends StateNotifier<SessionState> {
 
   Future<void> _handleRemoteDisconnect() async {
     final server = _currentServer;
-    final killSwitch = _ref.read(settingsControllerProvider).advanced.killSwitchMode;
-    if (server != null && _ref.read(settingsControllerProvider).autoConnect.reconnectOnNetworkChange) {
-      _log('Unexpected disconnect; attempting auto-reconnect to ${server.name}');
+    final killSwitch =
+        _ref.read(settingsControllerProvider).advanced.killSwitchMode;
+    if (server != null &&
+        _ref
+            .read(settingsControllerProvider)
+            .autoConnect
+            .reconnectOnNetworkChange) {
+      _log(
+          'Unexpected disconnect; attempting auto-reconnect to ${server.name}');
       await _tryAutoReconnect(server);
       return;
     }
@@ -455,7 +472,8 @@ class SessionController extends StateNotifier<SessionState> {
   Future<void> _tryAutoReconnect(Server server) async {
     for (var i = 0; i < _reconnectDelays.length; i++) {
       await Future<void>.delayed(_reconnectDelays[i]);
-      if (state.status == SessionStatus.connected || _manualDisconnectInProgress) {
+      if (state.status == SessionStatus.connected ||
+          _manualDisconnectInProgress) {
         return;
       }
       _log('Auto-reconnect attempt ${i + 1}/${_reconnectDelays.length}');
@@ -538,7 +556,8 @@ class SessionController extends StateNotifier<SessionState> {
     bool fromSmartStableReconnect = false,
   }) async {
     _log('connect() requested for ${server.name} (${server.countryCode})');
-    final trafficPolicy = _ref.read(authControllerProvider).session?.trafficPolicy;
+    final trafficPolicy =
+        _ref.read(authControllerProvider).session?.trafficPolicy;
     if (trafficPolicy?.overQuota == true) {
       _setError(
         ecTrafficLimited,
@@ -549,21 +568,22 @@ class SessionController extends StateNotifier<SessionState> {
     }
     if (!fromSmartStableReconnect &&
         state.status == SessionStatus.disconnected) {
-      _ref.read(smartStableProvider.notifier).clearDeclineSuppressForNewUserConnect();
+      _ref
+          .read(smartStableProvider.notifier)
+          .clearDeclineSuppressForNewUserConnect();
     }
     final routing = _ref.read(settingsControllerProvider).routing;
     if (routing.mode == TrafficMode.rule) {
-      final hasRules = routing.ruleDb.customRules
-          .split(RegExp(r'\r?\n'))
-          .any((line) {
-            final t = line.trim();
-            return t.isNotEmpty && !t.startsWith('#');
-          });
+      final hasRules =
+          routing.ruleDb.customRules.split(RegExp(r'\r?\n')).any((line) {
+        final t = line.trim();
+        return t.isNotEmpty && !t.startsWith('#');
+      });
       if (!hasRules) {
         _setError(
           ecNodeConfigFailed,
           details: 'rule mode empty',
-          displayMessage: '规则模式需要至少填写一条分流规则',
+          displayMessage: 'Rule mode requires at least one split-routing rule.',
         );
         return;
       }
@@ -598,7 +618,8 @@ class SessionController extends StateNotifier<SessionState> {
       status: SessionStatus.connecting,
       errorMessage: null,
     );
-    await Future<void>.delayed(Duration.zero); // yield so UI paints orange immediately
+    await Future<void>.delayed(
+        Duration.zero); // yield so UI paints orange immediately
 
     // 连接前检查网络，已离线则立即报错
     final results = await Connectivity().checkConnectivity();
@@ -639,7 +660,8 @@ class SessionController extends StateNotifier<SessionState> {
       _appliedAccountThrottle = wantThrottle;
       _vpnPort.setGameTrafficMode(_ref.read(gameModeControllerProvider));
       _vpnPort.setGameDecelTier(_ref.read(gameDecelTierProvider));
-      _vpnPort.setGameModeOverlayActive(_ref.read(gameModeOverlayActiveProvider));
+      _vpnPort
+          .setGameModeOverlayActive(_ref.read(gameModeOverlayActiveProvider));
 
       var routing = settingsState.routing;
       final advanced = settingsState.advanced;
@@ -653,7 +675,8 @@ class SessionController extends StateNotifier<SessionState> {
       final coreProto = _ref.read(preferencesControllerProvider).coreProtocol;
       _vpnPort.setProtocol(sdProtocolFromName(coreProto));
       final node = nodeForHostOrCountry(server.ip, server.countryName);
-      _log('Dolphin-Core: protocol=$coreProto node=${node.tag} host=${node.host}');
+      _log(
+          'Dolphin-Core: protocol=$coreProto node=${node.tag} host=${node.host}');
       _vpnPort.setDnsServers(settingsState.protocol.resolvedDnsServers);
       _vpnPort.setSplitTunnel(
         settingsState.splitTunnel.mode,
@@ -680,7 +703,8 @@ class SessionController extends StateNotifier<SessionState> {
       // Validate that we have a configuration
       if (configBase64.isEmpty) {
         _log('Missing node config for server ${server.id}');
-        _setError(ecNodeConfigFailed, details: 'No config for server ${server.id}');
+        _setError(ecNodeConfigFailed,
+            details: 'No config for server ${server.id}');
         return;
       }
 
@@ -706,9 +730,10 @@ class SessionController extends StateNotifier<SessionState> {
       _startConnectionTimeout();
       _startConnectivityWatch();
 
-      _log('Attempting to connect to VPN server: ${vpnServer.hostName}, IP: ${vpnServer.ip}');
+      _log(
+          'Attempting to connect to VPN server: ${vpnServer.hostName}, IP: ${vpnServer.ip}');
       _log('Config length: ${vpnServer.openVpnConfig.length}');
-      
+
       final connected = await _vpnPort.connect(vpnServer);
       _log('Dolphin-Core connect() returned $connected');
       if (!connected) {
@@ -730,7 +755,8 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   Future<void> disconnect({bool userInitiated = true}) async {
-    _log('disconnect() requested. Status: ${state.status}, userInitiated: $userInitiated');
+    _log(
+        'disconnect() requested. Status: ${state.status}, userInitiated: $userInitiated');
     if (_manualDisconnectInProgress) {
       _log('Ignoring duplicate disconnect (already in progress)');
       return;
@@ -760,7 +786,9 @@ class SessionController extends StateNotifier<SessionState> {
       // later tap (connect/switch/disconnect) is silently ignored — the UI looks frozen until the
       // app is force-killed. This was the "后台过久后切节点/模式 → 界面卡死" bug.
       try {
-        await _vpnPort.disconnect().timeout(const Duration(seconds: 6), onTimeout: () {});
+        await _vpnPort
+            .disconnect()
+            .timeout(const Duration(seconds: 6), onTimeout: () {});
       } catch (e) {
         _log('disconnect: VPN tear-down error (ignored): $e');
       }
@@ -780,17 +808,20 @@ class SessionController extends StateNotifier<SessionState> {
           final meta = previousState.meta;
           final stats = <String, dynamic>{};
           try {
-            stats.addAll(await _vpnPort
-                .getTunnelStats()
-                .timeout(const Duration(seconds: 4), onTimeout: () => <String, dynamic>{}));
+            stats.addAll(await _vpnPort.getTunnelStats().timeout(
+                const Duration(seconds: 4),
+                onTimeout: () => <String, dynamic>{}));
           } catch (_) {}
           Duration? actualDuration;
           if (meta != null) {
             try {
-              final nowMs = await _clock
-                  .elapsedRealtime()
-                  .timeout(const Duration(seconds: 4), onTimeout: () => meta.startElapsedMs);
-              actualDuration = Duration(milliseconds: (nowMs - meta.startElapsedMs).clamp(0, meta.durationMs).toInt());
+              final nowMs = await _clock.elapsedRealtime().timeout(
+                  const Duration(seconds: 4),
+                  onTimeout: () => meta.startElapsedMs);
+              actualDuration = Duration(
+                  milliseconds: (nowMs - meta.startElapsedMs)
+                      .clamp(0, meta.durationMs)
+                      .toInt());
             } catch (_) {}
           }
           final sessionForHistory = actualDuration != null
@@ -799,7 +830,8 @@ class SessionController extends StateNotifier<SessionState> {
           await _settings
               .recordSessionEnd(sessionForHistory, server: server, stats: stats)
               .timeout(const Duration(seconds: 6), onTimeout: () {});
-          await _clearPersistedState().timeout(const Duration(seconds: 4), onTimeout: () {});
+          await _clearPersistedState()
+              .timeout(const Duration(seconds: 4), onTimeout: () {});
         } catch (_) {}
       }
     } catch (e, st) {
@@ -845,7 +877,9 @@ class SessionController extends StateNotifier<SessionState> {
     _cancelConnectionTimeout();
     _stopConnectivityWatch();
     _stopTicker();
-    await _vpnPort.disconnect().timeout(const Duration(seconds: 6), onTimeout: () {});
+    await _vpnPort
+        .disconnect()
+        .timeout(const Duration(seconds: 6), onTimeout: () {});
     if (clearPrefs) {
       await _clearPersistedMeta();
     }
@@ -857,7 +891,8 @@ class SessionController extends StateNotifier<SessionState> {
     if (preserveError && state.status == SessionStatus.error) {
       state = state.copyWith(expired: markExpired, sessionLocked: false);
     } else {
-      state = SessionState.initial().copyWith(expired: markExpired, sessionLocked: false);
+      state = SessionState.initial()
+          .copyWith(expired: markExpired, sessionLocked: false);
     }
     _applyQueuedServerSelection();
   }
@@ -911,7 +946,8 @@ class SessionController extends StateNotifier<SessionState> {
         _setError(
           ecSessionTimerCap,
           details: 'session wall time',
-          displayMessage: '当前服务出现错误，请重新启动该服务',
+          displayMessage:
+              'The current service has an error. Please restart this service.',
         );
         return;
       }
@@ -919,10 +955,14 @@ class SessionController extends StateNotifier<SessionState> {
         final stats = await _vpnPort.getTunnelStats();
         final rx = _parseBytes(stats['byte_in'] ?? stats['rxBytes']);
         final tx = _parseBytes(stats['byte_out'] ?? stats['txBytes']);
-        if (_lastTickRx != null && _lastTickTx != null && (rx > _lastTickRx! || tx > _lastTickTx!)) {
+        if (_lastTickRx != null &&
+            _lastTickTx != null &&
+            (rx > _lastTickRx! || tx > _lastTickTx!)) {
           final delta = (rx - _lastTickRx!) + (tx - _lastTickTx!);
           if (delta > 0) {
-            await _ref.read(dataUsageControllerProvider.notifier).addUsageBytes(delta);
+            await _ref
+                .read(dataUsageControllerProvider.notifier)
+                .addUsageBytes(delta);
             _bytesSinceTrafficReport += delta;
           }
         }
@@ -939,7 +979,8 @@ class SessionController extends StateNotifier<SessionState> {
           _bytesSinceTrafficReport = 0;
           unawaited(() async {
             try {
-              await ConsoleTraffic().reportBytes(session: session, bytes: reportBytes);
+              await ConsoleTraffic()
+                  .reportBytes(session: session, bytes: reportBytes);
               await _ref.read(authControllerProvider.notifier).refreshSession();
               await _applyAccountTrafficPolicyFromServer();
             } catch (_) {}
@@ -949,13 +990,16 @@ class SessionController extends StateNotifier<SessionState> {
       final usage = _ref.read(dataUsageControllerProvider);
       if (usage.limitExceeded) {
         await _forceDisconnect(clearPrefs: true, markExpired: false);
-        _setError(ecTrafficLimited, details: _dataLimitMessage, displayMessage: _dataLimitMessage);
+        _setError(ecTrafficLimited,
+            details: _dataLimitMessage, displayMessage: _dataLimitMessage);
         return;
       }
-      final refreshedPolicy = _ref.read(authControllerProvider).session?.trafficPolicy;
+      final refreshedPolicy =
+          _ref.read(authControllerProvider).session?.trafficPolicy;
       if (refreshedPolicy?.overQuota == true) {
         await _forceDisconnect(clearPrefs: true, markExpired: false);
-        _setError(ecTrafficLimited, details: _dataLimitMessage, displayMessage: _dataLimitMessage);
+        _setError(ecTrafficLimited,
+            details: _dataLimitMessage, displayMessage: _dataLimitMessage);
         return;
       }
       final server = _currentServer;
@@ -1039,8 +1083,6 @@ class SessionController extends StateNotifier<SessionState> {
     }
   }
 
-
-
   Future<void> autoConnectIfEnabled({
     required BuildContext context,
     bool fromBoot = false,
@@ -1049,8 +1091,7 @@ class SessionController extends StateNotifier<SessionState> {
     _pendingAutoConnect = false;
     final settings = _ref.read(settingsControllerProvider);
     final ac = settings.autoConnect;
-    final shouldConnect =
-        ac.connectOnLaunch || (fromBoot && ac.connectOnBoot);
+    final shouldConnect = ac.connectOnLaunch || (fromBoot && ac.connectOnBoot);
     if (!shouldConnect) {
       return;
     }
@@ -1096,7 +1137,8 @@ class SessionController extends StateNotifier<SessionState> {
     if (_manualDisconnectInProgress ||
         _pendingConnection != null ||
         _accountTrafficReconnectBusy) {
-      _log('reconnectToApplyAccountTrafficPolicy skipped: operation in progress');
+      _log(
+          'reconnectToApplyAccountTrafficPolicy skipped: operation in progress');
       return;
     }
     final server = _currentServer ?? _ref.read(selectedServerProvider);
@@ -1126,7 +1168,8 @@ class SessionController extends StateNotifier<SessionState> {
       _vpnPort.setAccountTrafficThrottle(want);
       return;
     }
-    _log('Account traffic throttle changed ($_appliedAccountThrottle -> $want)');
+    _log(
+        'Account traffic throttle changed ($_appliedAccountThrottle -> $want)');
     _appliedAccountThrottle = want;
     _vpnPort.setAccountTrafficThrottle(want);
     if (state.status == SessionStatus.connected) {
@@ -1186,7 +1229,8 @@ class SessionController extends StateNotifier<SessionState> {
     required BuildContext context,
     required Server server,
   }) async {
-    if (state.status == SessionStatus.connected && _currentServer?.id == server.id) {
+    if (state.status == SessionStatus.connected &&
+        _currentServer?.id == server.id) {
       return;
     }
     if (_manualDisconnectInProgress || _pendingConnection != null) {

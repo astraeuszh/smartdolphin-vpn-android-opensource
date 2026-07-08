@@ -2,7 +2,7 @@
 class ConsoleEndpoint {
   ConsoleEndpoint._();
 
-  static const String defaultUrl = 'https://api.smartdolphin.top';
+  static const String defaultUrl = 'https://smartdolphinvpn.com';
 
   static String get base {
     const fromEnv = String.fromEnvironment('SMARTDOLPHIN_CONSOLE_URL');

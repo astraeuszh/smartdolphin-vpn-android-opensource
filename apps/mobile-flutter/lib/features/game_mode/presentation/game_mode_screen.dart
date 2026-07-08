@@ -75,10 +75,10 @@ class GameModeScreen extends ConsumerWidget {
             backgroundColor: Colors.transparent,
             drawer: Drawer(
               width: drawerW,
-              backgroundColor: Colors.white,
+              backgroundColor: const Color(0xFFF8FBFF),
               elevation: 0,
               child: ColoredBox(
-                color: Colors.white,
+                color: const Color(0xFFF8FBFF),
                 child: SafeArea(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -92,7 +92,6 @@ class GameModeScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const Divider(height: 1),
                       Expanded(
                         child: ListView(
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
@@ -150,9 +149,8 @@ class GameModeScreen extends ConsumerWidget {
                               : isAttemptCancelable
                                   ? l10n.statusConnecting
                                   : l10n.connect,
-                          statusText: isAttemptCancelable
-                              ? l10n.tapToCancel
-                              : null,
+                          statusText:
+                              isAttemptCancelable ? l10n.tapToCancel : null,
                           onTap: () async {
                             await ref.read(hapticsServiceProvider).impact();
                             if (!context.mounted) return;
@@ -161,8 +159,7 @@ class GameModeScreen extends ConsumerWidget {
                             } else if (isAttemptCancelable) {
                               unawaited(_safeDisconnect(ref));
                             } else {
-                              final server =
-                                  ref.read(selectedServerProvider);
+                              final server = ref.read(selectedServerProvider);
                               if (server == null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -197,8 +194,8 @@ class GameModeScreen extends ConsumerWidget {
                     ),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest
-                            .withValues(alpha: 0.55),
+                        color:
+                            cs.surfaceContainerHighest.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: cs.outline.withValues(alpha: 0.12),

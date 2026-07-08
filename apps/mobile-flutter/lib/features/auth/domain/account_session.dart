@@ -43,8 +43,9 @@ class AccountSession {
   }
 
   bool get canUseVpn {
-    if (banned || expireAt <= 0) return false;
+    if (banned) return false;
     if (trafficPolicy.overQuota) return false;
+    if (expireAt <= 0) return sessionToken.isNotEmpty;
     if (expireAt >= kPermanentExpireUnix) return true;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return now <= expireAt;
@@ -57,12 +58,15 @@ class AccountSession {
     required Map<String, dynamic> data,
   }) {
     final expire = _asInt(data['expire_at'] ?? data['expire_time']);
+    final uid = _asInt(data['uid'] ?? data['id'] ?? data['sub']);
+    final token =
+        (data['session_token'] as String?) ?? (data['token'] as String?) ?? '';
     return AccountSession(
       username: username,
       password: password,
-      uid: _asInt(data['uid']),
+      uid: uid,
       expireAt: expire,
-      sessionToken: (data['session_token'] as String?) ?? '',
+      sessionToken: token,
       deviceId: (data['device_id'] as String?)?.isNotEmpty == true
           ? data['device_id'] as String
           : deviceId,
@@ -77,14 +81,15 @@ class AccountSession {
 
   AccountSession copyWithRemote(Map<String, dynamic> data) {
     final expire = _asInt(data['expire_at'] ?? data['expire_time']);
+    final token = (data['session_token'] as String?) ??
+        (data['token'] as String?) ??
+        sessionToken;
     return AccountSession(
       username: username,
       password: password,
-      uid: uid > 0 ? uid : _asInt(data['uid']),
+      uid: uid > 0 ? uid : _asInt(data['uid'] ?? data['id'] ?? data['sub']),
       expireAt: expire > 0 ? expire : expireAt,
-      sessionToken: (data['session_token'] as String?)?.isNotEmpty == true
-          ? data['session_token'] as String
-          : sessionToken,
+      sessionToken: token.isNotEmpty ? token : sessionToken,
       deviceId: deviceId,
       banned: data['banned'] == true || banned,
       permissionLevel: _asInt(data['permission_level']),

@@ -115,6 +115,7 @@ class MainActivity : FlutterFragmentActivity() {
         methodChannel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "isAlwaysOnVpnEnabled" -> result.success(isAlwaysOnVpnEnabled())
+                "isVpnLockdownEnabled" -> result.success(isVpnLockdownEnabled())
                 "prepare" -> handlePrepare(result)
                 "getInstalledApps" -> result.success(fetchInstalledApps())
                 "updateQuickTile" -> {
@@ -221,6 +222,14 @@ class MainActivity : FlutterFragmentActivity() {
     private fun isAlwaysOnVpnEnabled(): Boolean {
         return try {
             Settings.Secure.getString(contentResolver, "always_on_vpn_app") == packageName
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isVpnLockdownEnabled(): Boolean {
+        return try {
+            Settings.Secure.getInt(contentResolver, "always_on_vpn_lockdown") == 1
         } catch (_: Exception) {
             false
         }

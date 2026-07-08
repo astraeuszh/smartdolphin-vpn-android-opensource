@@ -14,3 +14,20 @@ Future<bool> isAlwaysOnVpnEnabled() async {
     return false;
   }
 }
+
+Future<bool> isVpnLockdownEnabled() async {
+  if (!isAndroidNative) return false;
+  try {
+    final enabled = await _channel.invokeMethod<bool>('isVpnLockdownEnabled');
+    return enabled ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<bool> isStrictKillSwitchReady() async {
+  if (!isAndroidNative) return true;
+  final alwaysOn = await isAlwaysOnVpnEnabled();
+  final lockdown = await isVpnLockdownEnabled();
+  return alwaysOn && lockdown;
+}

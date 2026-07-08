@@ -128,13 +128,14 @@ class ConsoleFeedback {
   }) async {
     final bytes = await file.readAsBytes();
     if (bytes.isEmpty) {
-      throw Exception('截图文件为空');
+      throw Exception('Screenshot file is empty');
     }
     if (bytes.length > 4 * 1024 * 1024) {
-      throw Exception('截图过大（最大 4MB）');
+      throw Exception('Screenshot is too large (maximum 4 MB)');
     }
     final contentType = _guessImageContentType(bytes, filename);
-    final uri = Uri.parse('${ConsoleEndpoint.base}/api/client/feedback/attachment');
+    final uri =
+        Uri.parse('${ConsoleEndpoint.base}/api/client/feedback/attachment');
     final resp = await _client
         .post(
           uri,
@@ -151,14 +152,14 @@ class ConsoleFeedback {
     try {
       data = jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (_) {
-      throw Exception('截图上传失败 (HTTP ${resp.statusCode})');
+      throw Exception('Screenshot upload failed (HTTP ${resp.statusCode})');
     }
     if (data['ok'] != true) {
-      throw Exception((data['error'] as String?) ?? '截图上传失败');
+      throw Exception((data['error'] as String?) ?? 'Screenshot upload failed');
     }
     final url = data['url'] as String?;
     if (url == null || url.isEmpty) {
-      throw Exception('截图上传响应无效');
+      throw Exception('Invalid screenshot upload response');
     }
     return url;
   }
@@ -173,7 +174,8 @@ class ConsoleFeedback {
       rethrow; // server explicitly rejected (validation) — do not retry
     } catch (e) {
       await _enqueue(body);
-      throw Exception('反馈暂存失败队列，恢复网络后将自动重传：$e');
+      throw Exception(
+          'Feedback was saved to the retry queue and will be resent when the network recovers: $e');
     }
   }
 
@@ -191,10 +193,10 @@ class ConsoleFeedback {
       data = jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (_) {
       // Non-JSON (e.g. 5xx HTML / proxy error) → treat as retryable network failure.
-      throw Exception('服务器响应无效 (HTTP ${resp.statusCode})');
+      throw Exception('Invalid server response (HTTP ${resp.statusCode})');
     }
     if (data['ok'] != true) {
-      throw _FeedbackRejected((data['error'] as String?) ?? '反馈失败');
+      throw _FeedbackRejected((data['error'] as String?) ?? 'Feedback failed');
     }
   }
 

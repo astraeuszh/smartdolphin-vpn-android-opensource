@@ -18,10 +18,10 @@ Future<int?> _readMemoryMb() async {
   return null;
 }
 
-/// 当前进程内存占用 (MB)，实时刷新
+/// Current process memory usage in MB. Sampled lightly for dashboard display.
 final appMemoryProvider = StreamProvider<int?>((ref) async* {
   yield await _readMemoryMb();
-  await for (final _ in Stream.periodic(const Duration(seconds: 2))) {
+  await for (final _ in Stream.periodic(const Duration(seconds: 5))) {
     yield await _readMemoryMb();
   }
 });

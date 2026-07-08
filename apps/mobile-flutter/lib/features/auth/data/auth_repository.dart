@@ -151,12 +151,12 @@ class AuthRepository {
 
   Future<AccountSession> completeQrLogin(Map<String, dynamic> data) async {
     if (data['status'] == 'pending') {
-      throw ConsoleAuthException('qr_pending', '等待扫码确认');
+      throw ConsoleAuthException('qr_pending', 'Waiting for QR confirmation');
     }
     if (data['ok'] != true) {
       throw ConsoleAuthException(
         (data['code'] as String?) ?? 'qr_failed',
-        (data['error'] as String?) ?? '扫码登录失败',
+        (data['error'] as String?) ?? 'QR sign-in failed',
       );
     }
     final device = await deviceId();
@@ -171,7 +171,8 @@ class AuthRepository {
     return session;
   }
 
-  Future<void> approveQrLogin(AccountSession session, String challengeId) async {
+  Future<void> approveQrLogin(
+      AccountSession session, String challengeId) async {
     try {
       await _qrApi.approveChallenge(
         session: session,
@@ -211,14 +212,14 @@ class AuthRepository {
   }) async {
     final session = await loadSession();
     if (session == null) {
-      throw ConsoleAuthException('auth_failed', '未登录');
+      throw ConsoleAuthException('auth_failed', 'Not signed in');
     }
     if (session.username.trim() != oldUsername.trim()) {
-      throw ConsoleAuthException('auth_failed', '当前姓名不正确');
+      throw ConsoleAuthException('auth_failed', 'Current name is incorrect');
     }
     final trimmed = newUsername.trim();
     if (trimmed.isEmpty) {
-      throw ConsoleAuthException('auth_failed', '新姓名不能为空');
+      throw ConsoleAuthException('auth_failed', 'New name cannot be empty');
     }
     try {
       final username = await _api.renameUser(
@@ -253,11 +254,11 @@ class AuthRepository {
   }) async {
     final session = await loadSession();
     if (session == null) {
-      throw ConsoleAuthException('auth_failed', '未登录');
+      throw ConsoleAuthException('auth_failed', 'Not signed in');
     }
     final next = newEmail.trim().toLowerCase();
     if (!next.contains('@')) {
-      throw ConsoleAuthException('auth_failed', '请输入有效邮箱');
+      throw ConsoleAuthException('auth_failed', 'Enter a valid email');
     }
     try {
       final email = await _api.changeEmail(
@@ -292,14 +293,16 @@ class AuthRepository {
     required String newPassword,
   }) async {
     if (verificationCode.trim().length != 6) {
-      throw ConsoleAuthException('auth_failed', '验证码须为 6 位');
+      throw ConsoleAuthException(
+          'auth_failed', 'Verification code must be 6 digits');
     }
     if (newPassword.length < 6) {
-      throw ConsoleAuthException('auth_failed', '新密码至少 6 位');
+      throw ConsoleAuthException(
+          'auth_failed', 'New password must be at least 6 characters');
     }
     final session = await loadSession();
     if (session == null) {
-      throw ConsoleAuthException('auth_failed', '未登录');
+      throw ConsoleAuthException('auth_failed', 'Not signed in');
     }
     try {
       await _api.resetPasswordWithCode(
@@ -336,7 +339,7 @@ class AuthRepository {
   }) async {
     final session = await loadSession();
     if (session == null) {
-      throw ConsoleAuthException('auth_failed', '未登录');
+      throw ConsoleAuthException('auth_failed', 'Not signed in');
     }
     try {
       await _api.changePassword(
