@@ -28,15 +28,33 @@ class RuleDatabase extends Equatable {
   const RuleDatabase({
     this.source = RuleSource.builtIn,
     this.customRules = '',
+    this.compiledSourceHash = '',
+    this.savedRuleName = '',
+    this.pendingReconnect = false,
   });
 
   final RuleSource source;
   final String customRules;
+  /// SHA256 hash from last successful SDRL compile (`sha256:…`).
+  final String compiledSourceHash;
+  /// User-chosen file name (without .sdrl). Empty = never saved to library.
+  final String savedRuleName;
+  /// Rule changed while VPN connected — reconnect to apply.
+  final bool pendingReconnect;
 
-  RuleDatabase copyWith({RuleSource? source, String? customRules}) =>
+  RuleDatabase copyWith({
+    RuleSource? source,
+    String? customRules,
+    String? compiledSourceHash,
+    String? savedRuleName,
+    bool? pendingReconnect,
+  }) =>
       RuleDatabase(
         source: source ?? this.source,
         customRules: customRules ?? this.customRules,
+        compiledSourceHash: compiledSourceHash ?? this.compiledSourceHash,
+        savedRuleName: savedRuleName ?? this.savedRuleName,
+        pendingReconnect: pendingReconnect ?? this.pendingReconnect,
       );
 
   /// Built-in China IP list (17mon — well-known GitHub project).
@@ -48,6 +66,9 @@ class RuleDatabase extends Equatable {
   Map<String, dynamic> toJson() => {
         'source': source.name,
         'customRules': customRules,
+        'compiledSourceHash': compiledSourceHash,
+        'savedRuleName': savedRuleName,
+        'pendingReconnect': pendingReconnect,
       };
 
   factory RuleDatabase.fromJson(Map<String, dynamic>? json) {
@@ -58,9 +79,13 @@ class RuleDatabase extends Equatable {
         orElse: () => RuleSource.builtIn,
       ),
       customRules: json['customRules'] as String? ?? '',
+      compiledSourceHash: json['compiledSourceHash'] as String? ?? '',
+      savedRuleName: json['savedRuleName'] as String? ?? '',
+      pendingReconnect: json['pendingReconnect'] as bool? ?? false,
     );
   }
 
   @override
-  List<Object?> get props => [source, customRules];
+  List<Object?> get props =>
+      [source, customRules, compiledSourceHash, savedRuleName, pendingReconnect];
 }

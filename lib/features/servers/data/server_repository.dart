@@ -49,46 +49,37 @@ class ServerRepository {
 
   Future<List<CountryCard>> loadCountryCards() async {
     final servers = await loadServers();
-    final bestByCountry = _bestServerPerCountry(servers);
+    // Group our own nodes by country so a country with several nodes (e.g.
+    // Hong Kong 1 + Hong Kong 2) yields one selectable card PER node instead of
+    // collapsing them — keying by country code alone dropped all but the last.
+    final ourByCountry = <String, List<Server>>{};
+    for (final s in servers) {
+      ourByCountry.putIfAbsent(s.countryCode.toUpperCase(), () => []).add(s);
+    }
     final cards = <CountryCard>[];
     for (final (code, name) in allCountries) {
-      final server = bestByCountry[code];
-      final latencyMs = server?.pingMs;
       final isPinned = code == 'HK' || code == 'US' || code == 'SG';
-      cards.add(CountryCard(
-        countryCode: code,
-        countryName: name,
-        server: server,
-        latencyMs: latencyMs,
-        isPinned: isPinned,
-      ));
+      final ours = ourByCountry[code];
+      if (ours != null && ours.isNotEmpty) {
+        for (final server in ours) {
+          cards.add(CountryCard(
+            countryCode: code,
+            countryName: name,
+            server: server,
+            latencyMs: server.pingMs,
+            isPinned: isPinned,
+          ));
+        }
+      } else {
+        cards.add(CountryCard(
+          countryCode: code,
+          countryName: name,
+          server: null,
+          isPinned: isPinned,
+        ));
+      }
     }
     return cards;
-  }
-
-  Map<String, Server> _bestServerPerCountry(List<Server> servers) {
-    final byCountry = <String, List<Server>>{};
-    for (final s in servers) {
-      final code = s.countryCode.toUpperCase();
-      byCountry.putIfAbsent(code, () => []).add(s);
-    }
-    final result = <String, Server>{};
-    for (final e in byCountry.entries) {
-      final list = e.value;
-      list.sort((a, b) {
-        final pa = a.pingMs ?? 9999;
-        final pb = b.pingMs ?? 9999;
-        if (pa != pb) return pa.compareTo(pb);
-        final sa = a.downloadSpeed ?? a.bandwidth ?? 0;
-        final sb = b.downloadSpeed ?? b.bandwidth ?? 0;
-        return sb.compareTo(sa);
-      });
-      result[e.key] = list.first;
-    }
-    for (final s in smartDolphinStaticServers) {
-      result[s.countryCode.toUpperCase()] = s;
-    }
-    return result;
   }
 
   Future<List<Server>> _loadCachedServers() async {

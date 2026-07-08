@@ -7,6 +7,8 @@ class VpnStatus {
     required this.byteOut,
     required this.packetsIn,
     required this.packetsOut,
+    this.byteInRate = '0',
+    this.byteOutRate = '0',
   });
 
   final String duration;
@@ -16,6 +18,12 @@ class VpnStatus {
   final String packetsIn;
   final String packetsOut;
 
+  /// Instantaneous throughput in bytes/sec, straight from the core's status
+  /// stream (libbox StatusMessage.downlink/uplink). Far more reliable than
+  /// deriving deltas from the cumulative counters.
+  final String byteInRate;
+  final String byteOutRate;
+
   factory VpnStatus.empty() => const VpnStatus(
         duration: '00:00:00',
         connectedOn: null,
@@ -23,6 +31,8 @@ class VpnStatus {
         byteOut: '0',
         packetsIn: '0',
         packetsOut: '0',
+        byteInRate: '0',
+        byteOutRate: '0',
       );
 
   Map<String, dynamic> toJson() {
@@ -33,6 +43,8 @@ class VpnStatus {
       'byte_out': byteOut,
       'packets_in': packetsIn,
       'packets_out': packetsOut,
+      'byte_in_rate': byteInRate,
+      'byte_out_rate': byteOutRate,
     };
   }
 
@@ -43,6 +55,8 @@ class VpnStatus {
     String? byteOut,
     String? packetsIn,
     String? packetsOut,
+    String? byteInRate,
+    String? byteOutRate,
   }) {
     return VpnStatus(
       duration: duration ?? this.duration,
@@ -51,6 +65,8 @@ class VpnStatus {
       byteOut: byteOut ?? this.byteOut,
       packetsIn: packetsIn ?? this.packetsIn,
       packetsOut: packetsOut ?? this.packetsOut,
+      byteInRate: byteInRate ?? this.byteInRate,
+      byteOutRate: byteOutRate ?? this.byteOutRate,
     );
   }
 

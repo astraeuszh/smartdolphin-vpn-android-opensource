@@ -1,23 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'openvpn_port.dart';
-import 'models/vpn.dart';
+import 'dolphin_core_port.dart';
 
-/// Provider for OpenVPN port
-final openVpnPortProvider = Provider<OpenVpnPort>((ref) {
-  final port = OpenVpnPort();
-  // Native OpenVPN / method channels are not used on web; skip init to avoid hangs.
+/// Active VPN engine: Dolphin-Core (sing-box / libbox). Replaces OpenVPN.
+/// The provider name is kept (`openVpnPortProvider`) so existing callers don't
+/// need changes; it now returns the Dolphin-Core port.
+final openVpnPortProvider = Provider<DolphinCorePort>((ref) {
+  final port = DolphinCorePort();
   if (!kIsWeb) {
     port.initialize().catchError((error) {
-      debugPrint('Failed to initialize OpenVPN: $error');
+      debugPrint('Failed to initialize Dolphin-Core: $error');
     });
   }
   ref.onDispose(port.dispose);
   return port;
 });
 
-/// Legacy VPN port provider for backward compatibility
-/// Now returns OpenVPN port instead of WireGuard
-final vpnPortProvider = Provider<OpenVpnPort>((ref) {
+/// Legacy alias kept for backward compatibility.
+final vpnPortProvider = Provider<DolphinCorePort>((ref) {
   return ref.watch(openVpnPortProvider);
 });

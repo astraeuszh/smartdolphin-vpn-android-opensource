@@ -39,7 +39,7 @@ class TrafficHistoryNotifier extends StateNotifier<TrafficHistoryState> {
 
   void _startSampling() {
     _stopSampling();
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _sample());
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _sample());
   }
 
   void _stopSampling() {

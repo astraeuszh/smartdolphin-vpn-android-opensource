@@ -85,6 +85,33 @@ class AppLocalizations {
   }
 
   String get appTitle => _value('appTitle');
+  String get settingsFeatureInDevelopment => _value('settingsFeatureInDevelopment');
+  // Account risk-control + custom DNS (extracted from hardcoded Chinese literals).
+  String get riskTitle => _value('riskTitle');
+  String riskUnblockMessage(int violations, int limits) => _value('riskUnblockMessage')
+      .replaceAll('{violations}', '$violations')
+      .replaceAll('{limits}', '$limits');
+  String get riskReported => _value('riskReported');
+  String riskReportFailed(String error) =>
+      _value('riskReportFailed').replaceAll('{error}', error);
+  String get riskExplain => _value('riskExplain');
+  String get riskExplainBan => _value('riskExplainBan');
+  String get riskExplainLimit => _value('riskExplainLimit');
+  String get riskBanCount => _value('riskBanCount');
+  String get riskLimitCount => _value('riskLimitCount');
+  String get riskTotalCount => _value('riskTotalCount');
+  String get riskReporting => _value('riskReporting');
+  String get riskReportButton => _value('riskReportButton');
+  String get riskPenaltyActive => _value('riskPenaltyActive');
+  String get dnsEnterFullIpv4 => _value('dnsEnterFullIpv4');
+  String get dnsCheckingIpRange => _value('dnsCheckingIpRange');
+  String get dnsCheckingConnectivity => _value('dnsCheckingConnectivity');
+  String get dnsSetFailed => _value('dnsSetFailed');
+  String get dnsSetSuccess => _value('dnsSetSuccess');
+  String get dnsTitle => _value('dnsTitle');
+  String get dnsHint => _value('dnsHint');
+  String get commonCancel => _value('cancel');
+  String get commonOk => _value('ok');
   String get authLegalAgreementHint => _value('authLegalAgreementHint');
   String get authLegalAgreementSeparator => _value('authLegalAgreementSeparator');
   String get settingsLegalAgreementHint => _value('settingsLegalAgreementHint');
@@ -256,6 +283,17 @@ class AppLocalizations {
   String get noServerSelected => _value('noServerSelected');
   String get serverNoNodes => _value('serverNoNodes');
   String get latencyLabel => _value('latencyLabel');
+  String get packetLossLabel => _value('packetLossLabel');
+  String get authQrUseScan => _value('authQrUseScan');
+  String get authQrUsePassword => _value('authQrUsePassword');
+  String get authQrWaiting => _value('authQrWaiting');
+  String get authQrRefresh => _value('authQrRefresh');
+  String get authQrScanTitle => _value('authQrScanTitle');
+  String get authQrScanHint => _value('authQrScanHint');
+  String get authQrApproveOk => _value('authQrApproveOk');
+  String get authQrApproveTitle => _value('authQrApproveTitle');
+  String get authQrApproveMessage => _value('authQrApproveMessage');
+  String get authQrApproveConfirm => _value('authQrApproveConfirm');
   String get badgeConnected => _value('badgeConnected');
   String get badgeSelected => _value('badgeSelected');
   String get badgeConnect => _value('badgeConnect');
@@ -303,6 +341,8 @@ class AppLocalizations {
   String get settingsDnsServer => _value('settingsDnsServer');
   String get settingsDnsCloudflare => _value('settingsDnsCloudflare');
   String get settingsDnsGoogle => _value('settingsDnsGoogle');
+  String get settingsDns114 => _value('settingsDns114');
+  String get settingsDnsQuad9 => _value('settingsDnsQuad9');
   String get settingsDnsCustom => _value('settingsDnsCustom');
   String get settingsNetworkQuality => _value('settingsNetworkQuality');
   String get settingsNetworkQualitySubtitle =>
@@ -343,6 +383,10 @@ class AppLocalizations {
   String get settingsAppSelectApps => _value('settingsAppSelectApps');
   String get settingsAppSelectAppsSubtitle =>
       _value('settingsAppSelectAppsSubtitle');
+  String get settingsAppPickerSearch => _value('settingsAppPickerSearch');
+  String get settingsAppPickerClear => _value('settingsAppPickerClear');
+  String get settingsAppPickerLoadFailed => _value('settingsAppPickerLoadFailed');
+  String get settingsAppPickerEmpty => _value('settingsAppPickerEmpty');
   String get settingsTunnelMode => _value('settingsTunnelMode');
   String get settingsTunnelModeTun => _value('settingsTunnelModeTun');
   String get settingsTunnelModeSystemProxy =>
@@ -377,6 +421,58 @@ class AppLocalizations {
       _value('settingsRuleSourceCustomSubtitle');
   String get settingsRuleEditor => _value('settingsRuleEditor');
   String get settingsRuleEditorHint => _value('settingsRuleEditorHint');
+  String get settingsRuleEditorSdrlHintPrefix =>
+      _value('settingsRuleEditorSdrlHintPrefix');
+  String get settingsRuleEditorHintBody =>
+      _value('settingsRuleEditorHintBody');
+  String get settingsRuleEditorHintSuffix =>
+      _value('settingsRuleEditorHintSuffix');
+  String get settingsRuleEditorSdrlHintLink =>
+      _value('settingsRuleEditorSdrlHintLink');
+  String get settingsRuleEditorSdrlHintSuffix =>
+      _value('settingsRuleEditorSdrlHintSuffix');
+  String get settingsRuleEditorInvalid => _value('settingsRuleEditorInvalid');
+  String get settingsRuleEditorCompileErrorHint =>
+      _value('settingsRuleEditorCompileErrorHint');
+  String get settingsRuleEditorSave => _value('settingsRuleEditorSave');
+  String get settingsRuleEditorSaveAsTitle =>
+      _value('settingsRuleEditorSaveAsTitle');
+  String get settingsRuleEditorSaveAsLabel =>
+      _value('settingsRuleEditorSaveAsLabel');
+  String get settingsRuleEditorSaveAsHint =>
+      _value('settingsRuleEditorSaveAsHint');
+  String get settingsRuleEditorReconnectHint =>
+      _value('settingsRuleEditorReconnectHint');
+  String get settingsRuleEditorLargeFileHint =>
+      _value('settingsRuleEditorLargeFileHint');
+  String get settingsRuleEditorValidHint =>
+      _value('settingsRuleEditorValidHint');
+  String get settingsRuleEditorInputLimit =>
+      _value('settingsRuleEditorInputLimit');
+  String get settingsRuleEditorCompiling =>
+      _value('settingsRuleEditorCompiling');
+  String get settingsRuleEditorNoActiveRule =>
+      _value('settingsRuleEditorNoActiveRule');
+  String settingsRuleEditorActiveRule(String name) =>
+      _value('settingsRuleEditorActiveRule').replaceAll('{name}', name);
+  String get settingsRuleEditorUnsavedTitle =>
+      _value('settingsRuleEditorUnsavedTitle');
+  String get settingsRuleEditorUnsavedBody =>
+      _value('settingsRuleEditorUnsavedBody');
+  String get settingsRuleEditorUnsavedStay =>
+      _value('settingsRuleEditorUnsavedStay');
+  String get settingsRuleEditorUnsavedDiscard =>
+      _value('settingsRuleEditorUnsavedDiscard');
+  String get settingsRulePicker => _value('settingsRulePicker');
+  String get settingsRulePickerEmpty => _value('settingsRulePickerEmpty');
+  String get settingsRuleEditorErrorTitle =>
+      _value('settingsRuleEditorErrorTitle');
+  String get settingsRuleEditorErrorClose =>
+      _value('settingsRuleEditorErrorClose');
+  String get settingsRuleEditorWarningTitle =>
+      _value('settingsRuleEditorWarningTitle');
+  String get settingsRuleEditorPlaceholder =>
+      _value('settingsRuleEditorPlaceholder');
   String get settingsRuleDomains => _value('settingsRuleDomains');
   String get settingsRuleDomainsSubtitle =>
       _value('settingsRuleDomainsSubtitle');
@@ -483,6 +579,7 @@ class AppLocalizations {
   String get settingsUsageNoLimit => _value('settingsUsageNoLimit');
   String get settingsSetLimit => _value('settingsSetLimit');
   String get settingsResetUsage => _value('settingsResetUsage');
+  String get settingsRechargeTraffic => _value('settingsRechargeTraffic');
   String get settingsRemoveLimit => _value('settingsRemoveLimit');
   String get settingsBackup => _value('settingsBackup');
   String get settingsCreateBackup => _value('settingsCreateBackup');
@@ -491,6 +588,63 @@ class AppLocalizations {
   String get settingsReferralSubtitle => _value('settingsReferralSubtitle');
   String get settingsAddReferral => _value('settingsAddReferral');
   String get settingsLanguage => _value('settingsLanguage');
+
+  /// Keys whose value differs from English (real translation), 0–100. English is always 100.
+  static int localeCoveragePercent(String tag) {
+    final en = kAppStringsEn;
+    if (tag == 'en') return 100;
+    final loc = _coreLocales[tag];
+    if (loc == null || en.isEmpty) return 0;
+    var translated = 0;
+    for (final key in en.keys) {
+      final v = loc[key];
+      if (v == null || v.trim().isEmpty) continue;
+      if (v != en[key]) translated++;
+    }
+    return ((translated / en.length) * 100).round();
+  }
+
+  static String localeTagFor(Locale locale) {
+    var tag = locale.languageCode;
+    if (locale.languageCode == 'zh') {
+      if (locale.scriptCode == 'Hant' ||
+          locale.countryCode == 'TW' ||
+          locale.countryCode == 'HK') {
+        tag = 'zh_Hant';
+      } else {
+        tag = 'zh';
+      }
+    } else if (locale.countryCode != null && locale.countryCode!.isNotEmpty) {
+      final full = '${locale.languageCode}_${locale.countryCode}';
+      if (_coreLocales.containsKey(full)) tag = full;
+    }
+    if (locale.scriptCode != null &&
+        locale.scriptCode!.isNotEmpty &&
+        tag == locale.languageCode) {
+      final full = '${locale.languageCode}_${locale.scriptCode}';
+      if (_coreLocales.containsKey(full)) tag = full;
+    }
+    return tag;
+  }
+
+  static String localeDisplayNameWithCoverage(Locale locale) {
+    final tag = localeTagFor(locale);
+    const names = {
+      'en': 'English',
+      'zh': '简体中文',
+      'zh_Hant': '繁體中文',
+      'es': 'Español',
+      'pt_BR': 'Português',
+      'de': 'Deutsch',
+      'fr': 'Français',
+      'ja': '日本語',
+      'ko': '한국어',
+    };
+    final name = names[tag] ?? tag;
+    // Coverage percentage intentionally not shown to users (looked unfinished);
+    // missing keys fall back to English so every locale stays functional.
+    return name;
+  }
   String get settingsLanguageSubtitle => _value('settingsLanguageSubtitle');
   String get settingsLanguageSystem => _value('settingsLanguageSystem');
   String get settingsAppearance => _value('settingsAppearance');
@@ -635,6 +789,238 @@ class AppLocalizations {
   String get gameModeMenuTooltip => _value('gameModeMenuTooltip');
   String get gameModeDecelMode => _value('gameModeDecelMode');
   String get gameModeAccelMode => _value('gameModeAccelMode');
+
+  String get commonYes => _value('commonYes');
+  String get commonNo => _value('commonNo');
+  String get commonLater => _value('commonLater');
+  String get retry => _value('retry');
+  String get settingsUpdateAvailableTitle => _value('settingsUpdateAvailableTitle');
+  String get settingsUpdateAvailableBody => _value('settingsUpdateAvailableBody');
+  String get settingsAppInfo => _value('settingsAppInfo');
+  String settingsVersionLabel(String version) =>
+      _value('settingsVersionLabel').replaceAll('{version}', version);
+  String get settingsCheckUpdate => _value('settingsCheckUpdate');
+  String get settingsCheckingUpdate => _value('settingsCheckingUpdate');
+  String get settingsKillSwitchPromptTitle => _value('settingsKillSwitchPromptTitle');
+  String get settingsKillSwitchPromptBody => _value('settingsKillSwitchPromptBody');
+  String get settingsOpenVpnSettings => _value('settingsOpenVpnSettings');
+  String get snackbarTrafficReset => _value('snackbarTrafficReset');
+  String get homeAnnouncementAck => _value('homeAnnouncementAck');
+  String get smartStableTitle => _value('smartStableTitle');
+  String get settingsSmartStableToggle => _value('settingsSmartStableToggle');
+  String get settingsSmartStableToggleSubtitle =>
+      _value('settingsSmartStableToggleSubtitle');
+  String get smartStablePrompt => _value('smartStablePrompt');
+  String get smartStableDecline => _value('smartStableDecline');
+  String get smartStableStart => _value('smartStableStart');
+  String get authSessionExpired => _value('authSessionExpired');
+  String get authAccountBanned => _value('authAccountBanned');
+  String get sdrlIconSource => _value('sdrlIconSource');
+  String get sdrlIconBinary => _value('sdrlIconBinary');
+  String get sdrlIconCompiled => _value('sdrlIconCompiled');
+  String get dashboardIpLabel => _value('dashboardIpLabel');
+  String get onboardingIntroTitle => _value('onboardingIntroTitle');
+  String get onboardingIntroBullet1 => _value('onboardingIntroBullet1');
+  String get onboardingIntroBullet2 => _value('onboardingIntroBullet2');
+  String get onboardingIntroBullet3 => _value('onboardingIntroBullet3');
+  String get onboardingGetStarted => _value('onboardingGetStarted');
+  String get onboardingLearnHowItWorks => _value('onboardingLearnHowItWorks');
+  String get onboardingPrivacyPolicy => _value('onboardingPrivacyPolicy');
+  String get onboardingSlideServersTitle => _value('onboardingSlideServersTitle');
+  String get onboardingSlideTunnelTitle => _value('onboardingSlideTunnelTitle');
+  String get onboardingSlideAccountTitle => _value('onboardingSlideAccountTitle');
+  String get onboardingSpeedTestTitle => _value('onboardingSpeedTestTitle');
+  String get onboardingSpeedTestBody => _value('onboardingSpeedTestBody');
+  String get onboardingSpeedTestDisclaimer => _value('onboardingSpeedTestDisclaimer');
+  String get onboardingLearnMore => _value('onboardingLearnMore');
+  String get onboardingSpeedTestOptIn => _value('onboardingSpeedTestOptIn');
+  String get onboardingSpeedTestUnavailable => _value('onboardingSpeedTestUnavailable');
+  String get onboardingDismiss => _value('onboardingDismiss');
+  String get onboardingCancelTest => _value('onboardingCancelTest');
+  String get onboardingSectionServer => _value('onboardingSectionServer');
+  String get onboardingBestServerAuto => _value('onboardingBestServerAuto');
+  String get onboardingBrowseCommunityList => _value('onboardingBrowseCommunityList');
+  String get onboardingImportOvpn => _value('onboardingImportOvpn');
+  String get onboardingSectionOptions => _value('onboardingSectionOptions');
+  String get onboardingAutoReconnect => _value('onboardingAutoReconnect');
+  String get onboardingAlwaysOnVpn => _value('onboardingAlwaysOnVpn');
+  String get onboardingAlwaysOnVpnSubtitle => _value('onboardingAlwaysOnVpnSubtitle');
+  String get onboardingSectionPermissions => _value('onboardingSectionPermissions');
+  String get onboardingVpnPermission => _value('onboardingVpnPermission');
+  String get onboardingVpnPermissionSubtitle => _value('onboardingVpnPermissionSubtitle');
+  String get onboardingNotificationsTitle => _value('onboardingNotificationsTitle');
+  String get onboardingEnable => _value('onboardingEnable');
+  String get onboardingAllowAndConnect => _value('onboardingAllowAndConnect');
+  String get onboardingCancelConnection => _value('onboardingCancelConnection');
+  String get onboardingConnectWithoutNotifications =>
+      _value('onboardingConnectWithoutNotifications');
+  String get onboardingSetupLater => _value('onboardingSetupLater');
+  String get onboardingKnowTheRisks => _value('onboardingKnowTheRisks');
+  String onboardingRecentThroughput(String mbps) =>
+      _value('onboardingRecentThroughput').replaceAll('{mbps}', mbps);
+  String onboardingActiveSessions(int count) =>
+      _value('onboardingActiveSessions').replaceAll('{count}', '$count');
+  String onboardingRemoteLabel(String remote) =>
+      _value('onboardingRemoteLabel').replaceAll('{remote}', remote);
+  String onboardingCipherLabel(String cipher) =>
+      _value('onboardingCipherLabel').replaceAll('{cipher}', cipher);
+  String get onboardingAboutSpeedTestTitle => _value('onboardingAboutSpeedTestTitle');
+  String get onboardingAboutSpeedTestBullet1 => _value('onboardingAboutSpeedTestBullet1');
+  String get onboardingAboutSpeedTestBullet2 => _value('onboardingAboutSpeedTestBullet2');
+  String get onboardingAboutSpeedTestBullet3 => _value('onboardingAboutSpeedTestBullet3');
+  String get onboardingRisksTitle => _value('onboardingRisksTitle');
+  String get onboardingRisksBullet1 => _value('onboardingRisksBullet1');
+  String get onboardingRisksBullet2 => _value('onboardingRisksBullet2');
+  String get onboardingRisksBullet3 => _value('onboardingRisksBullet3');
+  String get onboardingConnectionFailed => _value('onboardingConnectionFailed');
+  String get onboardingTryAgain => _value('onboardingTryAgain');
+  String get onboardingChooseServerFirst => _value('onboardingChooseServerFirst');
+  String get onboardingConnectionCancelled => _value('onboardingConnectionCancelled');
+  String onboardingUnableCancelConnection(String error) =>
+      _value('onboardingUnableCancelConnection').replaceAll('{error}', error);
+  String get onboardingNotificationsOptional => _value('onboardingNotificationsOptional');
+  String onboardingUnableRequestNotifications(String error) =>
+      _value('onboardingUnableRequestNotifications').replaceAll('{error}', error);
+  String get onboardingAlwaysOnVpnAndroidOnly => _value('onboardingAlwaysOnVpnAndroidOnly');
+  String onboardingUnableOpenVpnSettings(String error) =>
+      _value('onboardingUnableOpenVpnSettings').replaceAll('{error}', error);
+  String get onboardingUnableReadFile => _value('onboardingUnableReadFile');
+  String onboardingUnableImportConfig(String error) =>
+      _value('onboardingUnableImportConfig').replaceAll('{error}', error);
+  String get onboardingOvpnMissingRemote => _value('onboardingOvpnMissingRemote');
+  String get onboardingRemoteMustIncludeHostPort =>
+      _value('onboardingRemoteMustIncludeHostPort');
+  String onboardingUnableOpenUrl(String url) =>
+      _value('onboardingUnableOpenUrl').replaceAll('{url}', url);
+  String get onboardingLabelDownload => _value('onboardingLabelDownload');
+  String get onboardingLabelUpload => _value('onboardingLabelUpload');
+  String get onboardingLabelLatency => _value('onboardingLabelLatency');
+  String get onboardingSpeedTestCollecting => _value('onboardingSpeedTestCollecting');
+  String get onboardingSpeedTestMeasuring => _value('onboardingSpeedTestMeasuring');
+  String get onboardingSpeedTestPending => _value('onboardingSpeedTestPending');
+  String get onboardingSpeedTestChecking => _value('onboardingSpeedTestChecking');
+  String get onboardingSpeedTestUnavailableShort =>
+      _value('onboardingSpeedTestUnavailableShort');
+  String get onboardingSpeedTestReady => _value('onboardingSpeedTestReady');
+  String get onboardingSpeedTestSkipped => _value('onboardingSpeedTestSkipped');
+  String errorDialogCodeLabel(String formattedCode) =>
+      _value('errorDialogCodeLabel').replaceAll('{code}', formattedCode);
+  String get authLoginRequired => _value('authLoginRequired');
+  String get onboardingHowItWorksTitle => _value('onboardingHowItWorksTitle');
+  String get onboardingHowItWorksServersDesc => _value('onboardingHowItWorksServersDesc');
+  String get onboardingHowItWorksTunnelDesc => _value('onboardingHowItWorksTunnelDesc');
+  String get onboardingHowItWorksAccountDesc => _value('onboardingHowItWorksAccountDesc');
+  String get onboardingContinue => _value('onboardingContinue');
+  String get onboardingRunQuickTest => _value('onboardingRunQuickTest');
+  String get onboardingImportedServer => _value('onboardingImportedServer');
+  String get onboardingConnectTitle => _value('onboardingConnectTitle');
+  String onboardingBaseline(String down, String up) => _value('onboardingBaseline')
+      .replaceAll('{down}', down)
+      .replaceAll('{up}', up);
+  String get onboardingNotificationsEnabledSubtitle =>
+      _value('onboardingNotificationsEnabledSubtitle');
+  String get onboardingNotificationsDeniedSubtitle =>
+      _value('onboardingNotificationsDeniedSubtitle');
+  String get onboardingNotificationsRecommendedSubtitle =>
+      _value('onboardingNotificationsRecommendedSubtitle');
+  String get onboardingNotificationsDisabledForNow =>
+      _value('onboardingNotificationsDisabledForNow');
+  String get onboardingVpnGateDisclaimer => _value('onboardingVpnGateDisclaimer');
+  String get onboardingSpeedTestTesting => _value('onboardingSpeedTestTesting');
+  String get onboardingSpeedTestResultReady => _value('onboardingSpeedTestResultReady');
+  String get commonRemove => _value('commonRemove');
+  String get featureUnstableDisclaimer => _value('featureUnstableDisclaimer');
+  String get proxyShareScreenTitle => _value('proxyShareScreenTitle');
+  String get proxyShareHostTab => _value('proxyShareHostTab');
+  String get proxyShareClientTab => _value('proxyShareClientTab');
+  String get proxyShareHostEnableHint => _value('proxyShareHostEnableHint');
+  String get proxyShareVpnRequired => _value('proxyShareVpnRequired');
+  String get proxyShareScopeTitle => _value('proxyShareScopeTitle');
+  String get proxyShareScopeLan => _value('proxyShareScopeLan');
+  String get proxyShareScopeRemote => _value('proxyShareScopeRemote');
+  String get proxyShareProtocolTitle => _value('proxyShareProtocolTitle');
+  String get proxyShareHostIp => _value('proxyShareHostIp');
+  String get proxyShareHostPort => _value('proxyShareHostPort');
+  String get proxyShareHostKey => _value('proxyShareHostKey');
+  String get proxyShareShowQr => _value('proxyShareShowQr');
+  String get proxyShareQrHint => _value('proxyShareQrHint');
+  String get proxyShareRegenerateKey => _value('proxyShareRegenerateKey');
+  String get proxyShareCopied => _value('proxyShareCopied');
+  String get proxyShareClientIntro => _value('proxyShareClientIntro');
+  String get proxyShareHasAppQuestion => _value('proxyShareHasAppQuestion');
+  String get proxyShareHasAppYes => _value('proxyShareHasAppYes');
+  String get proxyShareHasAppNo => _value('proxyShareHasAppNo');
+  String get proxyShareScanQrTitle => _value('proxyShareScanQrTitle');
+  String get proxyShareScanQrHint => _value('proxyShareScanQrHint');
+  String get proxyShareScanQrMock => _value('proxyShareScanQrMock');
+  String get proxyShareSameLanQuestion => _value('proxyShareSameLanQuestion');
+  String get proxyShareSameLanYes => _value('proxyShareSameLanYes');
+  String get proxyShareSameLanNo => _value('proxyShareSameLanNo');
+  String get proxyShareManualTitle => _value('proxyShareManualTitle');
+  String get proxyShareManualIpHint => _value('proxyShareManualIpHint');
+  String get proxyShareManualPortHint => _value('proxyShareManualPortHint');
+  String get proxyShareManualKeyHint => _value('proxyShareManualKeyHint');
+  String get proxyShareConnect => _value('proxyShareConnect');
+  String get proxyShareManualConnectMock => _value('proxyShareManualConnectMock');
+  String get proxyShareP2pTitle => _value('proxyShareP2pTitle');
+  String get proxyShareP2pStart => _value('proxyShareP2pStart');
+  String get proxyShareP2pTrying => _value('proxyShareP2pTrying');
+  String get proxyShareP2pSuccess => _value('proxyShareP2pSuccess');
+  String get proxyShareP2pFailed => _value('proxyShareP2pFailed');
+  String get proxyShareClientRestart => _value('proxyShareClientRestart');
+  String get proxyShareFlowTitle => _value('proxyShareFlowTitle');
+  String get proxyShareFlowStep1 => _value('proxyShareFlowStep1');
+  String get proxyShareFlowAppYes => _value('proxyShareFlowAppYes');
+  String get proxyShareFlowAppNo => _value('proxyShareFlowAppNo');
+  String get proxyShareFlowScan => _value('proxyShareFlowScan');
+  String get proxyShareFlowLanQ => _value('proxyShareFlowLanQ');
+  String get proxyShareFlowManual => _value('proxyShareFlowManual');
+  String get proxyShareFlowP2p => _value('proxyShareFlowP2p');
+  String get proxyShareFlowP2pFail => _value('proxyShareFlowP2pFail');
+  String get proxyShareOpenSetup => _value('proxyShareOpenSetup');
+  String get featureBetaDisclaimer => _value('featureBetaDisclaimer');
+  String get authPendingBanner => _value('authPendingBanner');
+  String get authBannedBanner => _value('authBannedBanner');
+  String authTrialBanner(String remaining) =>
+      _value('authTrialBanner').replaceAll('{remaining}', remaining);
+  String authTrialRemaining(int hours, int minutes, int seconds) => _value('authTrialRemaining')
+      .replaceAll('{hours}', '$hours')
+      .replaceAll('{minutes}', '$minutes')
+      .replaceAll('{seconds}', '$seconds');
+  String authTrialAccountHint(String remaining) =>
+      _value('authTrialAccountHint').replaceAll('{remaining}', remaining);
+  String authTrialRemainingShort(String remaining) =>
+      _value('authTrialRemainingShort').replaceAll('{remaining}', remaining);
+  String get accountSubscriptionTitle => _value('accountSubscriptionTitle');
+  String get accountSubscriptionIntro => _value('accountSubscriptionIntro');
+  String get accountSubscriptionUid => _value('accountSubscriptionUid');
+  String get accountSubscriptionCreated => _value('accountSubscriptionCreated');
+  String get accountSubscriptionStarted => _value('accountSubscriptionStarted');
+  String get accountSubscriptionExpires => _value('accountSubscriptionExpires');
+  String get accountDateTimeNone => _value('accountDateTimeNone');
+  String get accountDateTimePermanent => _value('accountDateTimePermanent');
+  String riskMenuSummary(int violations, int limits) => _value('riskMenuSummary')
+      .replaceAll('{violations}', '$violations')
+      .replaceAll('{limits}', '$limits');
+
+  /// Resolve auth status messages from codes; server text wins when provided.
+  String resolveAuthMessage({String? code, String? serverMessage}) {
+    if (serverMessage != null && serverMessage.trim().isNotEmpty) {
+      return serverMessage;
+    }
+    switch (code) {
+      case 'auth_failed':
+      case 'E6008':
+      case 'session_expired':
+        return authSessionExpired;
+      case 'banned':
+        return authAccountBanned;
+      case 'pending_vpn':
+        return settingsPendingVpnApproval;
+      default:
+        return serverMessage ?? '';
+    }
+  }
 
   String connectionQualityLabel(ConnectionQuality quality) {
     switch (quality) {

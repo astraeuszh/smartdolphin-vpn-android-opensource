@@ -3,7 +3,7 @@ import 'package:smartdolphin_vpn/l10n/app_localizations.dart';
 
 enum VpnProtocol { wireGuard, openVpn, ikev2 }
 
-enum VpnDnsOption { cloudflare, google }
+enum VpnDnsOption { google, cloudflare, dns114, quad9, custom }
 
 extension VpnProtocolX on VpnProtocol {
   String get label {
@@ -11,22 +11,28 @@ extension VpnProtocolX on VpnProtocol {
       case VpnProtocol.wireGuard:
         return 'WireGuard';
       case VpnProtocol.openVpn:
-        return 'OpenVPN (coming soon)';
+        return 'OpenVPN';
       case VpnProtocol.ikev2:
-        return 'IKEv2 (coming soon)';
+        return 'IKEv2/IPsec';
     }
   }
 
-  bool get isSupported => this == VpnProtocol.wireGuard;
+  bool get isSupported => true;
 }
 
 extension VpnDnsOptionX on VpnDnsOption {
   String labelFor(AppLocalizations l10n) {
     switch (this) {
-      case VpnDnsOption.cloudflare:
-        return l10n.settingsDnsCloudflare;
       case VpnDnsOption.google:
         return l10n.settingsDnsGoogle;
+      case VpnDnsOption.cloudflare:
+        return l10n.settingsDnsCloudflare;
+      case VpnDnsOption.dns114:
+        return l10n.settingsDns114;
+      case VpnDnsOption.quad9:
+        return l10n.settingsDnsQuad9;
+      case VpnDnsOption.custom:
+        return l10n.settingsDnsCustom;
     }
   }
 }
@@ -38,8 +44,8 @@ VpnProtocol protocolFromName(String? name) {
 
 VpnDnsOption dnsOptionFromName(String? name) {
   if (name == 'custom') {
-    return VpnDnsOption.cloudflare;
+    return VpnDnsOption.custom;
   }
   return VpnDnsOption.values.firstWhereOrNull((p) => p.name == name) ??
-      VpnDnsOption.cloudflare;
+      VpnDnsOption.google;
 }

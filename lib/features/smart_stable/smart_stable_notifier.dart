@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../services/storage/prefs.dart';
 
 /// SmartStable：弱网调优（MTU / mssfix）+ 仅前台询问。
 class SmartStableState {
@@ -29,11 +33,34 @@ class SmartStableState {
 }
 
 class SmartStableNotifier extends StateNotifier<SmartStableState> {
-  SmartStableNotifier() : super(const SmartStableState());
+  SmartStableNotifier(this._ref) : super(const SmartStableState()) {
+    _restore();
+  }
+
+  final Ref _ref;
 
   static const _afterAcceptCooldown = Duration(minutes: 5);
   static const _afterReconnectCooldown = Duration(seconds: 45);
-  static const _afterDeclineDebounce = Duration(seconds: 4);
+  static const _afterDeclineCooldown = Duration(minutes: 30);
+  static const _prefsKey = 'smart_stable_tuning_enabled';
+
+  /// Restore the persisted tuning state so it survives an app restart (users
+  /// used to think it stayed on while the MTU silently reverted to default).
+  Future<void> _restore() async {
+    try {
+      final store = await _ref.read(prefsStoreProvider.future);
+      if (store.getBool(_prefsKey) && mounted) {
+        state = state.copyWith(tuningEnabled: true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persist(bool enabled) async {
+    try {
+      final store = await _ref.read(prefsStoreProvider.future);
+      await store.setBool(_prefsKey, enabled);
+    } catch (_) {}
+  }
 
   void enableTuning() {
     state = state.copyWith(
@@ -41,15 +68,19 @@ class SmartStableNotifier extends StateNotifier<SmartStableState> {
       suppressDeclineUntilNextUserConnect: false,
       promptCooldownUntil: DateTime.now().add(_afterAcceptCooldown),
     );
+    unawaited(_persist(true));
   }
 
-  void disableTuning() => state = state.copyWith(tuningEnabled: false);
+  void disableTuning() {
+    state = state.copyWith(tuningEnabled: false);
+    unawaited(_persist(false));
+  }
 
-  /// 用户点「暂不需要」：直到下次从断开状态发起连接前不再问；仅短 debounce 防连点。
+  /// 用户点「暂不需要」：3 小时内不再弹，除非用户断开 VPN 后重新连接。
   void suppressAfterDecline() {
     state = state.copyWith(
       suppressDeclineUntilNextUserConnect: true,
-      promptCooldownUntil: DateTime.now().add(_afterDeclineDebounce),
+      promptCooldownUntil: DateTime.now().add(_afterDeclineCooldown),
     );
   }
 
@@ -69,5 +100,5 @@ class SmartStableNotifier extends StateNotifier<SmartStableState> {
 
 final smartStableProvider =
     StateNotifierProvider<SmartStableNotifier, SmartStableState>((ref) {
-  return SmartStableNotifier();
+  return SmartStableNotifier(ref);
 });

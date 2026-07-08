@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'server.dart';
 import '../../../l10n/country_names.dart';
+import '../../settings/domain/preferences_controller.dart';
+import '../../../services/vpn/node_table.dart';
 import '../data/all_countries.dart';
 import '../data/country_card.dart';
 import '../data/server_preferences_repository.dart';
@@ -109,18 +111,35 @@ int _pinPriority(String countryCode) {
 }
 
 List<CountryCard> _initialCountryCards() {
-  final staticByCode = <String, Server>{};
+  // One card per node so multi-node countries (e.g. Hong Kong 1 + Hong Kong 2)
+  // are both selectable instead of overwriting each other by country code.
+  final ourByCode = <String, List<Server>>{};
   for (final s in smartDolphinStaticServers) {
-    staticByCode[s.countryCode.toUpperCase()] = s;
+    ourByCode.putIfAbsent(s.countryCode.toUpperCase(), () => []).add(s);
   }
-  return allCountries
-      .map((e) => CountryCard(
-            countryCode: e.$1,
-            countryName: e.$2,
-            server: staticByCode[e.$1],
-            isPinned: e.$1 == 'HK' || e.$1 == 'US' || e.$1 == 'SG',
-          ))
-      .toList();
+  final cards = <CountryCard>[];
+  for (final e in allCountries) {
+    final isPinned = e.$1 == 'HK' || e.$1 == 'US' || e.$1 == 'SG';
+    final ours = ourByCode[e.$1];
+    if (ours != null && ours.isNotEmpty) {
+      for (final s in ours) {
+        cards.add(CountryCard(
+          countryCode: e.$1,
+          countryName: e.$2,
+          server: s,
+          isPinned: isPinned,
+        ));
+      }
+    } else {
+      cards.add(CountryCard(
+        countryCode: e.$1,
+        countryName: e.$2,
+        server: null,
+        isPinned: isPinned,
+      ));
+    }
+  }
+  return cards;
 }
 
 /// 当 API 返回的卡片少于全部国家时，用初始卡片补齐，确保始终显示全部
@@ -281,11 +300,30 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
     return false;
   }
 
+  /// TCP reachability probe — port depends on active Dolphin-Core protocol.
+  int _probePortFor(Server server) {
+    if (server.id.startsWith('smartdolphin-')) {
+      final node = nodeForHostOrCountry(server.ip, server.countryName);
+      final proto = sdProtocolFromName(
+        _ref.read(preferencesControllerProvider).coreProtocol,
+      );
+      switch (proto) {
+        case SdProtocol.reality:
+          return node.realityPort;
+        case SdProtocol.hysteria2:
+        case SdProtocol.wireguard:
+          return 443;
+      }
+    }
+    final parts = server.endpoint.split(':');
+    return parts.length > 1 ? (int.tryParse(parts[1]) ?? 443) : 1194;
+  }
+
   Future<MapEntry<String, int>> _probeServerLatency(Server server) async {
     try {
       final parts = server.endpoint.split(':');
       final host = parts.first;
-      final port = parts.length > 1 ? (int.tryParse(parts[1]) ?? 443) : 1194;
+      final port = _probePortFor(server);
       final stopwatch = Stopwatch()..start();
       final socket = await Socket.connect(
         host,

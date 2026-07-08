@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/time.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../widgets/page_app_bar.dart';
 import '../domain/connection_history_notifier.dart';
 import '../domain/connection_record.dart';
@@ -525,7 +526,7 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () => unawaited(onRetry()),
-              child: const Text('Retry'),
+              child: Text(context.l10n.retry),
             ),
           ],
         ),

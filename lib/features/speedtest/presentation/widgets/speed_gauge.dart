@@ -2,18 +2,20 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Semicircle speedometer: 0 on the LEFT, max on the RIGHT, needle with settle wobble.
+/// Semicircle speedometer capped at [maxValue]; [displayValue] may exceed the cap.
 class SpeedGauge extends StatefulWidget {
   const SpeedGauge({
     super.key,
-    required this.value,
-    this.maxValue = 180,
+    required this.needleValue,
+    required this.displayValue,
+    this.maxValue = 1000,
     this.statusLabel = '',
     this.isActive = false,
-    this.tickStep = 30,
+    this.tickStep = 100,
   });
 
-  final double value;
+  final double needleValue;
+  final double displayValue;
   final double maxValue;
   final String statusLabel;
   final bool isActive;
@@ -25,12 +27,13 @@ class SpeedGauge extends StatefulWidget {
 
 class _SpeedGaugeState extends State<SpeedGauge> with SingleTickerProviderStateMixin {
   late AnimationController _settleController;
-  double _displayValue = 0;
+  double _displayNeedle = 0;
+  final _rng = math.Random();
 
   @override
   void initState() {
     super.initState();
-    _displayValue = widget.value;
+    _displayNeedle = widget.needleValue;
     _settleController = AnimationController(vsync: this);
   }
 
@@ -43,25 +46,40 @@ class _SpeedGaugeState extends State<SpeedGauge> with SingleTickerProviderStateM
   @override
   void didUpdateWidget(covariant SpeedGauge oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if ((widget.value - _displayValue).abs() > 0.05 || widget.isActive != oldWidget.isActive) {
-      _animateTo(widget.value, settle: widget.isActive && !oldWidget.isActive);
+    var target = widget.needleValue;
+    if (widget.isActive && target > 0.05) {
+      target += (_rng.nextDouble() - 0.5) * target * 0.04;
+    }
+    target = target.clamp(0, widget.maxValue);
+    if ((target - _displayNeedle).abs() > 0.05 ||
+        widget.isActive != oldWidget.isActive) {
+      _animateTo(
+        target,
+        settle: widget.isActive && !oldWidget.isActive,
+        live: widget.isActive && widget.statusLabel.isNotEmpty,
+      );
     }
   }
 
-  void _animateTo(double target, {bool settle = false}) {
+  void _animateTo(double target, {bool settle = false, bool live = false}) {
     _settleController.stop();
-    final from = _displayValue;
+    final from = _displayNeedle;
+    final delta = (target - from).abs();
     final duration = settle
         ? const Duration(milliseconds: 900)
-        : Duration(milliseconds: (200 + (target - from).abs() * 8).clamp(250, 700).toInt());
-    final curve = settle ? Curves.elasticOut : Curves.easeOutCubic;
+        : Duration(
+            milliseconds: live
+                ? (120 + delta * 3).clamp(180, 450).toInt()
+                : (200 + delta * 5).clamp(250, 700).toInt(),
+          );
+    final curve = settle ? Curves.easeOutBack : Curves.easeOutCubic;
     _settleController.duration = duration;
     final anim = Tween<double>(begin: from, end: target).animate(
       CurvedAnimation(parent: _settleController, curve: curve),
     );
     _settleController.reset();
     void listener() {
-      if (mounted) setState(() => _displayValue = anim.value);
+      if (mounted) setState(() => _displayNeedle = anim.value);
     }
 
     anim.addListener(listener);
@@ -73,7 +91,9 @@ class _SpeedGaugeState extends State<SpeedGauge> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final normalized = (widget.maxValue <= 0 ? 0 : _displayValue / widget.maxValue).clamp(0.0, 1.0);
+    final normalized =
+        (widget.maxValue <= 0 ? 0 : _displayNeedle / widget.maxValue).clamp(0.0, 1.0);
+    final shown = widget.displayValue <= 0 ? '--' : widget.displayValue.toStringAsFixed(2);
 
     return SizedBox(
       width: 300,
@@ -103,7 +123,7 @@ class _SpeedGaugeState extends State<SpeedGauge> with SingleTickerProviderStateM
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _displayValue <= 0 ? '--' : _displayValue.toStringAsFixed(1),
+                  shown,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -180,19 +200,19 @@ class _SemicircleGaugePainter extends CustomPainter {
       final t = (tickValue / maxValue).clamp(0.0, 1.0);
       final angle = startAngle + sweepAngle * t;
       final inner = radius - 6;
-      final outer = radius + (i % 3 == 0 ? 8 : 4);
+      final outer = radius + (i % 2 == 0 ? 8 : 4);
       final p1 = Offset(center.dx + inner * math.cos(angle), center.dy + inner * math.sin(angle));
       final p2 = Offset(center.dx + outer * math.cos(angle), center.dy + outer * math.sin(angle));
       canvas.drawLine(
         p1,
         p2,
         Paint()
-          ..color = progressColor.withValues(alpha: i % 3 == 0 ? 0.85 : 0.45)
-          ..strokeWidth = i % 3 == 0 ? 2.2 : 1.2
+          ..color = progressColor.withValues(alpha: i % 2 == 0 ? 0.85 : 0.45)
+          ..strokeWidth = i % 2 == 0 ? 2.2 : 1.2
           ..strokeCap = StrokeCap.round,
       );
 
-      if (i % 3 == 0 || tickStep <= 10) {
+      if (i % 2 == 0) {
         final label = tickValue.toInt().toString();
         final labelR = radius + 22;
         final tp = TextPainter(

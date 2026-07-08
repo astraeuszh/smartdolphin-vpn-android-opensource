@@ -96,7 +96,6 @@ class _ConnectControlState extends State<ConnectControl>
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
         if (!isDisabled) {
-          HapticFeedback.lightImpact();
           _pressController.forward();
         }
       },
@@ -150,16 +149,15 @@ class _ConnectControlState extends State<ConnectControl>
               );
             },
           ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(innerSize / 2),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Container(
+          // Solid fill (no BackdropFilter): the fill is ~opaque anyway and the
+          // surrounding ring repaints every frame while connecting — a live blur
+          // here just burns GPU for no visible gain.
+          Container(
                 width: innerSize,
                 height: innerSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: theme.colorScheme.surface.withValues(alpha: 0.9),
+                  color: theme.colorScheme.surface.withValues(alpha: 0.96),
                   border: Border.all(
                     color: accent.withValues(alpha: 0.25),
                     width: 1.5,
@@ -202,8 +200,6 @@ class _ConnectControlState extends State<ConnectControl>
                         textAlign: TextAlign.center,
                       ),
               ),
-            ),
-          ),
         ],
       ),
     );

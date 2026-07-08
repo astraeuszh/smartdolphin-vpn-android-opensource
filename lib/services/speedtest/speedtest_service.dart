@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../features/speedtest/domain/speedtest_state.dart';
+import '../vpn/clash_api_client.dart';
 import 'ndt7_models.dart';
 import 'ndt7_service.dart';
 
@@ -12,6 +13,7 @@ class SpeedTestService {
   var _cancelled = false;
 
   Future<void> runTest({
+    required bool measureThroughVpn,
     required void Function(SpeedTestPhase phase) onPhase,
     required void Function(String serverName) onServerSelected,
     required void Function(int pingMs) onPingSample,
@@ -62,7 +64,15 @@ class SpeedTestService {
       final serverLabel = _serverLabel(summary);
       onServerSelected(serverLabel);
 
-      final pingMs = summary.minRttMs?.round() ?? 0;
+      // NDT7 MinRTT comes from TCP_INFO on the local segment — single-digit ms
+      // even over VPN. When testing through the tunnel, use Clash proxy delay.
+      var pingMs = summary.minRttMs?.round() ?? 0;
+      if (measureThroughVpn) {
+        final tunnelMs = await ClashApiClient.proxyDelayMs(timeoutMs: 8000);
+        if (tunnelMs != null && tunnelMs > 0) {
+          pingMs = tunnelMs;
+        }
+      }
       if (pingMs > 0) {
         onPhase(SpeedTestPhase.ping);
         onPingSample(pingMs);

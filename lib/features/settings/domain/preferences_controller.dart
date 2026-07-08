@@ -15,6 +15,7 @@ class PreferencesController extends StateNotifier<PreferencesState> {
 
   final Ref _ref;
   final Completer<void> _hydrated = Completer<void>();
+  var _localeChangedByUser = false;
 
   Future<void> get ready => _hydrated.future;
 
@@ -30,11 +31,10 @@ class PreferencesController extends StateNotifier<PreferencesState> {
     try {
       final data = jsonDecode(raw) as Map<String, dynamic>;
       final loaded = PreferencesState.fromJson(data);
-      // 若在异步读取期间用户已改语言，不要用旧快照覆盖内存中的 locale。
-      final memLocale = state.localeCode;
-      state = loaded;
-      if (memLocale != null) {
-        state = state.copyWith(localeCode: memLocale);
+      if (_localeChangedByUser) {
+        state = loaded.copyWith(localeCode: state.localeCode);
+      } else {
+        state = loaded;
       }
     } catch (_) {
       // ignore corrupt preferences
@@ -64,7 +64,14 @@ class PreferencesController extends StateNotifier<PreferencesState> {
     await _persist();
   }
 
+  /// Dolphin-Core transport: 'reality' | 'hysteria2' | 'wireguard'.
+  Future<void> setCoreProtocol(String protocol) async {
+    state = state.copyWith(coreProtocol: protocol);
+    await _persist();
+  }
+
   Future<void> setLocale(String? code) async {
+    _localeChangedByUser = true;
     state = state.copyWith(localeCode: code);
     await _persist();
   }

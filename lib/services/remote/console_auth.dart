@@ -60,9 +60,21 @@ class ConsoleAuth {
   void _throwIfFailed(Map<String, dynamic> data) {
     if (data['ok'] == true) return;
     final code = (data['code'] as String?) ?? 'auth_failed';
-    final msg = (data['error'] as String?) ??
+    var msg = (data['error'] as String?) ??
         (data['message'] as String?) ??
         '认证失败';
+    if (msg.contains('device registration limit reached')) {
+      if (msg.contains('per day')) {
+        msg = '此设备今日注册次数已达上限（每天最多 3 个账户）';
+      } else if (msg.contains('per year')) {
+        msg = '此设备本年度注册次数已达上限（每年最多 3 个账户）';
+      } else {
+        msg = '此设备注册次数已达上限';
+      }
+    } else if (msg.contains('hardware device id required') ||
+        msg.contains('invalid hardware device id')) {
+      msg = '无法识别设备硬件标识，请更新客户端后重试';
+    }
     throw ConsoleAuthException(code, msg);
   }
 
@@ -86,6 +98,17 @@ class ConsoleAuth {
           password: password,
           deviceId: deviceId,
           data: data,
+        );
+      }
+      if (data['banned'] == true || data['code'] == 'banned') {
+        return AccountSession.fromJson(
+          username: username.trim(),
+          password: password,
+          deviceId: deviceId,
+          data: {
+            ...data,
+            'banned': true,
+          },
         );
       }
       _throwIfFailed(data);
@@ -116,6 +139,7 @@ class ConsoleAuth {
     required String email,
     required String verificationCode,
     required String deviceId,
+    required String hardwareDeviceId,
   }) async {
     final body = await _clientPayload(
       deviceId: deviceId,
@@ -124,6 +148,7 @@ class ConsoleAuth {
         'password': password,
         'email': email.trim().toLowerCase(),
         'verification_code': verificationCode.trim(),
+        'hardware_device_id': hardwareDeviceId,
       },
     );
     final data = await _post('/api/client/register', body);
@@ -148,11 +173,15 @@ class ConsoleAuth {
     );
     final data = await _post('/api/client/check', body);
     if (data['banned'] == true || data['code'] == 'banned') {
-      throw ConsoleAuthException(
-        'banned',
-        (data['message'] as String?) ??
-            (data['ban_reason'] as String?) ??
-            '账户已封禁',
+      return AccountSession.fromJson(
+        username: session.username,
+        password: session.password,
+        deviceId: session.deviceId,
+        data: {
+          ...data,
+          'session_token': session.sessionToken,
+          'banned': true,
+        },
       );
     }
     _throwIfFailed(data);

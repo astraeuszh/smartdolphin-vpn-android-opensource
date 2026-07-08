@@ -173,17 +173,29 @@ class Ndt7Service {
           warmup,
           measure,
         );
-        final uploadResult = await runUpload(
-          locateResult.uploadUrl,
-          warmup,
-          measure,
-        );
+        _MeasurementResult? uploadResult;
+        try {
+          uploadResult = await runUpload(
+            locateResult.uploadUrl,
+            warmup,
+            measure,
+          );
+        } on Ndt7Exception catch (uploadError) {
+          if (downloadResult.clientMbps <= 0 &&
+              (downloadResult.serverMbps ?? 0) <= 0) {
+            rethrow;
+          }
+          _progressController.add(
+            Ndt7Progress.failure(uploadError),
+          );
+        }
 
-        final downloadMbps =
-            downloadResult.serverMbps ?? downloadResult.clientMbps;
-        final uploadMbps = uploadResult.serverMbps ?? uploadResult.clientMbps;
+        final downloadMbps = _pickDownloadMbps(downloadResult);
+        final uploadMbps = uploadResult == null
+            ? 0.0
+            : _pickUploadMbps(uploadResult);
 
-        if (downloadMbps <= 0 || uploadMbps <= 0) {
+        if (downloadMbps <= 0 && uploadMbps <= 0) {
           throw const Ndt7Exception(
             Ndt7ErrorCode.noResult,
             'Measurement did not return any throughput data',
@@ -193,13 +205,13 @@ class Ndt7Service {
         final summary = TestSummary(
           downloadMbps: downloadMbps,
           uploadMbps: uploadMbps,
-          minRttMs: downloadResult.minRttMs ?? uploadResult.minRttMs,
-          lossRate: downloadResult.lossRate ?? uploadResult.lossRate,
+          minRttMs: downloadResult.minRttMs ?? uploadResult?.minRttMs,
+          lossRate: downloadResult.lossRate ?? uploadResult?.lossRate,
           serverCity: locateResult.serverCity,
           serverCountry: locateResult.serverCountry,
           timestampUtc: DateTime.now().toUtc(),
           downloadDuration: downloadResult.duration,
-          uploadDuration: uploadResult.duration,
+          uploadDuration: uploadResult?.duration ?? Duration.zero,
         );
 
         _progressController.add(Ndt7Progress.complete(summary));
@@ -376,7 +388,14 @@ void _measurementEntry(_MeasurementRequest request) async {
         ? 'download'
         : 'upload';
 
+    var lastReportMicros = -1000000;
     void reportProgress({double? mbps, int? elapsedMicros, String? stage}) {
+      // Throttle to ~5 updates/sec. The upload pump used to fire a progress
+      // event for every 64KB chunk (hundreds/sec), flooding the UI isolate with
+      // setState calls and making the whole screen stutter during a test.
+      final nowMicros = stopwatch.elapsedMicroseconds;
+      if (nowMicros - lastReportMicros < 200000) return;
+      lastReportMicros = nowMicros;
       sendPort.send({
         'type': 'progress',
         'phase': progressStage,
@@ -407,12 +426,14 @@ void _measurementEntry(_MeasurementRequest request) async {
           if (!isWarmup) {
             measuredBytes += message.length;
             final measureElapsed = max(elapsed - warmupMicros, 1);
-            final mbps = computeThroughputMbps(measuredBytes, measureElapsed);
-            reportProgress(
-              mbps: mbps,
-              elapsedMicros: measureElapsed,
-              stage: 'measure',
-            );
+            if (measureElapsed >= 500000) {
+              final mbps = computeThroughputMbps(measuredBytes, measureElapsed);
+              reportProgress(
+                mbps: mbps,
+                elapsedMicros: measureElapsed,
+                stage: 'measure',
+              );
+            }
           } else {
             reportProgress(elapsedMicros: elapsed, stage: 'warmup');
           }
@@ -453,13 +474,20 @@ void _measurementEntry(_MeasurementRequest request) async {
             measuredBytes += bytes;
           }
           final measureElapsed = max(elapsedMicros - warmupMicros, 1);
-          final mbps =
-              computeThroughputMbps(measuredBytes, max(measureElapsed, 1));
-          reportProgress(
-            mbps: warmup ? null : mbps,
-            elapsedMicros: warmup ? elapsedMicros : measureElapsed,
-            stage: warmup ? 'warmup' : 'measure',
-          );
+          if (!warmup && measureElapsed >= 500000) {
+            final mbps =
+                computeThroughputMbps(measuredBytes, max(measureElapsed, 1));
+            reportProgress(
+              mbps: mbps,
+              elapsedMicros: measureElapsed,
+              stage: 'measure',
+            );
+          } else {
+            reportProgress(
+              elapsedMicros: elapsedMicros,
+              stage: warmup ? 'warmup' : 'measure',
+            );
+          }
         },
       );
     }
@@ -471,7 +499,12 @@ void _measurementEntry(_MeasurementRequest request) async {
       ]);
 
       final elapsedMicros = max(stopwatch.elapsedMicroseconds - warmupMicros, 1);
-      final clientMbps = computeThroughputMbps(measuredBytes, elapsedMicros);
+      // Upload client-side byte counting is inflated by WebSocket send buffering;
+      // trust the ndt7 server's MeanThroughputMbps when available.
+      final clientMbps = request.direction == _MeasurementDirection.upload
+          ? (reportedMetrics.meanThroughputMbps ??
+              computeThroughputMbps(measuredBytes, elapsedMicros))
+          : computeThroughputMbps(measuredBytes, elapsedMicros);
 
       sendPort.send({
         'type': 'result',
@@ -513,9 +546,14 @@ Future<void> _pumpUpload(
     chunk[i] = random.nextInt(256);
   }
 
+  var sent = 0;
   while (stopwatch.elapsedMicroseconds < totalMicros) {
     channel.sink.add(chunk);
-    await Future<void>.delayed(Duration.zero);
+    sent++;
+    // Backpressure: WebSocket sink queues faster than the radio can send, which
+    // inflates client-side throughput (200+ Mbps on a slow uplink). Pause after
+    // every chunk so measured bytes track wire speed more closely.
+    await Future<void>.delayed(const Duration(milliseconds: 12));
     final elapsed = stopwatch.elapsedMicroseconds;
     final warmup = elapsed < warmupMicros;
     onProgress(
@@ -555,4 +593,21 @@ Future<void> _pumpUpload(
     }
   }
   return (code: 'network', message: error.toString());
+}
+
+/// Download: client byte count is authoritative (server TCP_INFO often under-
+/// reports on tunneled links). Upload: server MeanThroughputMbps is authoritative.
+double _pickDownloadMbps(_MeasurementResult r) {
+  final server = r.serverMbps ?? 0;
+  final client = r.clientMbps;
+  if (client > 0.05 && server > 0.05) {
+    return client > server ? client : server;
+  }
+  return client > 0.05 ? client : server;
+}
+
+double _pickUploadMbps(_MeasurementResult r) {
+  final server = r.serverMbps ?? 0;
+  if (server > 0.05) return server.clamp(0.0, 999.0);
+  return r.clientMbps.clamp(0.0, 999.0);
 }

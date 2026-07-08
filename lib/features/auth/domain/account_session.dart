@@ -1,5 +1,7 @@
 import 'traffic_policy.dart';
 
+import 'account_datetime.dart';
+
 class AccountSession {
   const AccountSession({
     required this.username,
@@ -12,6 +14,8 @@ class AccountSession {
     this.permissionLevel = 0,
     this.trafficPolicy = const TrafficPolicy(),
     this.email = '',
+    this.createdAt = 0,
+    this.subscribedAt = 0,
   });
 
   final String username;
@@ -24,12 +28,24 @@ class AccountSession {
   final int permissionLevel;
   final TrafficPolicy trafficPolicy;
   final String email;
+  final int createdAt;
+  final int subscribedAt;
 
   bool get isPending => expireAt <= 0 && !banned;
 
+  /// True while the account is still within the initial 1-day self-registration trial.
+  bool get isTrial {
+    if (banned || expireAt <= 0 || createdAt <= 0) return false;
+    if (expireAt >= kPermanentExpireUnix) return false;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (now >= expireAt) return false;
+    return expireAt <= createdAt + kTrialDurationSec + 120;
+  }
+
   bool get canUseVpn {
     if (banned || expireAt <= 0) return false;
-    if (expireAt >= 4000000000) return true;
+    if (trafficPolicy.overQuota) return false;
+    if (expireAt >= kPermanentExpireUnix) return true;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return now <= expireAt;
   }
@@ -54,6 +70,8 @@ class AccountSession {
       permissionLevel: _asInt(data['permission_level']),
       trafficPolicy: TrafficPolicy.fromJson(data),
       email: (data['email'] as String?) ?? '',
+      createdAt: _asInt(data['created_at']),
+      subscribedAt: _asInt(data['subscribed_at']),
     );
   }
 
@@ -68,12 +86,18 @@ class AccountSession {
           ? data['session_token'] as String
           : sessionToken,
       deviceId: deviceId,
-      banned: data['banned'] == true,
+      banned: data['banned'] == true || banned,
       permissionLevel: _asInt(data['permission_level']),
-      trafficPolicy: TrafficPolicy.fromJson(data),
+      trafficPolicy: trafficPolicy.mergeFrom(data),
       email: (data['email'] as String?)?.isNotEmpty == true
           ? data['email'] as String
           : email,
+      createdAt: _asInt(data['created_at']) > 0
+          ? _asInt(data['created_at'])
+          : createdAt,
+      subscribedAt: _asInt(data['subscribed_at']) > 0
+          ? _asInt(data['subscribed_at'])
+          : subscribedAt,
     );
   }
 
@@ -87,6 +111,8 @@ class AccountSession {
         'banned': banned,
         'permission_level': permissionLevel,
         'email': email,
+        'created_at': createdAt,
+        'subscribed_at': subscribedAt,
       };
 
   static int _asInt(dynamic v) {

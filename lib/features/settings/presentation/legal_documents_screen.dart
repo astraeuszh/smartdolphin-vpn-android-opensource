@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/legal_urls.dart';
 import '../../../l10n/app_localizations.dart';
+import '../domain/preferences_controller.dart';
 
-List<(String, String)> _legalDocs(BuildContext context) {
-  final l10n = context.l10n;
-  return [
-    (LegalUrls.userAgreement, l10n.legalUserAgreement),
-    (LegalUrls.openSourceLicense, l10n.legalOpenSource),
-    (LegalUrls.legalNotice, l10n.legalNotice),
-    (LegalUrls.disclaimer, l10n.legalDisclaimer),
-  ];
+List<(String, String)> _legalDocs(AppLocalizations l10n, String? localeTag) {
+  return LegalUrls.docsFor(localeTag)
+      .map((d) => (
+            d.$1,
+            switch (d.$2) {
+              'user-agreement' => l10n.legalUserAgreement,
+              'open-source-license' => l10n.legalOpenSource,
+              'legal-notice' => l10n.legalNotice,
+              'disclaimer' => l10n.legalDisclaimer,
+              _ => d.$2,
+            },
+          ))
+      .toList();
 }
 
 Future<void> _openLegalUrl(String url) async {
@@ -22,16 +29,18 @@ Future<void> _openLegalUrl(String url) async {
 }
 
 /// Legal documents — opens the hosted pages on doc.smartdolphin.top
-class LegalDocumentsScreen extends StatelessWidget {
+class LegalDocumentsScreen extends ConsumerWidget {
   const LegalDocumentsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final docs = _legalDocs(context);
+    final l10n = context.l10n;
+    final localeTag = ref.watch(preferencesControllerProvider).localeCode;
+    final docs = _legalDocs(l10n, localeTag);
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.legalDocsTitle),
+        title: Text(l10n.legalDocsTitle),
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -49,7 +58,7 @@ class LegalDocumentsScreen extends StatelessWidget {
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${context.l10n.legalDocsTitle}: $e')),
+                    SnackBar(content: Text('${l10n.legalDocsTitle}: $e')),
                   );
                 }
               }

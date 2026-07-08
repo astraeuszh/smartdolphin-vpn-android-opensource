@@ -4,7 +4,9 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../../services/platform/hardware_device_id.dart';
 import '../../../services/remote/console_auth.dart';
+import '../../../services/remote/console_qr_auth.dart';
 import '../domain/account_session.dart';
 
 const _storageKey = 'smartdolphin_auth_v2';
@@ -18,11 +20,14 @@ class AuthRepository {
   AuthRepository({
     FlutterSecureStorage? storage,
     ConsoleAuth? api,
+    ConsoleQrAuth? qrApi,
   })  : _storage = storage ?? const FlutterSecureStorage(),
-        _api = api ?? ConsoleAuth();
+        _api = api ?? ConsoleAuth(),
+        _qrApi = qrApi ?? ConsoleQrAuth();
 
   final FlutterSecureStorage _storage;
   final ConsoleAuth _api;
+  final ConsoleQrAuth _qrApi;
 
   Future<String> deviceId() async {
     var id = await _storage.read(key: _deviceKey);
@@ -98,16 +103,80 @@ class AuthRepository {
     required String verificationCode,
   }) async {
     final device = await deviceId();
+    final hwId = await hardwareDeviceId();
     try {
-      final session = await _api.register(
+      await _api.register(
         username: username,
         password: password,
         email: email,
         verificationCode: verificationCode,
         deviceId: device,
+        hardwareDeviceId: hwId,
+      );
+      final session = await _api.login(
+        username: username,
+        password: password,
+        deviceId: device,
       );
       await saveSession(session);
       return session;
+    } catch (e) {
+      if (e is ConsoleAuthException) rethrow;
+      throw ConsoleAuth.mapNetwork(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> createQrLoginChallenge() async {
+    final device = await deviceId();
+    try {
+      return await _qrApi.createChallenge(deviceId: device);
+    } catch (e) {
+      if (e is ConsoleAuthException) rethrow;
+      throw ConsoleAuth.mapNetwork(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> pollQrLoginChallenge(String challengeId) async {
+    final device = await deviceId();
+    try {
+      return await _qrApi.pollChallenge(
+        deviceId: device,
+        challengeId: challengeId,
+      );
+    } catch (e) {
+      if (e is ConsoleAuthException) rethrow;
+      throw ConsoleAuth.mapNetwork(e);
+    }
+  }
+
+  Future<AccountSession> completeQrLogin(Map<String, dynamic> data) async {
+    if (data['status'] == 'pending') {
+      throw ConsoleAuthException('qr_pending', '等待扫码确认');
+    }
+    if (data['ok'] != true) {
+      throw ConsoleAuthException(
+        (data['code'] as String?) ?? 'qr_failed',
+        (data['error'] as String?) ?? '扫码登录失败',
+      );
+    }
+    final device = await deviceId();
+    final username = (data['username'] as String?)?.trim() ?? '';
+    final session = AccountSession.fromJson(
+      username: username,
+      password: '',
+      deviceId: device,
+      data: data,
+    );
+    await saveSession(session);
+    return session;
+  }
+
+  Future<void> approveQrLogin(AccountSession session, String challengeId) async {
+    try {
+      await _qrApi.approveChallenge(
+        session: session,
+        challengeId: challengeId,
+      );
     } catch (e) {
       if (e is ConsoleAuthException) rethrow;
       throw ConsoleAuth.mapNetwork(e);

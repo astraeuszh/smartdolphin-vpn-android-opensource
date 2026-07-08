@@ -17,6 +17,7 @@ class SessionNotificationService {
   Future<void> Function(String action)? _onAction;
 
   static const int _notificationId = 1337;
+  static const int _killSwitchNotificationId = 1338;
   static const String actionDisconnect = 'action_disconnect';
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
@@ -180,6 +181,31 @@ class SessionNotificationService {
       ),
     );
     _currentServerId = null;
+  }
+
+  /// 断网保护：以独立通知告知用户 VPN 已断开（替代覆盖 UI 的方式）。
+  Future<void> showKillSwitchAlert() async {
+    if (!_initialized) return;
+    await _plugin.show(
+      _killSwitchNotificationId,
+      '断网保护：VPN 已断开',
+      '为保护隐私已停止网络访问，请打开 SmartDolphinVPN 重新连接或开启「始终开启 VPN」。',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channel.id,
+          _channel.name,
+          channelDescription: _channel.description,
+          autoCancel: true,
+          onlyAlertOnce: false,
+          category: AndroidNotificationCategory.alarm,
+          importance: Importance.max,
+          priority: Priority.max,
+          color: Colors.redAccent,
+          colorized: true,
+          ticker: 'SmartDolphinVPN Kill Switch',
+        ),
+      ),
+    );
   }
 
   Future<void> clear() async {

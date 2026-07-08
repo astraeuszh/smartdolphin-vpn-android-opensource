@@ -18,6 +18,7 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
         Log.d(TAG, "Boot completed; launching app for auto-reconnect.")
+        prefs.edit().putBoolean("launch_from_boot", true).apply()
         val launch = Intent(context, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
@@ -33,6 +34,9 @@ class NetworkChangeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = context.getSharedPreferences("smartdolphin_vpn", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("has_active_session", false)) {
+            return
+        }
+        if (!prefs.getBoolean("reconnect_on_network_change", true)) {
             return
         }
         Log.d(TAG, "Network change while session active; launching app to reconnect.")

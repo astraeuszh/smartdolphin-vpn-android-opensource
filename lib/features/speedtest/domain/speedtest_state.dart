@@ -40,21 +40,14 @@ class SpeedTestState extends Equatable {
   /// true = VPN 隧道测速, false = 本地网络测速
   final bool isVpnTest;
 
-  double get gaugeMax {
-    final peak = [
-      liveMbps,
-      downloadMbps,
-      uploadMbps,
-      if (downloadSeries.isNotEmpty) downloadSeries.reduce((a, b) => a > b ? a : b),
-      if (uploadSeries.isNotEmpty) uploadSeries.reduce((a, b) => a > b ? a : b),
-    ].fold<double>(0, (max, value) => value > max ? value : max);
-    if (peak <= 0) return 180;
-    if (peak <= 50) return 50;
-    if (peak <= 100) return 100;
-    if (peak <= 180) return 180;
-    if (peak <= 300) return 300;
-    return ((peak / 100).ceil() * 100).toDouble();
-  }
+  /// Gauge scale is fixed at 1000 Mbps; needle pins at cap, label shows actual speed.
+  static const gaugeCap = 1000.0;
+
+  double get gaugeMax => gaugeCap;
+
+  double get gaugeNeedleValue => gaugeValue.clamp(0, gaugeCap);
+
+  double get gaugeDisplayValue => gaugeValue;
 
   double get gaugeValue {
     if (phase == SpeedTestPhase.upload && liveMbps > 0) return liveMbps;

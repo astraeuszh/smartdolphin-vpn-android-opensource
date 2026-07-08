@@ -1,0 +1,22 @@
+{
+  "riskTitle": "계정 위험 통제",
+  "riskUnblockMessage": "차단 해제 요청: {violations} 금지 / {limits} 비율 제한. 검토해 주세요.",
+  "riskReported": "보고되었습니다. 관리자 검토를 기다리고 있습니다.",
+  "riskReportFailed": "보고 실패: {error}",
+  "riskExplain": "금지 및 비율 제한이 총 30개에 도달하면 계정이 3일 동안 눈에 띄게 느려지거나 사용할 수 없게 됩니다.",
+  "riskExplainBan": "• 금지: 각 수동 관리자 금지는 1로 계산됩니다.",
+  "riskExplainLimit": "• 비율 제한: 제한된 기간 동안 한 달에 한 번 계산됩니다.",
+  "riskBanCount": "금지 횟수",
+  "riskLimitCount": "비율 제한 수",
+  "riskTotalCount": "총 개수",
+  "riskReporting": "보고 중…",
+  "riskReportButton": "차단 해제 요청",
+  "riskPenaltyActive": "귀하는 위험 통제 처벌 기간에 있습니다. 규칙을 따르고 나중에 다시 시도해 주세요.",
+  "dnsEnterFullIpv4": "전체 IPv4 주소를 입력하세요.",
+  "dnsCheckingIpRange": "IP 규정 준수 확인 중…",
+  "dnsCheckingConnectivity": "DNS 서버 연결을 확인하는 중…",
+  "dnsSetFailed": "사용자 정의 DNS를 설정하지 못했습니다. IP 형식이 잘못되었거나 서버에 DNS 서비스가 없습니다.",
+  "dnsSetSuccess": "성공적으로 설정되었습니다.",
+  "dnsTitle": "맞춤 DNS",
+  "dnsHint": "숫자만; Enter를 눌러 다음 상자로 이동하세요(점 필요 없음)."
+}

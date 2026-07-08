@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/haptics/haptics_service.dart';
 import '../../../core/device/device_memory_tier_provider.dart';
 import '../../../core/device/memory_tier.dart';
+import '../../../core/ui/top_snack.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_dialog.dart';
 import '../../theme/colors.dart';
@@ -19,6 +20,7 @@ import '../../l10n/app_localizations.dart';
 import '../dashboard/domain/ip_info_provider.dart';
 import '../../../l10n/country_names.dart';
 import '../home/domain/home_local_stats_provider.dart';
+import '../home/domain/home_packet_loss_provider.dart';
 import '../dashboard/presentation/dashboard_screen.dart';
 import '../servers/data/country_card.dart';
 import '../servers/domain/server.dart';
@@ -28,22 +30,27 @@ import '../servers/domain/server_providers.dart';
 import '../servers/domain/server_display_name.dart';
 import '../servers/presentation/server_picker_sheet.dart';
 import '../auth/domain/auth_controller.dart';
+import '../auth/presentation/qr_scan_screen.dart';
 import '../session/domain/session_controller.dart';
+import '../../services/remote/console_feedback.dart';
 import '../../services/vpn/vpn_provider.dart';
 import '../session/domain/session_state.dart';
 import '../session/domain/session_status.dart';
 import '../session/presentation/countdown.dart';
 import '../speedtest/presentation/speedtest_screen.dart';
 import '../settings/presentation/settings_screen.dart';
+import '../../services/notifications/session_notification_service.dart';
 import '../../services/remote/console_announcements.dart';
 import '../../services/storage/prefs.dart';
 import '../usage/data_usage_controller.dart';
+import '../usage/data_usage_state.dart';
 import '../game_mode/domain/game_mode_controller.dart';
 import '../game_mode/domain/game_mode_overlay_provider.dart';
 import '../game_mode/domain/game_mode_speed.dart';
 import '../game_mode/domain/game_traffic_providers.dart';
 import '../game_mode/presentation/game_mode_screen.dart';
-import '../usage/data_usage_state.dart';
+import '../../../platform/android/background_keep_alive.dart';
+import '../connection/domain/connection_quality_controller.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -54,6 +61,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 const _actionDebounceMs = 600;
 const _dismissedAnnouncementsKey = 'announcements.dismissed_ids';
+const _dismissedAnnouncementVersionsKey = 'announcements.dismissed_versions';
+const _lastSeenAnnouncementKey = 'announcements.last_seen_updated_at';
 
 class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObserver {
   final GlobalKey _serverCarouselKey = GlobalKey();
@@ -68,11 +77,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   bool _didSchedulePostFrameCallback = false;
   DateTime? _lastConnectTap;
   DateTime? _lastSwitchTap;
+  Timer? _policyRefreshTimer;
+  bool _showingAnnouncement = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _policyRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted) return;
+      unawaited(ref.read(authControllerProvider.notifier).refreshSession());
+      unawaited(_maybeShowAnnouncement());
+    });
   }
 
   @override
@@ -82,6 +98,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached;
     ref.read(serverCatalogProvider.notifier).setLatencyPollingPaused(paused);
+    // 应用进入后台时停掉账户/公告轮询，避免长时间挂起后定时器堆积导致卡死。
+    if (paused) {
+      _policyRefreshTimer?.cancel();
+      _policyRefreshTimer = null;
+    }
+    if (state == AppLifecycleState.resumed) {
+      _policyRefreshTimer ??= Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!mounted) return;
+        unawaited(ref.read(authControllerProvider.notifier).refreshSession());
+        unawaited(_maybeShowAnnouncement());
+      });
+      // 长时间后台后 Flutter semantics 树可能卡住；预热一帧并延迟刷新账户状态。
+      WidgetsBinding.instance.scheduleWarmUpFrame();
+      Future<void>.delayed(const Duration(milliseconds: 400), () {
+        if (!mounted) return;
+        unawaited(ref.read(authControllerProvider.notifier).refreshSession());
+        unawaited(_maybeShowAnnouncement());
+        // 息屏/后台数小时后隧道可能已死；恢复前台时探测 Clash API 并按需硬重连。
+        unawaited(ref.read(sessionControllerProvider.notifier).checkTunnelHealthOnResume());
+      });
+    }
   }
 
   @override
@@ -99,6 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   @override
   void dispose() {
+    _policyRefreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -114,17 +152,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Future<void> _handleAppLaunchFlow() async {
     if (!mounted) return;
+    // 启动后请求一次通知权限：用于断网保护、连接状态、TileService 等。
+    unawaited(ref.read(sessionNotificationServiceProvider).requestPermission());
+    // 重传离线期间排队的反馈/工单。
+    unawaited(ConsoleFeedback().flushPending());
     unawaited(_maybeShowAnnouncement());
     final auth = ref.read(authControllerProvider);
     if (auth.status == AuthStatus.authenticated &&
         auth.session?.canUseVpn == true) {
+      final fromBoot = await consumeLaunchFromBoot();
       unawaited(
         ref.read(sessionControllerProvider.notifier).autoConnectIfEnabled(
               context: context,
+              fromBoot: fromBoot,
             ),
       );
     }
     unawaited(_warmUpVpn());
+  }
+
+  Future<Map<int, int>> _loadDismissedAnnouncementVersions(PrefsStore prefs) async {
+    final raw = prefs.getString(_dismissedAnnouncementVersionsKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        return {
+          for (final e in map.entries)
+            if (int.tryParse(e.key) != null && int.tryParse('${e.value}') != null)
+              int.parse(e.key): int.parse('${e.value}'),
+        };
+      } catch (_) {}
+    }
+    final legacy = await _loadDismissedAnnouncementIds(prefs);
+    if (legacy.isEmpty) return {};
+    return {for (final id in legacy) id: 0};
   }
 
   Future<Set<int>> _loadDismissedAnnouncementIds(PrefsStore prefs) async {
@@ -143,31 +204,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _dismissAnnouncementId(int id) async {
+  Future<void> _dismissAnnouncement(ConsoleAnnouncement announcement) async {
     final prefs = await ref.read(prefsStoreProvider.future);
-    final dismissed = await _loadDismissedAnnouncementIds(prefs);
-    dismissed.add(id);
+    final dismissed = await _loadDismissedAnnouncementVersions(prefs);
+    dismissed[announcement.id] = announcement.updatedAt;
+    await prefs.setString(
+      _dismissedAnnouncementVersionsKey,
+      jsonEncode(dismissed.map((k, v) => MapEntry('$k', v))),
+    );
+    final legacy = await _loadDismissedAnnouncementIds(prefs);
+    legacy.add(announcement.id);
     await prefs.setString(
       _dismissedAnnouncementsKey,
-      jsonEncode(dismissed.toList()),
+      jsonEncode(legacy.toList()),
     );
   }
 
+  bool _announcementSeen(
+    ConsoleAnnouncement row,
+    Map<int, int> dismissedVersions,
+  ) {
+    final seenAt = dismissedVersions[row.id];
+    if (seenAt == null) return false;
+    return seenAt >= row.updatedAt;
+  }
+
   Future<void> _maybeShowAnnouncement() async {
-    if (!mounted) return;
+    if (!mounted || _showingAnnouncement) return;
     try {
       final rows = await ConsoleAnnouncements().fetchPublished();
       if (rows.isEmpty || !mounted) return;
 
       final prefs = await ref.read(prefsStoreProvider.future);
-      final dismissed = await _loadDismissedAnnouncementIds(prefs);
-      final unseen = rows.where((row) => !dismissed.contains(row.id)).toList()
+      final dismissed = await _loadDismissedAnnouncementVersions(prefs);
+      final unseen = rows.where((row) => !_announcementSeen(row, dismissed)).toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       if (unseen.isEmpty || !mounted) return;
 
       final announcement = unseen.first;
-      final l10n = AppLocalizations.of(context);
-      await showDialog<void>(
+      _showingAnnouncement = true;
+      final acknowledged = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
@@ -177,19 +253,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('已知晓'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(l10n.close),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(context.l10n.homeAnnouncementAck),
             ),
           ],
         ),
       );
-      if (!mounted) return;
-      await _dismissAnnouncementId(announcement.id);
+      _showingAnnouncement = false;
+      if (acknowledged == true && mounted) {
+        await _dismissAnnouncement(announcement);
+        await prefs.setString(
+          _lastSeenAnnouncementKey,
+          '${announcement.updatedAt}',
+        );
+        if (mounted) {
+          unawaited(_maybeShowAnnouncement());
+        }
+      }
     } catch (e, st) {
+      _showingAnnouncement = false;
       debugPrint('[HomeScreen] announcement error: $e');
       debugPrintStack(stackTrace: st);
     }
@@ -306,6 +388,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(connectionQualityControllerProvider);
     ref.listen<SessionState>(sessionControllerProvider, _onSessionChanged);
     ref.listen<DataUsageState>(dataUsageControllerProvider, _onDataUsageChanged);
     final l10n = context.l10n;
@@ -576,12 +659,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   Widget _buildHomeTab(BuildContext context, AppLocalizations l10n) {
     final session = ref.watch(sessionControllerProvider);
+    final auth = ref.watch(authControllerProvider);
     final selectedServer = ref.watch(selectedServerProvider);
     final liveThroughput = ref.watch(tunnelThroughputProvider);
     final speedCache = ref.watch(serverSpeedCacheProvider);
     final theme = Theme.of(context);
-    final statusBadgeLabel = _statusBadgeLabel(session.status, l10n);
-    final statusBadgeColor = _statusDotColor(session.status);
     final titleBaseStyle = theme.textTheme.headlineSmall ?? const TextStyle(fontSize: 24);
     final titleStyle = titleBaseStyle.copyWith(fontWeight: FontWeight.w700);
 
@@ -634,9 +716,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   const SizedBox(width: 10),
                   KeyedSubtree(
                     key: _statusKey,
-                    child: _ConnectionStatusBadge(
-                      label: statusBadgeLabel,
-                      color: statusBadgeColor,
+                    child: IconButton(
+                      tooltip: l10n.authQrScanTitle,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.qr_code_scanner, size: 22),
+                      onPressed: auth.status == AuthStatus.authenticated ||
+                              auth.status == AuthStatus.pending
+                          ? () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const QrScanScreen(),
+                                ),
+                              );
+                            }
+                          : null,
                     ),
                   ),
                 ],
@@ -752,9 +845,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                               } else {
                                 final server = selectedServer;
                                 if (server == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(l10n.pleaseSelectServer)),
-                                  );
+                                  showTopSnackBar(context, l10n.pleaseSelectServer);
                                   return;
                                 }
                                 final ok = await ref
@@ -764,9 +855,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                                   final msg = ref.read(authControllerProvider).message ??
                                       l10n.homeLoginVpnRequired;
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(msg)),
-                                    );
+                                    showTopSnackBar(context, msg, isError: true);
                                   }
                                   return;
                                 }
@@ -888,26 +977,27 @@ class _HomeConnectionStats extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final ipInfo = ref.watch(ipInfoProvider).valueOrNull;
     final localStats = !isConnected
         ? ref.watch(homeLocalStatsPeriodicProvider).valueOrNull
         : null;
-    final latencyMap = ref.watch(serverLatencyProvider);
+    final packetLoss = ref.watch(homePacketLossProvider).valueOrNull;
+    final systemLatency = ref.watch(homeSystemLatencyProvider).valueOrNull;
+    final ipInfo = ref.watch(ipInfoProvider).valueOrNull;
     final cached = server != null ? speedCache[server!.id] : null;
-    final useLive = isConnected &&
-        server != null &&
-        (liveThroughput.downloadMbps != null || liveThroughput.uploadMbps != null);
+    final useLive = isConnected && server != null;
 
     String downloadText = '--';
     String uploadText = '--';
+    String _fmtMbps(double? v) {
+      if (v == null) return '--';
+      if (v < 0.01) return '0.0 Mbps';
+      return '${v.toStringAsFixed(1)} Mbps';
+    }
+
     if (isConnected) {
       if (useLive) {
-        if (liveThroughput.downloadMbps != null && liveThroughput.downloadMbps! > 0.05) {
-          downloadText = '${liveThroughput.downloadMbps!.toStringAsFixed(1)} Mbps';
-        }
-        if (liveThroughput.uploadMbps != null && liveThroughput.uploadMbps! > 0.05) {
-          uploadText = '${liveThroughput.uploadMbps!.toStringAsFixed(1)} Mbps';
-        }
+        downloadText = _fmtMbps(liveThroughput.downloadMbps);
+        uploadText = _fmtMbps(liveThroughput.uploadMbps);
       } else if (cached != null) {
         downloadText = '${cached.downloadMbps.toStringAsFixed(1)} Mbps';
         uploadText = '${cached.uploadMbps.toStringAsFixed(1)} Mbps';
@@ -924,22 +1014,17 @@ class _HomeConnectionStats extends ConsumerWidget {
       }
     }
 
-    final ipText = isConnected
-        ? ((publicIp?.isNotEmpty ?? false) ? publicIp! : (ipInfo?.ip ?? '--'))
-        : (localStats?.ip ?? ipInfo?.ip ?? '--');
-    final addressText = _physicalAddress(l10n, server, ipInfo, isConnected, localStats);
+    final packetLossText = packetLoss != null
+        ? '${packetLoss.toStringAsFixed(1)}%'
+        : '--';
 
-    int? targetLatencyMs;
-    if (isConnected && server != null) {
-      final measured = latencyMap[server!.id];
-      final rawPing = measured ?? server!.pingMs;
-      if (rawPing != null && rawPing > 0 && rawPing < 9999) {
-        targetLatencyMs = rawPing;
-      }
-    } else if (!isConnected) {
-      targetLatencyMs = localStats?.latencyMs;
-    }
-    final latencyText = targetLatencyMs != null ? '$targetLatencyMs ms' : '--';
+    final ipText = (isConnected ? publicIp : null) ??
+        localStats?.ip ??
+        ipInfo?.ip ??
+        '--';
+
+    final latencyMs = systemLatency;
+    final latencyText = latencyMs != null && latencyMs > 0 ? '$latencyMs ms' : '--';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -989,8 +1074,8 @@ class _HomeConnectionStats extends ConsumerWidget {
                 _infoDivider(),
                 Expanded(
                   child: _HomeInfoCell(
-                    label: l10n.networkLocation,
-                    value: addressText,
+                    label: l10n.packetLossLabel,
+                    value: packetLossText,
                     theme: theme,
                   ),
                 ),

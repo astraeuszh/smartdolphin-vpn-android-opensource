@@ -13,6 +13,9 @@ java {
 android {
     namespace = "astraeus.smartdolphin.vpn"
     compileSdk = 36
+    // NDK 26.x is the only fully-installed NDK here; 27.0.12077973 is a partial
+    // (failed) install missing build/cmake/android.toolchain.cmake. The plugin
+    // "wants NDK 27" message is just a warning — NDK is backward compatible.
     ndkVersion = "26.1.10909125"
 
     compileOptions {
@@ -27,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "astraeus.smartdolphin.vpn"
+        applicationId = "vpn.smartdolphin.com"
         minSdk = 26
         targetSdk = 36
         versionCode = flutter.versionCode?.toInt() ?: 1
@@ -75,12 +78,19 @@ flutter {
     source = "../.."
 }
 
+// Local Dolphin-Core (Go/libbox) archive lives in app/libs.
+repositories {
+    flatDir { dirs("libs") }
+}
+
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.multidex:multidex:2.0.1")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
+    // Dolphin-Core engine (the entire VPN backend, compiled Go).
+    implementation(":libbox@aar")
 }
 
 configurations.all {

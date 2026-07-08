@@ -31,7 +31,7 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
   DateTime? _lastSampleTime;
 
   static const _emaAlpha = 0.35;
-  static const _minMbps = 0.05;
+  static const _minMbps = 0.01;
 
   void _onSessionChanged(dynamic prev, dynamic next) {
     if (next.status == SessionStatus.connected) {
@@ -66,10 +66,33 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
     return previous * (1 - _emaAlpha) + sample * _emaAlpha;
   }
 
+  /// EMA that also tracks downward (toward 0), for the live instantaneous rate.
+  double _ema(double? previous, double sample) {
+    if (previous == null) return sample;
+    return previous * (1 - _emaAlpha) + sample * _emaAlpha;
+  }
+
   Future<void> _poll() async {
     try {
       final port = _ref.read(openVpnPortProvider);
       final stats = await port.getTunnelStats();
+
+      // libbox uplink/downlink are bytes/sec deltas when TrafficAvailable=true.
+      // VpnStatus.toJson() always includes byte_*_rate keys (default "0"), so
+      // we must NOT treat key presence as "live rate available" — only use the
+      // rate path when the core is actually reporting non-zero throughput.
+      final inRate = _parseBytes(stats['byte_in_rate']);
+      final outRate = _parseBytes(stats['byte_out_rate']);
+      if (inRate > 0 || outRate > 0) {
+        final dl = (inRate * 8) / 1000000;
+        final ul = (outRate * 8) / 1000000;
+        state = TunnelThroughputState(
+          downloadMbps: _ema(state.downloadMbps, dl),
+          uploadMbps: _ema(state.uploadMbps, ul),
+        );
+        return;
+      }
+
       final rx = _parseBytes(stats['byte_in'] ?? stats['rxBytes']);
       final tx = _parseBytes(stats['byte_out'] ?? stats['txBytes']);
       final now = DateTime.now();
@@ -86,6 +109,18 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
             uploadMbps: _smooth(state.uploadMbps, instantUl),
           );
         }
+      } else if (_lastSampleTime == null) {
+        // First sample after connect — seed counters so the next tick can delta.
+        state = TunnelThroughputState(
+          downloadMbps: state.downloadMbps ?? 0,
+          uploadMbps: state.uploadMbps ?? 0,
+        );
+      } else {
+        // Idle: decay live-rate EMA toward zero instead of freezing.
+        state = TunnelThroughputState(
+          downloadMbps: _ema(state.downloadMbps, 0),
+          uploadMbps: _ema(state.uploadMbps, 0),
+        );
       }
       _lastRxBytes = rx;
       _lastTxBytes = tx;

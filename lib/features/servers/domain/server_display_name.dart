@@ -7,7 +7,9 @@ import 'server.dart';
 String localizedServerDisplayName(Server s, AppLocalizations l10n) {
   switch (s.id) {
     case 'smartdolphin-hk':
-      return l10n.serverPinnedHk;
+      return '${l10n.serverPinnedHk} 1';
+    case 'smartdolphin-hk2':
+      return '${l10n.serverPinnedHk} 2';
     case 'smartdolphin-us':
       return l10n.serverPinnedUs;
     case 'smartdolphin-sg':
@@ -21,6 +23,7 @@ String localizedServerDisplayName(Server s, AppLocalizations l10n) {
 String localizedServerLocation(Server s, AppLocalizations l10n) {
   switch (s.id) {
     case 'smartdolphin-hk':
+    case 'smartdolphin-hk2':
       return l10n.geoCityHongKong;
     case 'smartdolphin-us':
       return l10n.geoCityLosAngeles;
@@ -70,6 +73,7 @@ String languageTagForL10n(AppLocalizations l10n) {
 String englishServerAddress(Server s) {
   switch (s.id) {
     case 'smartdolphin-hk':
+    case 'smartdolphin-hk2':
       return 'Hong Kong';
     case 'smartdolphin-us':
       return 'Los Angeles';

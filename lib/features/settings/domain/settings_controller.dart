@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/platform/runtime_platform.dart';
+import '../../../services/storage/prefs.dart';
 import '../../../platform/android/background_keep_alive.dart';
 import '../../history/domain/connection_history_notifier.dart';
 import '../../history/domain/connection_record.dart';
@@ -10,14 +11,21 @@ import '../../servers/domain/server.dart';
 import '../../session/domain/session_state.dart';
 import 'auto_connect_rules.dart';
 import 'advanced_settings_config.dart';
+import 'transport_profile.dart';
 import 'log_config.dart';
 import 'protocol_config.dart';
+import 'preferences_controller.dart';
 import 'routing_config.dart';
+import '../../../services/sdrl/sdrl_rule_store.dart';
 import 'traffic_mode.dart';
+import 'rule_draft.dart';
 import 'settings_state.dart';
 import 'split_tunnel_config.dart';
 import '../data/settings_repository.dart';
 import 'vpn_protocol.dart';
+
+const _androidTunnelProfileKey = 'android_tunnel_profile_v6';
+const androidTunnelReconnectPrefKey = 'android_tunnel_reconnect_v6';
 
 class SettingsController extends StateNotifier<SettingsState> {
   SettingsController(this._ref, this._repository)
@@ -27,13 +35,26 @@ class SettingsController extends StateNotifier<SettingsState> {
 
   final Ref _ref;
   final SettingsRepository? _repository;
+  final Completer<void> _profileMigrationReady = Completer<void>();
+
+  /// Session bootstrap awaits this so auto-connect uses post-migration protocol/routing.
+  Future<void> get profileMigrationReady => _profileMigrationReady.future;
+
+  void _completeProfileMigrationReady() {
+    if (!_profileMigrationReady.isCompleted) {
+      _profileMigrationReady.complete();
+    }
+  }
 
   Future<void> _restore() async {
-    if (_repository == null) return;
+    if (_repository == null) {
+      _completeProfileMigrationReady();
+      return;
+    }
     final protocol = _repository!.loadProtocol();
     final splitTunnel = _repository!.loadSplitTunnel();
     final advanced = _repository!.loadAdvanced();
-    final routing = _repository!.loadRouting();
+    final routing = await _routingWithDiskRules(_repository!.loadRouting());
     final logConfig = _repository!.loadLog();
     final autoConnect = _repository!.loadAutoConnect();
     final batterySaver = _repository!.loadBatterySaver();
@@ -53,10 +74,52 @@ class SettingsController extends StateNotifier<SettingsState> {
       preciseSessionTimer: preciseSessionTimer,
       accentSeed: accent,
     );
+    _ref.read(ruleDraftProvider.notifier).syncFromPersisted(
+          text: routing.ruleDb.customRules,
+          savedFileName: routing.ruleDb.savedRuleName,
+        );
     if (isAndroidNative) {
       unawaited(setWakeOnBootEnabled(
         autoConnect.connectOnLaunch || autoConnect.connectOnBoot,
       ));
+      unawaited(setReconnectOnNetworkChange(autoConnect.reconnectOnNetworkChange));
+    }
+    await _applyAndroidTunnelProfileMigration();
+  }
+
+  /// Smart split + one reconnect after OTA. Protocol (Reality/Hy2/WG) is user choice.
+  Future<void> _applyAndroidTunnelProfileMigration() async {
+    if (!isAndroidNative || _repository == null) {
+      _completeProfileMigrationReady();
+      return;
+    }
+    try {
+      final prefs = await _ref.read(prefsStoreProvider.future);
+      if (prefs.getBool(_androidTunnelProfileKey) == true) {
+        _completeProfileMigrationReady();
+        return;
+      }
+      await prefs.setBool(_androidTunnelProfileKey, true);
+      final routing = state.routing.copyWith(mode: TrafficMode.auto);
+      state = state.copyWith(routing: routing);
+      await _repository!.saveRouting(routing);
+      await prefs.setBool(androidTunnelReconnectPrefKey, true);
+    } catch (_) {}
+    _completeProfileMigrationReady();
+  }
+
+  static Future<RoutingConfig> _routingWithDiskRules(RoutingConfig routing) async {
+    try {
+      final fromDisk = await SdrlRuleStore.loadActiveSource();
+      if (fromDisk == null || fromDisk.isEmpty) return routing;
+      return routing.copyWith(
+        ruleDb: routing.ruleDb.copyWith(
+          customRules: fromDisk,
+          source: RuleSource.custom,
+        ),
+      );
+    } catch (_) {
+      return routing;
     }
   }
 
@@ -76,6 +139,13 @@ class SettingsController extends StateNotifier<SettingsState> {
 
   Future<void> setDnsOption(VpnDnsOption option) async {
     await updateProtocol(state.protocol.copyWith(dnsOption: option));
+  }
+
+  Future<void> setCustomDns(String ip) async {
+    await updateProtocol(state.protocol.copyWith(
+      dnsOption: VpnDnsOption.custom,
+      customDnsServers: [ip],
+    ));
   }
 
   Future<void> updateAdvanced(AdvancedSettingsConfig config) async {
@@ -130,7 +200,11 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   Future<void> setTrafficMode(TrafficMode mode) async {
-    await updateRouting(state.routing.copyWith(mode: mode));
+    final autoRoute = mode == TrafficMode.global;
+    await updateRouting(state.routing.copyWith(
+      mode: mode,
+      autoRouteSystem: autoRoute ? true : state.routing.autoRouteSystem,
+    ));
   }
 
   Future<void> setAutoRouteSystem(bool value) async {
@@ -149,8 +223,49 @@ class SettingsController extends StateNotifier<SettingsState> {
 
   Future<void> setCustomRules(String text) async {
     await updateRouting(state.routing.copyWith(
-      ruleDb: state.routing.ruleDb.copyWith(customRules: text),
+      ruleDb: state.routing.ruleDb.copyWith(
+        customRules: text,
+        source: text.trim().isEmpty
+            ? state.routing.ruleDb.source
+            : RuleSource.custom,
+      ),
     ));
+  }
+
+  Future<void> saveCompiledCustomRules({
+    required String text,
+    required String sourceHash,
+    required String savedRuleName,
+    bool pendingReconnect = false,
+  }) async {
+    await updateRouting(state.routing.copyWith(
+      ruleDb: state.routing.ruleDb.copyWith(
+        customRules: text,
+        source: RuleSource.custom,
+        compiledSourceHash: sourceHash,
+        savedRuleName: savedRuleName,
+        pendingReconnect: pendingReconnect,
+      ),
+    ));
+    _ref.read(ruleDraftProvider.notifier).markSaved(
+          text: text,
+          fileName: savedRuleName,
+          pendingReconnect: pendingReconnect,
+        );
+  }
+
+  Future<void> clearPendingReconnect() async {
+    if (!state.routing.ruleDb.pendingReconnect) return;
+    await updateRouting(state.routing.copyWith(
+      ruleDb: state.routing.ruleDb.copyWith(pendingReconnect: false),
+    ));
+    _ref.read(ruleDraftProvider.notifier).clearPendingReconnect();
+  }
+
+  Future<void> discardUnsavedRules() async {
+    final snap = _ref.read(ruleDraftProvider).savedSnapshot;
+    await setCustomRules(snap);
+    _ref.read(ruleDraftProvider.notifier).discardDraft();
   }
 
   Future<void> updateLogConfig(LogConfig config) async {
@@ -194,6 +309,12 @@ class SettingsController extends StateNotifier<SettingsState> {
   Future<void> updateAutoConnect(AutoConnectRules rules) async {
     state = state.copyWith(autoConnect: rules);
     await _repository?.saveAutoConnect(rules);
+    if (isAndroidNative) {
+      unawaited(setWakeOnBootEnabled(
+        rules.connectOnLaunch || rules.connectOnBoot,
+      ));
+      unawaited(setReconnectOnNetworkChange(rules.reconnectOnNetworkChange));
+    }
   }
 
   Future<void> setAutoConnect({

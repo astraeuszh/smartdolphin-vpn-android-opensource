@@ -3,6 +3,10 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../services/vpn/clash_api_client.dart';
+import '../../session/domain/session_controller.dart';
+import '../../session/domain/session_status.dart';
+
 /// 网站延迟测试目标
 class WebsiteTarget {
   const WebsiteTarget({
@@ -50,67 +54,84 @@ class WebsiteLatencyState {
 }
 
 class WebsiteLatencyNotifier extends StateNotifier<WebsiteLatencyState> {
-  WebsiteLatencyNotifier() : super(const WebsiteLatencyState());
+  WebsiteLatencyNotifier(this._ref) : super(const WebsiteLatencyState());
 
-  static const _timeoutMs = 1300;
+  final Ref _ref;
+
+  static const _timeoutMsDisconnected = 1300;
+  static const _timeoutMsConnected = 6000;
+  static const _hardTimeout = Duration(seconds: 8);
 
   Future<void> testOne(String id) async {
+    if (state.isTesting(id)) return;
     final target = websiteTargets.firstWhere((t) => t.id == id);
     state = WebsiteLatencyState(
       results: Map.from(state.results),
       testing: {...state.testing, id},
     );
+    LatencyResult result;
     try {
-      final result = await _measureLatency(target.host);
-      state = WebsiteLatencyState(
-        results: {...state.results, id: result},
-        testing: {...state.testing}..remove(id),
-      );
+      result = await _measureLatency(target)
+          .timeout(_hardTimeout, onTimeout: () => const LatencyTimeout());
     } catch (_) {
-      state = WebsiteLatencyState(
-        results: {...state.results, id: const LatencyError()},
-        testing: {...state.testing}..remove(id),
-      );
+      result = const LatencyError();
     }
+    if (!mounted) return;
+    state = WebsiteLatencyState(
+      results: {...state.results, id: result},
+      testing: {...state.testing}..remove(id),
+    );
   }
 
   Future<void> testAll() async {
     for (final t in websiteTargets) {
+      if (!mounted) return;
       await testOne(t.id);
     }
   }
 
-  Future<LatencyResult> _measureLatency(String url) async {
-    final uri = Uri.parse(url);
-    final host = uri.host;
-    if (host.isEmpty) {
-      return const LatencyError();
+  Future<LatencyResult> _measureLatency(WebsiteTarget target) async {
+    final vpnConnected =
+        _ref.read(sessionControllerProvider).status == SessionStatus.connected;
+
+    // Raw TCP to a DNS-resolved edge IP often hits a local CDN (single-digit ms).
+    // Through VPN, ask sing-box Clash API to probe the destination URL via proxy.
+    if (vpnConnected) {
+      final ms = await ClashApiClient.proxyDelayMs(
+        testUrl: target.host,
+        timeoutMs: 8000,
+      );
+      if (ms == null || ms <= 0) return const LatencyTimeout();
+      return ms > _timeoutMsConnected ? const LatencyTimeout() : LatencySuccess(ms);
     }
-    final port = uri.hasPort ? uri.port : 443;
+
+    return _measureHttpHeadLatency(target.host);
+  }
+
+  Future<LatencyResult> _measureHttpHeadLatency(String url) async {
+    final uri = Uri.parse(url);
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 2);
     final stopwatch = Stopwatch()..start();
     try {
-      final socket = await Socket.connect(
-        host,
-        port,
-        timeout: const Duration(seconds: 3),
-      );
-      socket.destroy();
+      final request = await client.headUrl(uri);
+      final response = await request.close();
+      await response.drain<void>();
       stopwatch.stop();
       final ms = stopwatch.elapsedMilliseconds;
-      if (ms > _timeoutMs) {
-        return const LatencyTimeout();
-      }
-      return LatencySuccess(ms);
+      return ms > _timeoutMsDisconnected ? const LatencyTimeout() : LatencySuccess(ms);
     } on TimeoutException {
       return const LatencyTimeout();
     } on SocketException {
       return const LatencyTimeout();
     } catch (_) {
-      return const LatencyTimeout();
+      return const LatencyError();
+    } finally {
+      client.close(force: true);
     }
   }
 }
 
 final websiteLatencyProvider =
     StateNotifierProvider<WebsiteLatencyNotifier, WebsiteLatencyState>(
-        (ref) => WebsiteLatencyNotifier());
+        (ref) => WebsiteLatencyNotifier(ref));

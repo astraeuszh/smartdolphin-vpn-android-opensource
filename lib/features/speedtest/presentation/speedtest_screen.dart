@@ -140,11 +140,12 @@ class _GaugePanel extends StatelessWidget {
           const SizedBox(height: 8),
           Center(
             child: SpeedGauge(
-              value: state.gaugeValue,
+              needleValue: state.gaugeNeedleValue,
+              displayValue: state.gaugeDisplayValue,
               maxValue: state.gaugeMax,
               statusLabel: gaugeLabel,
-              isActive: state.status == SpeedTestStatus.complete,
-              tickStep: state.gaugeMax <= 50 ? 10 : (state.gaugeMax <= 100 ? 20 : 30),
+              isActive: state.status == SpeedTestStatus.running,
+              tickStep: 100,
             ),
           ),
           const SizedBox(height: 20),

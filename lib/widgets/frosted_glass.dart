@@ -35,13 +35,16 @@ class FrostedGlass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sigma = enabled
-        ? (blurSigma ??
-            (surface == GlassSurface.nav
-                ? HiVpnGlass.blurSigmaNav
-                : HiVpnGlass.blurSigma))
-        : 0.0;
-    final fill = surface == GlassSurface.nav ? HiVpnGlass.tintNav : HiVpnGlass.tint;
+    // Real-time BackdropFilter blur was removed for performance: a single
+    // settings screen stacks 20+ frosted tiles, and that many live Gaussian
+    // blurs make mobile GPUs stutter badly. The app canvas is a near-solid light
+    // color, so blurring it was essentially a visual no-op; an opaque white fill
+    // reproduces the frosted-card look at a tiny fraction of the cost.
+    final fill = surface == GlassSurface.nav
+        ? Colors.white.withValues(alpha: 0.74)
+        : surface == GlassSurface.flat
+            ? Colors.white.withValues(alpha: 0.55)
+            : Colors.white.withValues(alpha: 0.64);
     final shadow = boxShadow ??
         (surface == GlassSurface.flat
             ? const <BoxShadow>[]
@@ -52,50 +55,47 @@ class FrostedGlass extends StatelessWidget {
     Widget panel = RepaintBoundary(
       child: ClipRRect(
         borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: borderRadius,
-                    color: fill,
-                    border: Border.all(
-                      color: HiVpnGlass.borderLight,
-                      width: 0.6,
-                    ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: borderRadius,
+                  color: fill,
+                  border: Border.all(
+                    color: HiVpnGlass.borderLight,
+                    width: 0.6,
                   ),
                 ),
               ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: borderRadius,
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.22),
-                        Colors.white.withValues(alpha: 0.04),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.18, 0.45],
-                    ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: borderRadius,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.22),
+                      Colors.white.withValues(alpha: 0.04),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.18, 0.45],
                   ),
                 ),
               ),
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _GlassRimPainter(borderRadius: borderRadius),
-                ),
+            ),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _GlassRimPainter(borderRadius: borderRadius),
               ),
-              Padding(
-                padding: padding ?? EdgeInsets.zero,
-                child: child,
-              ),
-            ],
-          ),
+            ),
+            Padding(
+              padding: padding ?? EdgeInsets.zero,
+              child: child,
+            ),
+          ],
         ),
       ),
     );

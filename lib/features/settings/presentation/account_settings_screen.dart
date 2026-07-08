@@ -5,17 +5,24 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/ui/top_snack.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../services/logging/vpn_core_layout.dart';
 import '../../../services/logging/vpn_logger.dart';
 import '../../../services/remote/console_auth.dart';
 import '../../../services/remote/console_feedback.dart';
+import '../../auth/domain/account_datetime.dart';
 import '../../auth/domain/auth_controller.dart';
 import '../../auth/domain/traffic_policy.dart';
 import '../../auth/presentation/auth_gate_screen.dart';
-import '../../auth/data/auth_repository.dart';
+import 'account_risk_screen.dart';
+import 'subscription_management_screen.dart';
+import '../domain/preferences_controller.dart';
 import 'feedback_ticket_screen.dart';
 
 const _websiteUrl = 'https://smartdolphin.top';
+// Password reset is handled on the website (no in-app email-code flow).
+const _passwordResetUrl = 'https://smartdolphinvpn.com';
 
 class AccountSettingsScreen extends ConsumerStatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -28,13 +35,21 @@ class AccountSettingsScreen extends ConsumerStatefulWidget {
 class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   bool _refreshing = false;
   bool _busy = false;
+  Timer? _trialTimer;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_refreshPolicy());
+    _trialTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final session = ref.read(authControllerProvider).session;
+      if (session?.isTrial == true && mounted) setState(() {});
     });
+  }
+
+  @override
+  void dispose() {
+    _trialTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _refreshPolicy() async {
@@ -45,9 +60,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
       await ref.read(authControllerProvider.notifier).refreshSession();
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.accountRefreshFailed)),
-        );
+        showTopSnackBar(context, context.l10n.accountRefreshFailed, isError: true);
       }
     } finally {
       if (mounted) setState(() => _refreshing = false);
@@ -58,9 +71,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final uri = Uri.parse(_websiteUrl);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.accountOpenWebsiteFailed)),
-        );
+        showTopSnackBar(context, context.l10n.accountOpenWebsiteFailed, isError: true);
       }
     }
   }
@@ -138,7 +149,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                             ? null
                             : () {
                                 Navigator.of(ctx).pop();
-                                unawaited(_openForgotPassword());
+                                unawaited(_openPasswordResetWebsite());
                               },
                         child: Text(l10n.accountForgotPassword),
                       ),
@@ -156,11 +167,11 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                       ? null
                       : () async {
                           if (newCtrl.text.length < 6) {
-                            _snack(l10n.accountPasswordTooShort);
+                            _snack(l10n.accountPasswordTooShort, isError: true);
                             return;
                           }
                           if (newCtrl.text != confirmCtrl.text) {
-                            _snack(l10n.accountPasswordMismatch);
+                            _snack(l10n.accountPasswordMismatch, isError: true);
                             return;
                           }
                           setDialogState(() => _busy = true);
@@ -172,9 +183,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             _snack(l10n.accountUpdateSuccess);
                           } on ConsoleAuthException catch (e) {
-                            _snack(e.message);
+                            _snack(e.message, isError: true);
                           } catch (e) {
-                            _snack('$e');
+                            _snack('$e', isError: true);
                           } finally {
                             setDialogState(() => _busy = false);
                           }
@@ -193,150 +204,15 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     confirmCtrl.dispose();
   }
 
-  Future<void> _openForgotPassword() async {
-    final l10n = context.l10n;
-    final session = ref.read(authControllerProvider).session;
-    if (session == null) return;
-
-    final emailCtrl = TextEditingController(text: session.email);
-    final codeCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
-    var codeSent = false;
-    var cooldown = 0;
-    Timer? timer;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(l10n.accountForgotPassword),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: emailCtrl,
-                      decoration: InputDecoration(labelText: l10n.accountEmail),
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: codeCtrl,
-                            decoration: InputDecoration(
-                              labelText: l10n.accountVerificationCode,
-                            ),
-                            keyboardType: TextInputType.number,
-                            maxLength: 6,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: cooldown > 0 || _busy
-                              ? null
-                              : () async {
-                                  final email = emailCtrl.text.trim();
-                                  if (!email.contains('@')) {
-                                    _snack(l10n.accountInvalidEmail);
-                                    return;
-                                  }
-                                  setDialogState(() => _busy = true);
-                                  try {
-                                    await ref
-                                        .read(authRepositoryProvider)
-                                        .sendPasswordChangeCode(email);
-                                    codeSent = true;
-                                    cooldown = 60;
-                                    timer?.cancel();
-                                    timer = Timer.periodic(
-                                      const Duration(seconds: 1),
-                                      (t) {
-                                        if (cooldown <= 1) {
-                                          t.cancel();
-                                          setDialogState(() => cooldown = 0);
-                                        } else {
-                                          setDialogState(() => cooldown -= 1);
-                                        }
-                                      },
-                                    );
-                                    _snack(l10n.accountCodeSent);
-                                  } catch (e) {
-                                    _snack('$e');
-                                  } finally {
-                                    setDialogState(() => _busy = false);
-                                  }
-                                },
-                          child: Text(
-                            cooldown > 0
-                                ? l10n.accountResendIn(cooldown)
-                                : l10n.accountSendCode,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: passCtrl,
-                      obscureText: true,
-                      decoration: InputDecoration(labelText: l10n.accountNewPassword),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: _busy ? null : () => Navigator.of(ctx).pop(),
-                  child: Text(l10n.cancel),
-                ),
-                FilledButton(
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          if (!codeSent && codeCtrl.text.trim().length != 6) {
-                            _snack(l10n.accountCodeRequired);
-                            return;
-                          }
-                          if (passCtrl.text.length < 6) {
-                            _snack(l10n.accountPasswordTooShort);
-                            return;
-                          }
-                          setDialogState(() => _busy = true);
-                          try {
-                            await ref
-                                .read(authControllerProvider.notifier)
-                                .resetPasswordWithCode(
-                                  email: emailCtrl.text.trim(),
-                                  verificationCode: codeCtrl.text.trim(),
-                                  newPassword: passCtrl.text,
-                                );
-                            if (ctx.mounted) Navigator.of(ctx).pop();
-                            _snack(l10n.accountUpdateSuccess);
-                          } catch (e) {
-                            _snack('$e');
-                          } finally {
-                            setDialogState(() => _busy = false);
-                          }
-                        },
-                  child: Text(l10n.accountSave),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    timer?.cancel();
-    emailCtrl.dispose();
-    codeCtrl.dispose();
-    passCtrl.dispose();
+  /// Forgot password is handled on the website now (no in-app email-code flow).
+  Future<void> _openPasswordResetWebsite() async {
+    final uri = Uri.parse(_passwordResetUrl);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        showTopSnackBar(context, context.l10n.accountOpenWebsiteFailed,
+            isError: true);
+      }
+    }
   }
 
   Future<void> _openChangeName() async {
@@ -344,18 +220,12 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final session = ref.read(authControllerProvider).session;
     if (session == null) return;
 
-    final oldCtrl = TextEditingController(text: session.username);
     final newCtrl = TextEditingController();
     final passCtrl = TextEditingController();
 
     await _showPasswordVerifiedDialog(
       title: l10n.accountChangeName,
       fields: [
-        TextField(
-          controller: oldCtrl,
-          decoration: InputDecoration(labelText: l10n.accountCurrentName),
-        ),
-        const SizedBox(height: 12),
         TextField(
           controller: newCtrl,
           decoration: InputDecoration(labelText: l10n.accountNewName),
@@ -369,58 +239,13 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
       ],
       onSave: () async {
         await ref.read(authControllerProvider.notifier).updateUsername(
-              oldUsername: oldCtrl.text,
+              oldUsername: session.username,
               newUsername: newCtrl.text,
               password: passCtrl.text,
             );
       },
     );
 
-    oldCtrl.dispose();
-    newCtrl.dispose();
-    passCtrl.dispose();
-  }
-
-  Future<void> _openChangeEmail() async {
-    final l10n = context.l10n;
-    final session = ref.read(authControllerProvider).session;
-    if (session == null) return;
-
-    final currentCtrl = TextEditingController(text: session.email);
-    final newCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
-
-    await _showPasswordVerifiedDialog(
-      title: l10n.accountChangeEmail,
-      fields: [
-        TextField(
-          controller: currentCtrl,
-          decoration: InputDecoration(labelText: l10n.accountCurrentEmail),
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: newCtrl,
-          decoration: InputDecoration(labelText: l10n.accountNewEmail),
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: passCtrl,
-          obscureText: true,
-          decoration: InputDecoration(labelText: l10n.accountVerifyPassword),
-        ),
-      ],
-      onSave: () async {
-        await ref.read(authControllerProvider.notifier).updateEmail(
-              currentEmail: currentCtrl.text,
-              newEmail: newCtrl.text,
-              password: passCtrl.text,
-            );
-      },
-    );
-
-    currentCtrl.dispose();
     newCtrl.dispose();
     passCtrl.dispose();
   }
@@ -456,9 +281,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             _snack(l10n.accountUpdateSuccess);
                           } on ConsoleAuthException catch (e) {
-                            _snack(e.message);
+                            _snack(e.message, isError: true);
                           } catch (e) {
-                            _snack('$e');
+                            _snack('$e', isError: true);
                           } finally {
                             setDialogState(() => _busy = false);
                           }
@@ -521,24 +346,27 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     setState(() => _busy = true);
     try {
       final logger = ref.read(vpnLoggerProvider);
-      final snapshot = await logger.buildFeedbackSnapshot();
+      final snapshot = await logger.buildFeedbackSnapshot(
+        window: VpnCoreLayout.manualFeedbackWindow,
+      );
       await ConsoleFeedback().submit(
         session: session,
         errorCode: kFeedbackManualErrorCode,
+        kind: 'admin_feedback',
         message: 'Manual feedback from Android account settings',
         logSnapshot: snapshot,
       );
       _snack(l10n.accountFeedbackSubmitted);
     } catch (e) {
-      _snack(l10n.accountFeedbackFailed);
+      _snack('${l10n.accountFeedbackFailed}: $e', isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  void _snack(String message) {
+  void _snack(String message, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showTopSnackBar(context, message, isError: isError);
   }
 
   String _formatBytes(int bytes) {
@@ -564,6 +392,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final session = auth.session;
     final theme = Theme.of(context);
     final policy = session?.trafficPolicy ?? const TrafficPolicy();
+    final localeTag = ref.watch(preferencesControllerProvider).localeCode ?? 'en';
 
     return Scaffold(
       appBar: AppBar(
@@ -619,19 +448,54 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     ),
                   ),
                 ],
-                if (policy.throttled) ...[
-                  const SizedBox(height: 24),
+                if (auth.status == AuthStatus.banned) ...[
+                  const SizedBox(height: 16),
+                  _warnCard(
+                    theme,
+                    auth.message ?? l10n.authBannedBanner,
+                    color: Colors.red.shade700,
+                  ),
+                ],
+                if (auth.status == AuthStatus.pending) ...[
+                  const SizedBox(height: 16),
+                  _warnCard(
+                    theme,
+                    auth.message ?? l10n.authPendingBanner,
+                    color: Colors.orange.shade800,
+                  ),
+                ],
+                if (session.isTrial) ...[
+                  const SizedBox(height: 16),
+                  _warnCard(
+                    theme,
+                    l10n.authTrialAccountHint(
+                      formatTrialRemaining(session.expireAt, l10n),
+                    ),
+                    color: Colors.red.shade700,
+                  ),
+                ],
+                if (policy.isViolationSpeedLimit) ...[
+                  const SizedBox(height: 16),
                   _warnCard(
                     theme,
                     policy.throttleMessage.isNotEmpty
                         ? policy.throttleMessage
-                        : l10n.accountThrottledHint,
+                        : '您因违反用户规则，暂时对您的账户进行限速处理，但连接仍可用，请遵循使用规范。',
+                    color: Colors.red.shade600,
                   ),
                 ],
-                if (policy.hasQuotaLimit) ...[
+                if (policy.isQuotaExceeded) ...[
+                  const SizedBox(height: 16),
+                  _warnCard(
+                    theme,
+                    '本月流量已用完（${policy.monthlyQuotaGb.toStringAsFixed(0)} GB 上限）',
+                    color: Colors.red.shade700,
+                  ),
+                ],
+                if (policy.hasQuotaLimit && !policy.isQuotaExceeded) ...[
                   const SizedBox(height: 24),
                   Text(
-                    l10n.accountQuotaTitle,
+                    '流量套餐：${policy.monthlyQuotaGb.toStringAsFixed(0)} GB / 月',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -656,6 +520,46 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                 ],
                 const SizedBox(height: 32),
                 _menuTile(
+                  icon: Icons.card_membership_outlined,
+                  title: l10n.accountSubscriptionTitle,
+                  subtitle: session.isTrial
+                      ? l10n.authTrialRemainingShort(
+                          formatTrialRemaining(session.expireAt, l10n),
+                        )
+                      : formatAccountDateTime(
+                          session.expireAt,
+                          localeTag: localeTag,
+                          l10n: l10n,
+                        ),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SubscriptionManagementScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _menuTile(
+                  icon: Icons.shield_outlined,
+                  title: l10n.riskTitle,
+                  subtitle: l10n.riskMenuSummary(
+                    policy.risk.violationCount,
+                    policy.risk.trafficLimitCount,
+                  ),
+                  onTap: _busy
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => AccountRiskScreen(
+                                risk: policy.risk,
+                                policy: policy,
+                              ),
+                            ),
+                          );
+                        },
+                ),
+                _menuTile(
                   icon: Icons.lock_outline,
                   title: l10n.accountChangePassword,
                   onTap: _busy ? null : _openChangePassword,
@@ -664,11 +568,6 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                   icon: Icons.badge_outlined,
                   title: l10n.accountChangeName,
                   onTap: _busy ? null : _openChangeName,
-                ),
-                _menuTile(
-                  icon: Icons.mail_outline,
-                  title: l10n.accountChangeEmail,
-                  onTap: _busy ? null : _openChangeEmail,
                 ),
                 const Divider(height: 32),
                 _menuTile(
@@ -714,6 +613,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   Widget _menuTile({
     required IconData icon,
     required String title,
+    String? subtitle,
     VoidCallback? onTap,
     Color? titleColor,
   }) {
@@ -721,28 +621,36 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon),
       title: Text(title, style: titleColor != null ? TextStyle(color: titleColor) : null),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      isThreeLine: subtitle != null,
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }
 
-  Widget _warnCard(ThemeData theme, String message) {
+  Widget _warnCard(ThemeData theme, String message, {Color? color}) {
+    final base = color ?? theme.colorScheme.error;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.errorContainer.withValues(alpha: 0.35),
+        color: base.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.colorScheme.error.withValues(alpha: 0.25),
+          color: base.withValues(alpha: 0.55),
         ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error),
+          Icon(Icons.warning_amber_rounded, color: base),
           const SizedBox(width: 12),
-          Expanded(child: Text(message, style: theme.textTheme.bodyMedium)),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(color: base),
+            ),
+          ),
         ],
       ),
     );

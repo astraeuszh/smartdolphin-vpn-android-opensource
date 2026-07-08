@@ -169,7 +169,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text('IP: ', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.65))),
+                                  Text('${l10n.dashboardIpLabel}: ', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.65))),
                                   Text(_ipHidden ? '••••••••' : (info.ip ?? '--'), style: theme.textTheme.bodySmall),
                                   IconButton(
                                     padding: EdgeInsets.zero,

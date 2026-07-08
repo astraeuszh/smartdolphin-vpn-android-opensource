@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:dart_ping/dart_ping.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../platform/android/network_stats_channel.dart';
+import '../../../services/vpn/clash_api_client.dart';
 import '../../dashboard/domain/ip_info_provider.dart';
 import '../../session/domain/session_controller.dart';
 import '../../session/domain/session_status.dart';
@@ -31,27 +31,11 @@ class HomeLocalStats {
 const _ipRefreshInterval = Duration(seconds: 300);
 const _tickInterval = Duration(seconds: 1);
 
-Future<int?> _measureLocalPing() async {
-  try {
-    final ping = Ping('8.8.8.8', count: 1, timeout: 2);
-    await for (final event in ping.stream) {
-      if (event.error != null) {
-        return null;
-      }
-      final time = event.response?.time;
-      if (time != null) {
-        return time.inMilliseconds.clamp(1, 9999);
-      }
-    }
-  } catch (_) {
-    // fall through
-  }
-  return null;
-}
+Future<int?> _measureLocalPing() => NetworkStatsChannel.pingMs('8.8.8.8');
 
 double? _smoothMbps(double? previous, double sample) {
-  const minMbps = 0.05;
-  const alpha = 0.35;
+  const minMbps = 0.01;
+  const alpha = 0.55;
   if (sample < minMbps) {
     return previous;
   }
@@ -120,8 +104,8 @@ final homeLocalStatsPeriodicProvider = StreamProvider.autoDispose<HomeLocalStats
       city: ipInfo.city,
       countryCode: ipInfo.countryCode,
       latencyMs: latencyMs,
-      downloadMbps: downloadMbps > 0.05 ? downloadMbps : null,
-      uploadMbps: uploadMbps > 0.05 ? uploadMbps : null,
+      downloadMbps: downloadMbps > 0.01 ? downloadMbps : null,
+      uploadMbps: uploadMbps > 0.01 ? uploadMbps : null,
     );
 
     await Future<void>.delayed(_tickInterval);
@@ -139,4 +123,21 @@ final homeLocalStatsProvider = FutureProvider.autoDispose<HomeLocalStats>((ref) 
     countryCode: ipInfo.countryCode,
     latencyMs: ping,
   );
+});
+
+/// Latency in ms, refreshed every 2s. When connected, ICMP can't traverse the
+/// sing-box tunnel, so the REAL latency is measured via the Clash API
+/// (`/proxies/proxy/delay`); when disconnected, a plain ICMP ping is used.
+final homeSystemLatencyProvider = StreamProvider.autoDispose<int?>((ref) async* {
+  while (true) {
+    final connected =
+        ref.read(sessionControllerProvider).status == SessionStatus.connected;
+    if (connected) {
+      yield await ClashApiClient.proxyDelayMs(timeoutMs: 4000);
+    } else {
+      yield await NetworkStatsChannel.pingMs('8.8.8.8');
+    }
+    // 3s (was 2s): fewer probes + fewer widget rebuilds = smoother UI.
+    await Future<void>.delayed(const Duration(seconds: 3));
+  }
 });

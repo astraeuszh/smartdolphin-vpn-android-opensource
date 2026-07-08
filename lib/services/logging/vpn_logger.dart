@@ -7,37 +7,64 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../features/settings/domain/log_config.dart';
 import '../../features/settings/domain/settings_controller.dart';
+import 'vpn_core_layout.dart';
 
-/// User-managed opera logs + system/error logs + in-memory cache when disabled.
+/// vpn-core logging: system logs protected; user/debug logs capped (default 50 files / 500MB).
 class VpnLogger {
   VpnLogger(this._getLogConfig);
 
   final LogConfig Function() _getLogConfig;
-  File? _logFile;
-  String? _logDir;
-  int _currentSize = 0;
+  VpnCoreLayout? _layout;
+  final Map<String, DateTime> _dedup = {};
+  static const _dedupWindow = Duration(seconds: 5);
   final List<String> _memoryCache = [];
-  static const _memoryCacheMaxLines = 256;
+  static const _memoryCacheMaxLines = 4096;
+  static final RegExp _lineTimestamp =
+      RegExp(r'(\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})?)');
 
-  static String _formatLine(String level, String message) {
+  static String _formatLine(String level, String component, String message) {
     final time = DateTime.now().toIso8601String();
-    return '[$time] [$level] $message\n';
+    return '$level $time ${component.padRight(12)} $message\n';
   }
 
-  Future<String?> _ensureLogDir() async {
-    if (_logDir != null) return _logDir;
-    try {
-      final dir = await getApplicationSupportDirectory();
-      final logsDir = Directory('${dir.path}/logs');
-      if (!await logsDir.exists()) {
-        await logsDir.create(recursive: true);
-      }
-      _logDir = logsDir.path;
-      return _logDir;
-    } catch (e) {
-      debugPrint('[VpnLogger] Failed to get log dir: $e');
-      return null;
+  /// External app-specific storage (no root required). Typical path:
+  /// /storage/emulated/0/Android/data/<pkg>/files/vpn-core
+  Future<VpnCoreLayout> layout() async {
+    if (_layout != null) return _layout!;
+    Directory base;
+    if (Platform.isAndroid) {
+      base = await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+    } else {
+      base = await getApplicationSupportDirectory();
     }
+    final root = Directory('${base.path}/vpn-core');
+    final lay = VpnCoreLayout(root.path);
+    for (final rel in VpnCoreLayout.initDirs) {
+      await Directory('${root.path}/$rel').create(recursive: true);
+    }
+    await File('${lay.logs}/README.txt').writeAsString(
+      'Smart Dolphin VPN logs (vpn-core)\n'
+      'System logs under logs/; open this folder from a file manager.\n'
+      'Path: ${root.path}\n',
+    );
+    _layout = lay;
+    return lay;
+  }
+
+  Future<String?> get logDirectory async {
+    final lay = await layout();
+    return lay.root;
+  }
+
+  bool _skipDedup(String key) {
+    final now = DateTime.now();
+    final prev = _dedup[key];
+    if (prev != null && now.difference(prev) < _dedupWindow) {
+      return true;
+    }
+    _dedup[key] = now;
+    return false;
   }
 
   void _pushCache(String line) {
@@ -47,166 +74,202 @@ class VpnLogger {
     }
   }
 
-  Future<File?> _ensureUserLogFile() async {
+  Future<void> _append(String category, String file, String level, String component, String message) async {
+    final line = _formatLine(level, component, message);
     final config = _getLogConfig();
-    if (!config.enabled) return null;
-
-    final dir = await _ensureLogDir();
-    if (dir == null) return null;
-
-    final path = '$dir/opera.log';
-    _logFile ??= File(path);
-    if (!await _logFile!.exists()) {
-      _currentSize = 0;
-    } else {
-      _currentSize = await _logFile!.length();
+    if (!config.enabled && category.contains('logs/user')) {
+      _pushCache(line);
+      return;
     }
-    return _logFile;
+    final lay = await layout();
+    final path = lay.logFile(category, file);
+    try {
+      final f = File(path);
+      await f.parent.create(recursive: true);
+      await f.writeAsString(line, mode: FileMode.append);
+      if (category == 'logs/user' || category == 'logs/debug') {
+        await _enforceUserCap(lay);
+      }
+    } catch (e) {
+      debugPrint('[VpnLogger] write failed: $e');
+      _pushCache(line);
+    }
   }
 
-  Future<void> _rotateIfNeeded() async {
+  Future<void> _enforceUserCap(VpnCoreLayout lay) async {
     final config = _getLogConfig();
     final maxBytes = config.sizeLimitMb * 1024 * 1024;
-    if (_currentSize < maxBytes) return;
-
-    final dir = await _ensureLogDir();
-    if (dir == null) return;
-
-    for (var i = config.countLimit - 1; i >= 0; i--) {
-      final src = i == 0 ? File('$dir/opera.log') : File('$dir/opera.$i.log');
-      final dst = File('$dir/opera.${i + 1}.log');
-      if (await dst.exists()) await dst.delete();
-      if (await src.exists()) await src.rename(dst.path);
-    }
-    _logFile = File('$dir/opera.log');
-    _currentSize = 0;
-  }
-
-  Future<void> _appendUser(String level, String message) async {
-    final line = _formatLine(level, message);
-    final config = _getLogConfig();
-    if (!config.enabled) {
-      _pushCache(line);
-      return;
-    }
-
-    switch (level) {
-      case 'debug':
-        if (!config.shouldLogDebug) return;
-        break;
-      case 'info':
-        if (!config.shouldLogInfo) return;
-        break;
-      case 'warn':
-        if (!config.shouldLogWarn) return;
-        break;
-      case 'error':
-        if (!config.shouldLogError) return;
-        break;
-    }
-
-    final file = await _ensureUserLogFile();
-    if (file == null) {
-      _pushCache(line);
-      return;
-    }
-
-    await _rotateIfNeeded();
-    try {
-      await file.writeAsString(line, mode: FileMode.append);
-      _currentSize += line.length;
-    } catch (e) {
-      debugPrint('[VpnLogger] Write failed: $e');
-    }
-  }
-
-  Future<void> _appendSystem(String level, String message) async {
-    final dir = await _ensureLogDir();
-    if (dir == null) return;
-    final file = File('$dir/system.log');
-    try {
-      await file.writeAsString(_formatLine(level, message), mode: FileMode.append);
-    } catch (e) {
-      debugPrint('[VpnLogger] System write failed: $e');
-    }
-  }
-
-  void debug(String message) {
-    debugPrint('[VpnLogger] $message');
-    unawaited(_appendUser('debug', message));
-  }
-
-  void info(String message) {
-    debugPrint('[VpnLogger] $message');
-    unawaited(_appendUser('info', message));
-  }
-
-  void warn(String message) {
-    debugPrint('[VpnLogger] $message');
-    unawaited(_appendUser('warn', message));
-  }
-
-  void error(String message) {
-    debugPrint('[VpnLogger] $message');
-    unawaited(_appendUser('error', message));
-    unawaited(_appendSystem('error', message));
-  }
-
-  void system(String message) {
-    unawaited(_appendSystem('info', message));
-  }
-
-  Future<String> buildFeedbackSnapshot({int maxChars = 32000}) async {
-    final buf = StringBuffer();
-    if (_memoryCache.isNotEmpty) {
-      buf.write('--- memory cache ---\n');
-      buf.write(_memoryCache.join());
-    }
-    final dir = await _ensureLogDir();
-    if (dir != null) {
-      for (final name in ['system.log', 'opera.log', 'vpn.log']) {
-        final file = File('$dir/$name');
-        if (await file.exists()) {
-          buf.write('--- $name ---\n');
-          try {
-            final text = await file.readAsString();
-            buf.write(text.length > 8000 ? text.substring(text.length - 8000) : text);
-          } catch (_) {}
-        }
+    final maxFiles = config.countLimit;
+    final files = <File>[];
+    var total = 0;
+    for (final cat in VpnCoreLayout.userCategories) {
+      final dir = Directory(lay.logFile(cat, ''));
+      if (!await dir.exists()) continue;
+      await for (final entity in dir.list()) {
+        if (entity is! File || !entity.path.endsWith('.log')) continue;
+        final len = await entity.length();
+        files.add(entity);
+        total += len;
       }
     }
-    final out = buf.toString();
-    if (out.length <= maxChars) return out;
-    return out.substring(out.length - maxChars);
+    files.sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
+    while (files.length > maxFiles || total > maxBytes) {
+      if (files.isEmpty) break;
+      final oldest = files.removeAt(0);
+      total -= await oldest.length();
+      await oldest.delete();
+    }
   }
 
-  Future<int> estimateFeedbackSnapshotBytes({int maxChars = 32000}) async {
-    final snapshot = await buildFeedbackSnapshot(maxChars: maxChars);
+  void debug(String message, {String component = 'app'}) {
+    debugPrint('[VpnLogger] $message');
+    unawaited(_append('logs/debug', 'debug.log', 'DEBUG', component, message));
+  }
+
+  void info(String message, {String component = 'app'}) {
+    debugPrint('[VpnLogger] $message');
+    unawaited(_append('logs/runtime', 'runtime.log', 'INFO', component, message));
+  }
+
+  void warn(String message, {String component = 'app'}) {
+    debugPrint('[VpnLogger] $message');
+    unawaited(_append('logs/runtime', 'runtime.log', 'WARN', component, message));
+  }
+
+  void error(String message, {String component = 'app'}) {
+    debugPrint('[VpnLogger] $message');
+    unawaited(_append('logs/runtime', 'runtime.log', 'ERROR', component, message));
+    unawaited(_writeCrashMeta(component, message));
+  }
+
+  void system(String message, {String component = 'service'}) {
+    unawaited(_append('logs/system', 'service.log', 'INFO', component, message));
+  }
+
+  void userAction(String action, String status, String message) {
+    final key = 'action:$action:$status';
+    if (_skipDedup(key)) return;
+    unawaited(_append('logs/user', 'action.log', 'INFO', action, '$status | $message'));
+  }
+
+  void network(String component, String message) {
+    final key = 'net:$component:$message';
+    if (_skipDedup(key)) return;
+    unawaited(_append('logs/network', 'connect.log', 'INFO', component, message));
+  }
+
+  void auth(String component, String message) {
+    final key = 'auth:$component:$message';
+    if (_skipDedup(key)) return;
+    unawaited(_append('logs/security', 'auth.log', 'INFO', component, message));
+  }
+
+  Future<void> _writeCrashMeta(String component, String message) async {
+    final lay = await layout();
+    final f = File('${lay.crash}/crash_meta.json');
+    await f.writeAsString(
+      '{"time":"${DateTime.now().toIso8601String()}","component":"$component","message":${ _jsonQuote(message) }}\n',
+    );
+  }
+
+  String _jsonQuote(String s) {
+    return '"${s.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"';
+  }
+
+  DateTime? _parseLineTime(String line) {
+    final match = _lineTimestamp.firstMatch(line);
+    if (match == null) return null;
+    return DateTime.tryParse(match.group(1)!);
+  }
+
+  bool _withinWindow(String line, DateTime cutoff, {required bool isHeader}) {
+    if (isHeader) return true;
+    final ts = _parseLineTime(line);
+    if (ts == null) return true;
+    return !ts.isBefore(cutoff);
+  }
+
+  /// Collects all log lines within [window] before now (not a fixed line count).
+  Future<String> buildFeedbackSnapshot({
+    Duration window = VpnCoreLayout.defaultFeedbackWindow,
+  }) async {
+    final cutoff = DateTime.now().subtract(window);
+    final buf = StringBuffer()
+      ..writeln(
+        '=== feedback log window: last ${window.inMinutes} min (since ${cutoff.toIso8601String()}) ===',
+      );
+    var lineCount = 0;
+
+    if (_memoryCache.isNotEmpty) {
+      buf.writeln('=== memory cache ===');
+      for (final ln in _memoryCache) {
+        final trimmed = ln.trimRight();
+        if (trimmed.isEmpty) continue;
+        if (!_withinWindow(trimmed, cutoff, isHeader: false)) continue;
+        buf.writeln(trimmed);
+        lineCount++;
+      }
+    }
+
+    final lay = await layout();
+    for (final rel in VpnCoreLayout.feedbackPriority) {
+      final parts = rel.split('/');
+      final file = parts.removeLast();
+      final category = parts.join('/');
+      final path = lay.logFile(category, file);
+      final f = File(path);
+      if (!await f.exists()) continue;
+      buf.writeln('=== $rel ===');
+      try {
+        final lines = await f.readAsLines();
+        for (final ln in lines) {
+          if (ln.trim().isEmpty) continue;
+          if (!_withinWindow(ln, cutoff, isHeader: ln.startsWith('==='))) continue;
+          buf.writeln(ln);
+          lineCount++;
+        }
+      } catch (_) {}
+    }
+
+    buf.writeln('=== total lines in window: $lineCount ===');
+    return _redact(buf.toString());
+  }
+
+  Future<String> buildErrorFeedbackSnapshot() => buildFeedbackSnapshot(
+        window: VpnCoreLayout.errorFeedbackWindow,
+      );
+
+  Future<int> estimateFeedbackSnapshotBytes({
+    Duration window = VpnCoreLayout.defaultFeedbackWindow,
+  }) async {
+    final snapshot = await buildFeedbackSnapshot(window: window);
     return snapshot.codeUnits.length;
   }
 
-  Future<void> clearLogs() async {
-    final dir = await _ensureLogDir();
-    if (dir == null) return;
+  String _redact(String s) {
+    const keys = ['password=', 'session_token', 'authorization:', 'bearer '];
+    return s.split('\n').map((line) {
+      final low = line.toLowerCase();
+      for (final k in keys) {
+        if (low.contains(k)) return '[redacted]';
+      }
+      return line;
+    }).join('\n');
+  }
 
-    try {
-      final logs = Directory(dir);
-      await for (final entity in logs.list()) {
-        if (entity is! File) continue;
-        final name = entity.path.split('/').last;
-        if (name.startsWith('opera') || name == 'vpn.log') {
+  Future<void> clearUserLogs() async {
+    final lay = await layout();
+    for (final cat in VpnCoreLayout.userCategories) {
+      final dir = Directory(lay.logFile(cat, ''));
+      if (!await dir.exists()) continue;
+      await for (final entity in dir.list()) {
+        if (entity is File && entity.path.endsWith('.log')) {
           await entity.delete();
         }
       }
-      _logFile = null;
-      _currentSize = 0;
-      _memoryCache.clear();
-    } catch (e) {
-      debugPrint('[VpnLogger] Clear failed: $e');
     }
+    _memoryCache.clear();
   }
-
-  Future<String?> get logDirectory async => _ensureLogDir();
 }
 
 final vpnLoggerProvider = Provider<VpnLogger>((ref) {

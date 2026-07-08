@@ -1,18 +1,10 @@
 import 'package:equatable/equatable.dart';
 
 import 'package:smartdolphin_vpn/core/utils/iterable_extensions.dart';
+import 'transport_profile.dart';
 
 /// Kill Switch：VPN 断开时的断网策略（前端配置，待接入隧道层）。
 enum KillSwitchMode { off, strict, smart }
-
-/// 传输协议（前端预留，实际隧道能力以后端为准）。
-enum TransportProtocol {
-  wireGuard,
-  openVpn,
-  realityVless,
-  hysteria2,
-  tuic,
-}
 
 /// 系统接管方式：TUN 全系统 / 系统代理部分程序。
 enum TunnelInterfaceMode { tun, systemProxy }
@@ -115,11 +107,6 @@ class AdvancedSettingsConfig extends Equatable {
 KillSwitchMode killSwitchModeFromName(String? name) {
   return KillSwitchMode.values.firstWhereOrNull((m) => m.name == name) ??
       KillSwitchMode.off;
-}
-
-TransportProtocol transportProtocolFromName(String? name) {
-  return TransportProtocol.values.firstWhereOrNull((p) => p.name == name) ??
-      TransportProtocol.openVpn;
 }
 
 TunnelInterfaceMode tunnelInterfaceModeFromName(String? name) {

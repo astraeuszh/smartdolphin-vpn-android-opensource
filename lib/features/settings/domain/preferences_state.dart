@@ -3,6 +3,8 @@ import 'package:equatable/equatable.dart';
 class PreferencesState extends Equatable {
   static const Object _sentinel = Object();
   static const defaultLocaleCode = 'en';
+  /// Persisted when user picks "follow system" in settings.
+  static const systemLocaleCode = '__system__';
 
   const PreferencesState({
     this.autoServerSwitch = true,
@@ -11,6 +13,7 @@ class PreferencesState extends Equatable {
     this.privacyPolicyAccepted = false,
     this.onboardingCompleted = false,
     this.autoReconnect = false,
+    this.coreProtocol = 'reality',
   });
 
   final bool autoServerSwitch;
@@ -19,6 +22,8 @@ class PreferencesState extends Equatable {
   final bool privacyPolicyAccepted;
   final bool onboardingCompleted;
   final bool autoReconnect;
+  /// Dolphin-Core transport: 'reality' | 'hysteria2' | 'wireguard'.
+  final String coreProtocol;
 
   PreferencesState copyWith({
     bool? autoServerSwitch,
@@ -27,6 +32,7 @@ class PreferencesState extends Equatable {
     bool? privacyPolicyAccepted,
     bool? onboardingCompleted,
     bool? autoReconnect,
+    String? coreProtocol,
   }) {
     return PreferencesState(
       autoServerSwitch: autoServerSwitch ?? this.autoServerSwitch,
@@ -36,6 +42,7 @@ class PreferencesState extends Equatable {
       privacyPolicyAccepted: privacyPolicyAccepted ?? this.privacyPolicyAccepted,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       autoReconnect: autoReconnect ?? this.autoReconnect,
+      coreProtocol: coreProtocol ?? this.coreProtocol,
     );
   }
 
@@ -43,10 +50,11 @@ class PreferencesState extends Equatable {
     return {
       'autoServerSwitch': autoServerSwitch,
       'hapticsEnabled': hapticsEnabled,
-      'localeCode': localeCode ?? defaultLocaleCode,
+      'localeCode': localeCode ?? systemLocaleCode,
       'privacyPolicyAccepted': privacyPolicyAccepted,
       'onboardingCompleted': onboardingCompleted,
       'autoReconnect': autoReconnect,
+      'coreProtocol': coreProtocol,
     };
   }
 
@@ -54,11 +62,19 @@ class PreferencesState extends Equatable {
     return PreferencesState(
       autoServerSwitch: json['autoServerSwitch'] as bool? ?? true,
       hapticsEnabled: json['hapticsEnabled'] as bool? ?? true,
-      localeCode: json['localeCode'] as String? ?? defaultLocaleCode,
+      localeCode: _parseLocaleCode(json['localeCode'] as String?),
       privacyPolicyAccepted: json['privacyPolicyAccepted'] as bool? ?? false,
       onboardingCompleted: json['onboardingCompleted'] as bool? ?? false,
       autoReconnect: json['autoReconnect'] as bool? ?? false,
+      coreProtocol: json['coreProtocol'] as String? ?? 'reality',
     );
+  }
+
+  static String? _parseLocaleCode(String? raw) {
+    if (raw == null || raw.isEmpty || raw == systemLocaleCode) {
+      return defaultLocaleCode;
+    }
+    return raw;
   }
 
   @override
@@ -69,5 +85,6 @@ class PreferencesState extends Equatable {
         privacyPolicyAccepted,
         onboardingCompleted,
         autoReconnect,
+        coreProtocol,
       ];
 }

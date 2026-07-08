@@ -25,42 +25,49 @@ class SmartDolphinApp extends ConsumerWidget {
     ref.watch(preferencesReadyProvider);
     final preferences = ref.watch(preferencesControllerProvider);
     final accentSeed = ref.watch(settingsControllerProvider).accentSeed;
-    final localeCode = preferences.localeCode ?? _defaultLocaleCode;
-    final navigatorKey = ref.watch(navigatorKeyProvider);
+    final localeTag = preferences.localeCode ?? _defaultLocaleCode;
 
-    return SmartStableLifecycle(
-      child: MaterialApp(
-        onGenerateTitle: (context) => context.l10n.appTitle,
-        theme: buildHiVpnTheme(accentSeed: accentSeed),
-        themeMode: ThemeMode.light,
-        debugShowCheckedModeBanner: false,
-        locale: parseLocaleFromTag(localeCode),
-        localeResolutionCallback: (locale, supported) {
-          if (locale == null) {
-            return parseLocaleFromTag(_defaultLocaleCode);
+    return MaterialApp(
+      onGenerateTitle: (context) => context.l10n.appTitle,
+      theme: buildHiVpnTheme(accentSeed: accentSeed),
+      themeMode: ThemeMode.light,
+      debugShowCheckedModeBanner: false,
+      locale: parseLocaleFromTag(localeTag),
+      localeResolutionCallback: (deviceLocale, supportedLocales) {
+        final preferred = parseLocaleFromTag(localeTag);
+        for (final supported in supportedLocales) {
+          if (supported.languageCode == preferred.languageCode &&
+              supported.countryCode == preferred.countryCode &&
+              supported.scriptCode == preferred.scriptCode) {
+            return supported;
           }
-          for (final supportedLocale in supported) {
-            if (supportedLocale.languageCode == locale.languageCode) {
-              return supportedLocale;
-            }
+        }
+        for (final supported in supportedLocales) {
+          if (supported.languageCode == preferred.languageCode) {
+            return supported;
           }
-          return parseLocaleFromTag(_defaultLocaleCode);
-        },
-        navigatorKey: navigatorKey,
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        builder: (context, child) {
-          return HiVpnGlassBackground(
+        }
+        return parseLocaleFromTag(_defaultLocaleCode);
+      },
+      navigatorKey: ref.watch(navigatorKeyProvider),
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      // SmartStableLifecycle must live BELOW MaterialApp: its banner Stack needs
+      // Directionality/Theme/Localizations/MediaQuery from the app. Mounting it
+      // above MaterialApp crashed every frame with "No Directionality widget found".
+      builder: (context, child) {
+        return HiVpnGlassBackground(
+          child: SmartStableLifecycle(
             child: child ?? const SizedBox.shrink(),
-          );
-        },
-        home: const SplashCheckScreen(),
-      ),
+          ),
+        );
+      },
+      home: const SplashCheckScreen(),
     );
   }
 }

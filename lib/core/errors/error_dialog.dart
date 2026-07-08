@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import 'error_codes.dart';
 
 /// Error dialog aligned with Windows ErrorModal. English, brief message + code.
@@ -37,7 +38,7 @@ class ErrorDialog extends StatelessWidget {
           Text(message, style: theme.textTheme.bodyLarge),
           const SizedBox(height: 12),
           Text(
-            'Error Code: ${formatCode(errorCode)}',
+            context.l10n.errorDialogCodeLabel(formatCode(errorCode)),
             style: theme.textTheme.bodySmall?.copyWith(
               fontFamily: 'monospace',
               color: theme.colorScheme.onSurface.withOpacity(0.7),
@@ -51,7 +52,7 @@ class ErrorDialog extends StatelessWidget {
             Navigator.of(context).pop();
             onClose?.call();
           },
-          child: const Text('Close'),
+          child: Text(context.l10n.close),
         ),
       ],
     );

@@ -1,11 +1,13 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/ui/top_snack.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../services/logging/vpn_core_layout.dart';
+import '../../../services/logging/vpn_logger.dart';
 import '../../../services/remote/console_feedback.dart';
 import '../../auth/domain/auth_controller.dart';
 import 'settings_picker_sheet.dart';
@@ -218,47 +220,38 @@ class _FeedbackTicketScreenState extends ConsumerState<FeedbackTicketScreen> {
     if (session == null) return;
     final description = _descriptionCtrl.text.trim();
     if (description.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.ticketDescriptionRequired)),
-      );
+      showTopSnackBar(context, l10n.ticketDescriptionRequired, isError: true);
       return;
     }
     if (_type == 'other' && _otherTypeCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.ticketTypeOtherHint)),
-      );
+      showTopSnackBar(context, l10n.ticketTypeOtherHint, isError: true);
       return;
     }
 
     setState(() => _submitting = true);
     try {
-      final images = <String>[];
-      for (final file in _images) {
-        final bytes = await file.readAsBytes();
-        if (bytes.length > 2 * 1024 * 1024) continue;
-        images.add(base64Encode(bytes));
-      }
       final typeLabel = _type == 'other'
           ? _otherTypeCtrl.text.trim()
           : _typeLabel(_type, l10n);
+      // 工单附带运行日志（此前工单完全不带日志）；图片不再 Base64 进日志字段（会乱码），仅计数。
+      final vpnLog = await ref.read(vpnLoggerProvider).buildFeedbackSnapshot(
+            window: VpnCoreLayout.manualFeedbackWindow,
+          );
       await ConsoleFeedback().submitTicket(
         session: session,
         type: typeLabel,
         severity: _severity,
         description: description,
         contactEmail: _emailCtrl.text.trim(),
-        imageBase64: images,
+        images: _images,
+        vpnLog: vpnLog,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.ticketSubmitted)),
-      );
+      showTopSnackBar(context, l10n.ticketSubmitted);
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e')),
-      );
+      showTopSnackBar(context, '$e', isError: true);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

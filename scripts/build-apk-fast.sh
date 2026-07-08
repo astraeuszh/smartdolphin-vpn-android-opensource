@@ -34,13 +34,18 @@ ANDROID_HOME="${ANDROID_HOME:-$HOME/.local/android-sdk}"
 FLUTTER="$FLUTTER_ROOT/bin/flutter"
 export PATH="$FLUTTER_ROOT/bin:$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:/usr/bin:/bin:$PATH"
 export JAVA_HOME
-# 持久缓存：勿用 /tmp，否则每次 Resolving dependencies 都要重新拉 pub.dev / Maven
-export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.local/share/smartdolphin/gradle-home}"
-export PUB_CACHE="${PUB_CACHE:-$HOME/.local/share/smartdolphin/pub-cache}"
-export TMPDIR="${TMPDIR:-$HOME/.local/share/smartdolphin/tmp}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+WORKSPACE="$(cd "$ROOT/.." && pwd)"
+# Gradle/临时文件放 btrfs 家目录，避免 exfat 分区上数万小文件 I/O 拖死编译
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.cache/smartdolphin/gradle-home}"
+export TMPDIR="${TMPDIR:-$HOME/.cache/smartdolphin/build-tmp}"
 export GRADLE_OPTS="${GRADLE_OPTS:--Djava.io.tmpdir=$TMPDIR}"
+export PUB_CACHE="${PUB_CACHE:-$HOME/.local/share/smartdolphin/pub-cache}"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 mkdir -p "$GRADLE_USER_HOME" "$PUB_CACHE" "$TMPDIR"
+
+INCREMENTAL="${INCREMENTAL:-1}"
+CLEAN="${CLEAN:-0}"
 
 [ -x "$FLUTTER" ] || { echo "缺少 $FLUTTER"; exit 1; }
 [ -f "$ANDROID_HOME/ndk/26.1.10909125/source.properties" ] || {
@@ -90,16 +95,28 @@ run_with_heartbeat() {
 trap stop_heartbeat EXIT
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# 默认直接在仓库里编（保留 .dart_tool）；仅 CI/隔离时设 BUILD_DIR=/tmp/...
-if [ -n "${BUILD_DIR:-}" ]; then
-  BUILD="$BUILD_DIR"
-  echo "=== $(date) rsync → $BUILD ==="
-  rsync -a --exclude build --exclude android/.gradle "$ROOT/" "$BUILD/"
+# 默认在本机 btrfs 缓存目录编译，避开 /run/media 上的 exfat/fuseblk 小文件 I/O 问题。
+# BUILD_DIR 内的 build/ 会保留，因此仍是增量打包；源码从仓库 rsync 同步过去。
+BUILD="${BUILD_DIR:-$HOME/.cache/smartdolphin/android-build/SmartDolphinVPNAndroid}"
+mkdir -p "$BUILD"
+if [ "$BUILD" != "$ROOT" ]; then
+  echo "=== $(date) 本地增量构建：$ROOT → $BUILD ==="
+  rsync -a --delete \
+    --exclude build \
+    --exclude android/.gradle \
+    --exclude .dart_tool/flutter_build \
+    "$ROOT/" "$BUILD/"
   cd "$BUILD"
 else
-  BUILD="$ROOT"
   cd "$BUILD"
-  echo "=== $(date) 在仓库内编译（Pub 缓存: $PUB_CACHE）==="
+  echo "=== $(date) 在仓库内编译（增量: $INCREMENTAL，Gradle: $GRADLE_USER_HOME）==="
+fi
+
+if [ "$CLEAN" = "1" ]; then
+  echo ">>> CLEAN=1：清理 build/（全量重编，通常 10–20 分钟）"
+  rm -rf "$BUILD/build" "$BUILD/android/.gradle" "$BUILD/android/app/build"
+else
+  echo ">>> 保留 build/ 缓存（增量编译，改 Dart 代码通常 1–4 分钟）"
 fi
 
 # Flutter includeBuild 默认仅 google()；网络差时可设 USE_CN_MAVEN=1 强制全镜像
@@ -127,14 +144,24 @@ FLUTTER_GRADLE_EOF
 fi
 
 # 仅当 pub 锁文件变化时才 pub get，避免每次 Resolving dependencies 卡很久
+# exfat 上 -nt 只有秒级精度，用 pubspec.yaml/lock/config 三者关系判断
 NEED_PUB=1
-if [ -f .dart_tool/package_config.json ] && [ .dart_tool/package_config.json -nt pubspec.lock ] 2>/dev/null; then
-  NEED_PUB=0
+if [ -f .dart_tool/package_config.json ] && [ -f pubspec.lock ]; then
+  if [ ! pubspec.yaml -nt pubspec.lock ] 2>/dev/null && \
+     [ ! pubspec.lock -nt .dart_tool/package_config.json ] 2>/dev/null; then
+    NEED_PUB=0
+  fi
+fi
+USE_NO_PUB=0
+if [ "$INCREMENTAL" = "1" ] && [ "$NEED_PUB" = 0 ]; then
+  USE_NO_PUB=1
 fi
 if [ "$NEED_PUB" = 1 ]; then
-  echo ">>> flutter pub get（首次或依赖变更较慢，缓存目录: $PUB_CACHE）"
-  echo ">>> 心跳每秒一行；若长时间不刷 = 可能卡住"
-  run_with_heartbeat "pub get" "$FLUTTER" pub get
+  echo ">>> dart pub get --offline（避免在线 Resolving dependencies 卡死）"
+  if ! run_with_heartbeat "pub get offline" "$FLUTTER" pub get --offline; then
+    echo ">>> 离线缓存不完整，改在线 pub get（可能较慢）"
+    run_with_heartbeat "pub get online" "$FLUTTER" pub get
+  fi
 else
   echo ">>> 跳过 pub get（依赖未变，用已有 .dart_tool）"
 fi
@@ -159,18 +186,30 @@ org.gradle.workers.max=4
 org.gradle.daemon=true
 EOF
 fi
+if ! grep -q '^org.gradle.caching=' "$PROP" 2>/dev/null; then
+  echo "org.gradle.caching=true" >> "$PROP"
+fi
+if ! grep -q '^org.gradle.daemon=' "$PROP" 2>/dev/null; then
+  echo "org.gradle.daemon=true" >> "$PROP"
+fi
 
 MODE="${BUILD_MODE:-debug}"
-echo ">>> flutter build apk ($MODE) …（通常 10–30 分钟，心跳每秒一行）"
+PUB_FLAG=()
+if [ "$USE_NO_PUB" = 1 ]; then
+  PUB_FLAG=(--no-pub)
+  echo ">>> flutter build apk ($MODE) 增量模式（--no-pub，跳过 pub + 复用缓存）…"
+else
+  echo ">>> flutter build apk ($MODE) …（依赖变更或首次，可能 5–15 分钟）"
+fi
 if [ "$MODE" = "release" ]; then
-  run_with_heartbeat "build apk release" "$FLUTTER" build apk --release --target-platform android-arm64
+  run_with_heartbeat "build apk release" "$FLUTTER" build apk --release --target-platform android-arm64 "${PUB_FLAG[@]}"
   APK="$BUILD/build/app/outputs/flutter-apk/app-release.apk"
 else
-  run_with_heartbeat "build apk debug" "$FLUTTER" build apk --debug --target-platform android-arm64
+  run_with_heartbeat "build apk debug" "$FLUTTER" build apk --debug --target-platform android-arm64 "${PUB_FLAG[@]}"
   APK="$BUILD/build/app/outputs/flutter-apk/app-debug.apk"
 fi
 
-ls -lh "$APK"
+/bin/ls -lh "$APK"
 if adb devices 2>/dev/null | grep -q 'device$'; then
   adb install -r "$APK"
 else

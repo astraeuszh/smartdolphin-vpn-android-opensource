@@ -12,6 +12,7 @@ import android.os.Build
 import android.provider.DocumentsContract
 import androidx.core.content.FileProvider
 import java.io.File
+import java.security.MessageDigest
 import android.app.ActivityManager
 import android.os.Bundle
 import android.os.PowerManager
@@ -21,10 +22,13 @@ import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import astraeus.smartdolphin.vpn.core.BoxService
+import astraeus.smartdolphin.vpn.core.CoreBridge
 import astraeus.smartdolphin.vpn.game.GameModeLocalService
+import astraeus.smartdolphin.vpn.vpn.ProxyShareService
 import astraeus.smartdolphin.vpn.vpn.SmartDolphinTileService
-import id.laskarmedia.openvpn_flutter.OpenVPNFlutterPlugin
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.example.vpn/VpnChannel"
@@ -41,6 +45,41 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        // Dolphin-Core (Go/libbox) engine channels — the entire VPN backend is Go.
+        MethodChannel(messenger, "smartdolphin/core").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "prepare" -> handlePrepare(result)
+                "start" -> {
+                    val cfg = call.argument<String>("config")
+                    if (cfg.isNullOrBlank()) {
+                        result.success(false)
+                    } else {
+                        CoreBridge.pendingConfig = cfg
+                        val i = Intent(this, BoxService::class.java)
+                            .setAction(BoxService.ACTION_START)
+                            .putExtra(BoxService.EXTRA_CONFIG, cfg)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i) else startService(i)
+                        result.success(true)
+                    }
+                }
+                "stop" -> {
+                    startService(Intent(this, BoxService::class.java).setAction(BoxService.ACTION_STOP))
+                    result.success(true)
+                }
+                "isConnected" -> result.success(CoreBridge.connected)
+                else -> result.notImplemented()
+            }
+        }
+        EventChannel(messenger, "smartdolphin/core/stage").setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) { CoreBridge.stageSink = events }
+            override fun onCancel(arguments: Any?) { CoreBridge.stageSink = null }
+        })
+        EventChannel(messenger, "smartdolphin/core/status").setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) { CoreBridge.statusSink = events }
+            override fun onCancel(arguments: Any?) { CoreBridge.statusSink = null }
+        })
+
         val methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "astraeus.smartdolphin.vpn/game_traffic")
             .setMethodCallHandler { call, result ->
@@ -75,6 +114,7 @@ class MainActivity : FlutterFragmentActivity() {
             }
         methodChannel.setMethodCallHandler { call, result ->
             when (call.method) {
+                "isAlwaysOnVpnEnabled" -> result.success(isAlwaysOnVpnEnabled())
                 "prepare" -> handlePrepare(result)
                 "getInstalledApps" -> result.success(fetchInstalledApps())
                 "updateQuickTile" -> {
@@ -92,6 +132,7 @@ class MainActivity : FlutterFragmentActivity() {
                     am.getMemoryInfo(mi)
                     result.success((mi.totalMem / (1024 * 1024)).toInt())
                 }
+                "getAppMemoryMb" -> result.success(readAppMemoryMb())
                 "getNetworkTotals" -> {
                     result.success(
                         mapOf(
@@ -100,16 +141,64 @@ class MainActivity : FlutterFragmentActivity() {
                         )
                     )
                 }
+                "getHardwareDeviceId" -> result.success(computeHardwareDeviceId())
+                "pingHost" -> {
+                    val host = call.argument<String>("host") ?: "8.8.8.8"
+                    val count = call.argument<Int>("count") ?: 1
+                    Thread {
+                        try {
+                            result.success(measurePing(host, count.coerceIn(1, 16)))
+                        } catch (e: Exception) {
+                            result.error("PING_FAILED", e.message, null)
+                        }
+                    }.start()
+                }
                 "setWakeOnBootEnabled" -> {
                     val enabled = call.arguments as? Boolean ?: false
                     getSharedPreferences(prefsName, Context.MODE_PRIVATE).edit()
                         .putBoolean("wake_on_boot", enabled).apply()
                     result.success(null)
                 }
+                "setReconnectOnNetworkChange" -> {
+                    val enabled = call.arguments as? Boolean ?: false
+                    getSharedPreferences(prefsName, Context.MODE_PRIVATE).edit()
+                        .putBoolean("reconnect_on_network_change", enabled).apply()
+                    result.success(null)
+                }
+                "consumeLaunchFromBoot" -> {
+                    val prefs = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                    val fromBoot = prefs.getBoolean("launch_from_boot", false)
+                    prefs.edit().remove("launch_from_boot").apply()
+                    result.success(fromBoot)
+                }
+                "syncUninstallMeta" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val args = call.arguments as? Map<String, Any?>
+                    val uid = (args?.get("uid") as? Number)?.toInt() ?: 0
+                    val username = args?.get("username") as? String ?: ""
+                    val deviceId = args?.get("device_id") as? String ?: ""
+                    getSharedPreferences(prefsName, Context.MODE_PRIVATE).edit()
+                        .putInt("last_uid", uid)
+                        .putString("last_username", username)
+                        .putString("last_device_id", deviceId)
+                        .apply()
+                    result.success(null)
+                }
                 "setHasActiveSession" -> {
                     val hasSession = call.arguments as? Boolean ?: false
                     getSharedPreferences(prefsName, Context.MODE_PRIVATE).edit()
                         .putBoolean("has_active_session", hasSession).apply()
+                    result.success(null)
+                }
+                "startProxyShare" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val args = call.arguments as? Map<String, Any?>
+                    val mode = args?.get("mode") as? String ?: "http"
+                    ProxyShareService.start(mode)
+                    result.success(null)
+                }
+                "stopProxyShare" -> {
+                    ProxyShareService.stop()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -128,8 +217,28 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    /** True when this app is set as Android's always-on VPN (kill-switch companion). */
+    private fun isAlwaysOnVpnEnabled(): Boolean {
+        return try {
+            Settings.Secure.getString(contentResolver, "always_on_vpn_app") == packageName
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** App process PSS (Proportional Set Size) in megabytes. */
+    private fun readAppMemoryMb(): Int {
+        return try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val pid = android.os.Process.myPid()
+            val info = am.getProcessMemoryInfo(intArrayOf(pid)).firstOrNull()
+            if (info != null) (info.totalPss / 1024).coerceAtLeast(0) else 0
+        } catch (_: Exception) {
+            0
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        OpenVPNFlutterPlugin.connectWhileGranted(requestCode == 24 && resultCode == RESULT_OK)
         super.onActivityResult(requestCode, resultCode, data)
     }
 
@@ -155,22 +264,20 @@ class MainActivity : FlutterFragmentActivity() {
         try {
             val dir = File(path)
             if (!dir.exists()) dir.mkdirs()
-            val logFile = File(dir, "vpn.log")
-            val target = when {
-                logFile.exists() -> logFile
-                dir.exists() -> dir
-                else -> {
-                    result.error("NOT_FOUND", "Log directory not found", null)
-                    return
-                }
+            val candidates = listOf(
+                File(dir, "logs/README.txt"),
+                File(dir, "logs/runtime/runtime.log"),
+                File(dir, "logs/user/action.log"),
+                dir,
+            )
+            val target = candidates.firstOrNull { it.exists() }
+            if (target == null) {
+                result.error("NOT_FOUND", "Log directory not found", null)
+                return
             }
 
             val uri = FileProvider.getUriForFile(this, "$packageName.files", target)
-            val mimeType = if (target.isDirectory) {
-                "vnd.android.document/directory"
-            } else {
-                "text/plain"
-            }
+            val mimeType = if (target.isDirectory) "resource/folder" else "text/plain"
 
             val viewIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, mimeType)
@@ -243,5 +350,57 @@ class MainActivity : FlutterFragmentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+    }
+
+    private fun computeHardwareDeviceId(): String {
+        val androidId =
+            Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+        val material = if (androidId.isNotEmpty() && androidId != "9774d56d682e549c") {
+            "smartdolphin-vpn-hw-v1|$androidId|${Build.MANUFACTURER}|${Build.MODEL}|${Build.DEVICE}"
+        } else {
+            val fallback =
+                "${Build.BOARD}|${Build.BRAND}|${Build.DEVICE}|${Build.HARDWARE}|${Build.MANUFACTURER}|${Build.MODEL}|${Build.PRODUCT}|${Build.FINGERPRINT}"
+            "smartdolphin-vpn-hw-v1|$fallback"
+        }
+        return sha256Hex(material)
+    }
+
+    private fun sha256Hex(input: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(input.toByteArray(Charsets.UTF_8))
+        return hash.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun measurePing(host: String, count: Int): Map<String, Any?> {
+        val process = ProcessBuilder(
+            "/system/bin/ping",
+            "-c",
+            count.toString(),
+            "-W",
+            "2",
+            host,
+        )
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        process.waitFor()
+
+        val lossRegex = Regex("(\\d+(?:\\.\\d+)?)% packet loss")
+        val loss = lossRegex.find(output)?.groupValues?.get(1)?.toDoubleOrNull()
+
+        val timeRegex = Regex("time=(\\d+(?:\\.\\d+)?) ms")
+        val times = timeRegex.findAll(output)
+            .mapNotNull { it.groupValues.getOrNull(1)?.toDoubleOrNull() }
+            .toList()
+        val avgMs = if (times.isNotEmpty()) {
+            times.average().toInt().coerceAtLeast(1)
+        } else {
+            null
+        }
+
+        return mapOf(
+            "ms" to avgMs,
+            "loss" to (loss ?: if (avgMs != null) 0.0 else 100.0),
+        )
     }
 }

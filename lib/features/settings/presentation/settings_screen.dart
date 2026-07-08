@@ -1,16 +1,17 @@
 import 'dart:async';
-import 'dart:convert';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:app_settings/app_settings.dart';
+import '../../../core/legal_urls.dart';
 import '../../../core/platform/runtime_platform.dart';
 import '../../../app/app.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_controller.dart';
-import '../../auth/domain/traffic_policy.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../usage/data_usage_controller.dart';
 import '../../usage/data_usage_state.dart';
@@ -18,18 +19,27 @@ import '../domain/preferences_controller.dart';
 import '../domain/preferences_state.dart';
 import '../domain/settings_controller.dart';
 import '../domain/advanced_settings_config.dart';
+import '../domain/transport_profile.dart';
 import '../domain/split_tunnel_config.dart';
 import '../domain/traffic_mode.dart';
+import '../domain/rule_draft.dart';
 import '../domain/vpn_protocol.dart';
+import '../../../platform/android/vpn_system_settings.dart';
+import '../../smart_stable/smart_stable_notifier.dart';
+import 'app_picker_screen.dart';
 import 'account_settings_screen.dart';
-import 'rule_editor_screen.dart';
+import 'custom_dns_dialog.dart';
 import 'settings_picker_sheet.dart';
+import '../../../core/ui/sdrl_icon.dart';
+import '../../../core/ui/top_snack.dart';
 import '../../../services/haptics/haptics_service.dart';
+import '../../../services/sdrl/sdrl_compiler.dart';
+import '../../../services/sdrl/sdrl_rule_store.dart';
+import '../../session/domain/session_controller.dart';
+import '../../session/domain/session_status.dart';
 import '../../../services/logging/vpn_logger.dart';
-import '../../../services/remote/console_endpoint.dart';
 import '../../../widgets/legal_agreement_rich_text.dart';
 import '../../../widgets/frosted_glass.dart';
-import '../../../theme/colors.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -39,8 +49,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  String _logSizeLimit = '10';
-  String _logCountLimit = '5';
+  bool _checkingUpdate = false;
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +83,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _sectionGap(),
         _buildLanguageSection(context, preferences),
         _sectionGap(),
-        _buildDiagnosticsSection(context),
+        _buildSmartStableSection(context),
         _sectionGap(),
         _buildLegalSection(context),
         _sectionGap(),
@@ -84,52 +93,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildInfoFooter(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
-    final auth = ref.watch(authControllerProvider);
-    final policy = auth.session?.trafficPolicy ?? const TrafficPolicy();
-
+    final theme = Theme.of(context);
     return FutureBuilder<PackageInfo>(
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
         final info = snapshot.data;
-        final versionLabel = info == null
-            ? '—'
-            : '${info.version} (${info.buildNumber})';
+        final versionLabel = info?.version ?? '—';
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '应用信息',
+              l10n.settingsAppInfo,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              '版本 $versionLabel',
+              l10n.settingsVersionLabel(versionLabel),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.72),
               ),
             ),
-            if (policy.hasPolicy && policy.hasQuotaLimit) ...[
-              const SizedBox(height: 8),
-              Text(
-                l10n.accountQuotaSummary(
-                  policy.monthlyQuotaGb,
-                  policy.monthlyUsedGb,
-                  policy.quotaUtilization * 100,
-                ),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.72),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _checkingUpdate || info == null ? null : () => _checkForUpdate(context),
+              child: Text(
+                _checkingUpdate ? l10n.settingsCheckingUpdate : l10n.settingsCheckUpdate,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                  decorationColor: theme.colorScheme.primary.withValues(alpha: 0.6),
                 ),
               ),
-            ],
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: info == null ? null : () => _checkForUpdate(info),
-              child: const Text('检查更新'),
             ),
           ],
         );
@@ -137,46 +135,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<void> _checkForUpdate(PackageInfo info) async {
-    await ref.read(hapticsServiceProvider).selection();
+  Future<void> _checkForUpdate(BuildContext context) async {
+    if (_checkingUpdate) return;
+    setState(() => _checkingUpdate = true);
+    await Future<void>.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final uri = Uri.parse('${ConsoleEndpoint.base}/api/client/update/check');
-      final resp = await http
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'version': info.version,
-              'build': info.buildNumber,
-              'platform': 'android',
-            }),
-          )
-          .timeout(const Duration(seconds: 18));
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (data['ok'] != true) {
-        throw Exception((data['error'] as String?) ?? '检查失败');
-      }
-      if (!mounted) return;
-      final force = data['force_update'] == true;
-      final deprecated = data['deprecated'] == true;
-      final minVersion = (data['min_version'] as String?) ?? '';
-      String message;
-      if (force) {
-        message = '当前版本过低，请更新至 $minVersion 或更高版本';
-      } else if (deprecated) {
-        message = '当前版本已弃用，建议更新';
-      } else {
-        message = '当前已是最新版本';
-      }
-      messenger.showSnackBar(SnackBar(content: Text(message)));
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('检查更新失败：$e')),
-      );
-    }
+    setState(() => _checkingUpdate = false);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final l10n = ctx.l10n;
+        return AlertDialog(
+          title: Text(l10n.settingsUpdateAvailableTitle),
+          content: Text(l10n.settingsUpdateAvailableBody),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l10n.commonNo)),
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l10n.commonYes)),
+          ],
+        );
+      },
+    );
   }
 
   Widget _sectionGap() {
@@ -238,6 +216,72 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showInDevelopmentHint() {
+    unawaited(ref.read(hapticsServiceProvider).selection());
+    showTopSnackBar(context, context.l10n.settingsFeatureInDevelopment);
+  }
+
+  /// Grayed, non-functional picker tile for features not yet wired to the
+  /// Dolphin-Core engine. Tapping explains it's still in development.
+  Widget _lockedPickerTile(
+    BuildContext context, {
+    required String title,
+    required String value,
+  }) {
+    final theme = Theme.of(context);
+    return Opacity(
+      opacity: 0.5,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: InkWell(
+          onTap: _showInDevelopmentHint,
+          borderRadius: BorderRadius.circular(12),
+          child: FrostedGlass(
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            surface: GlassSurface.flat,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text(value, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7))),
+                    ],
+                  ),
+                ),
+                Icon(Icons.lock_outline, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.55)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Grayed, non-functional switch row for features not yet wired to the engine.
+  Widget _lockedSwitchTile(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final theme = Theme.of(context);
+    return Opacity(
+      opacity: 0.5,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        onTap: _showInDevelopmentHint,
+        leading: Icon(icon, color: theme.colorScheme.primary),
+        title: Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.65))),
+        trailing: Icon(Icons.lock_outline, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.55)),
       ),
     );
   }
@@ -345,10 +389,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.watch(settingsControllerProvider);
     final routing = settings.routing;
     final splitTunnel = settings.splitTunnel;
-    final ruleCount = routing.ruleDb.customRules
-        .split(RegExp(r'\r?\n'))
-        .where((s) => s.trim().isNotEmpty && !s.trim().startsWith('#'))
-        .length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,68 +398,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildPickerTile(
           context,
           title: l10n.settingsTrafficMode,
-          value: switch (routing.mode) {
-            TrafficMode.global => l10n.settingsTrafficModeGlobal,
-            TrafficMode.rule => l10n.settingsTrafficModeRule,
-            TrafficMode.auto => l10n.settingsTrafficModeAuto,
-          },
+          value: _trafficModeLabel(routing.mode, l10n),
           onTap: () async {
             await ref.read(hapticsServiceProvider).selection();
             final result = await SettingsPickerSheet.show<String>(
               context: context,
               title: l10n.settingsTrafficMode,
               options: [
-                SettingsPickerOption(value: TrafficMode.global.name, label: l10n.settingsTrafficModeGlobal),
-                SettingsPickerOption(value: TrafficMode.auto.name, label: l10n.settingsTrafficModeAuto),
-                SettingsPickerOption(value: TrafficMode.rule.name, label: l10n.settingsTrafficModeRule),
+                SettingsPickerOption(
+                  value: TrafficMode.global.name,
+                  label:
+                      '${l10n.settingsTrafficModeGlobal} — ${l10n.settingsTrafficModeGlobalSubtitle}',
+                ),
+                SettingsPickerOption(
+                  value: TrafficMode.auto.name,
+                  label:
+                      '${l10n.settingsTrafficModeAuto} — ${l10n.settingsTrafficModeAutoHint}',
+                ),
               ],
-              currentValue: routing.mode.name,
+              currentValue: routing.mode == TrafficMode.auto
+                  ? TrafficMode.auto.name
+                  : TrafficMode.global.name,
               isSelected: (a, b) => a == b,
             );
             if (!mounted || result == null) return;
-            await ref.read(settingsControllerProvider.notifier).setTrafficMode(
-                  TrafficMode.values.firstWhere(
-                    (m) => m.name == result,
-                    orElse: () => TrafficMode.global,
-                  ),
-                );
+            final mode = result == TrafficMode.auto.name
+                ? TrafficMode.auto
+                : TrafficMode.global;
+            await ref.read(settingsControllerProvider.notifier).setTrafficMode(mode);
+            if (mounted &&
+                ref.read(sessionControllerProvider).status ==
+                    SessionStatus.connected) {
+              showTopSnackBar(context, l10n.settingsRuleEditorReconnectHint);
+            }
           },
         ),
-        if (routing.mode == TrafficMode.auto) ...[
-          const SizedBox(height: 8),
-          Text(
-            l10n.settingsTrafficModeAutoHint,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ],
-        if (routing.mode == TrafficMode.rule) ...[
-          const SizedBox(height: 8),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.edit_note, color: Theme.of(context).colorScheme.primary),
-            title: Text(l10n.settingsRuleEditor),
-            subtitle: Text(
-              routing.ruleDb.customRules.isEmpty
-                  ? l10n.settingsRuleEditorEmptyHint
-                  : l10n.settingsRuleEditorRuleCount(ruleCount),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              await ref.read(hapticsServiceProvider).selection();
-              if (!mounted) return;
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const RuleEditorScreen(),
-                ),
-              );
-              if (mounted) setState(() {});
-            },
-          ),
-        ],
+        const SizedBox(height: 8),
+        _lockedPickerTile(
+          context,
+          title: l10n.settingsTrafficModeRule,
+          value: l10n.settingsFeatureInDevelopment,
+        ),
         const SizedBox(height: 8),
         _buildPickerTile(
           context,
@@ -448,31 +467,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               isSelected: (a, b) => a == b,
             );
             if (!mounted || result == null) return;
-            await ref.read(settingsControllerProvider.notifier).setAppSplitMode(
-                  SplitTunnelMode.values.firstWhere(
-                    (m) => m.name == result,
-                    orElse: () => SplitTunnelMode.allTraffic,
-                  ),
-                );
+            final mode = SplitTunnelMode.values.firstWhere(
+              (m) => m.name == result,
+              orElse: () => SplitTunnelMode.allTraffic,
+            );
+            await ref
+                .read(settingsControllerProvider.notifier)
+                .setAppSplitMode(mode);
+            if (mode != SplitTunnelMode.allTraffic && mounted) {
+              await Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AppPickerScreen(),
+                ),
+              );
+            }
+            if (mounted &&
+                ref.read(sessionControllerProvider).status ==
+                    SessionStatus.connected) {
+              showTopSnackBar(context, l10n.settingsRuleEditorReconnectHint);
+            }
           },
         ),
         if (splitTunnel.mode != SplitTunnelMode.allTraffic) ...[
           const SizedBox(height: 8),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.apps_outlined, color: Theme.of(context).colorScheme.primary),
-            title: Text(l10n.settingsAppSelectApps),
-            subtitle: Text(
-              splitTunnel.selectedPackages.isEmpty
-                  ? l10n.settingsAppSelectAppsSubtitle
-                  : l10n.settingsAppSplitAppCount(splitTunnel.selectedPackages.length),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              unawaited(() async {
-                await ref.read(hapticsServiceProvider).selection();
-                _showPendingSnackBar(context);
-              }());
+          _buildValueTile(
+            context,
+            l10n.settingsAppSelectApps,
+            l10n.settingsAppSplitAppCount(splitTunnel.selectedPackages.length),
+            onTap: () async {
+              await ref.read(hapticsServiceProvider).selection();
+              await Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AppPickerScreen(),
+                ),
+              );
             },
           ),
         ],
@@ -520,7 +548,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildPickerTile(
           context,
           title: l10n.settingsDnsServer,
-          value: protocol.dnsOption.labelFor(l10n),
+          value: protocol.dnsOption == VpnDnsOption.custom
+              ? '${l10n.settingsDnsCustom} (${protocol.customDnsServers.isNotEmpty ? protocol.customDnsServers.first : ''})'
+              : protocol.dnsOption.labelFor(l10n),
           onTap: () async {
             await ref.read(hapticsServiceProvider).selection();
             final result = await SettingsPickerSheet.show<String>(
@@ -533,9 +563,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               isSelected: (a, b) => a == b,
             );
             if (!mounted || result == null) return;
-            await ref.read(settingsControllerProvider.notifier).setDnsOption(
-                  dnsOptionFromName(result),
-                );
+            final option = dnsOptionFromName(result);
+            if (option == VpnDnsOption.custom) {
+              final ip = await showCustomDnsDialog(context);
+              if (!mounted || ip == null) return;
+              await ref.read(settingsControllerProvider.notifier).setCustomDns(ip);
+              return;
+            }
+            await ref.read(settingsControllerProvider.notifier).setDnsOption(option);
           },
         ),
         _buildSwitchTile(
@@ -551,18 +586,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             }());
           },
         ),
-        _buildSwitchTile(
+        _lockedSwitchTile(
           context,
-          value: advanced.blockLocalDns,
           title: l10n.settingsBlockLocalDns,
           subtitle: l10n.settingsBlockLocalDnsSubtitle,
           icon: Icons.block_outlined,
-          onChanged: (v) {
-            unawaited(() async {
-              await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setBlockLocalDns(v);
-            }());
-          },
         ),
         _buildSwitchTile(
           context,
@@ -590,36 +618,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             }());
           },
         ),
-        _buildPickerTile(
+        // Android always tunnels via VpnService (TUN); the system-proxy mode
+        // isn't applicable, so this row is locked.
+        _lockedPickerTile(
           context,
           title: l10n.settingsTunnelMode,
-          value: _tunnelModeLabel(advanced.tunnelMode, l10n),
-          onTap: () async {
-            await ref.read(hapticsServiceProvider).selection();
-            final result = await SettingsPickerSheet.show<String>(
-              context: context,
-              title: l10n.settingsTunnelMode,
-              options: [
-                SettingsPickerOption(
-                  value: TunnelInterfaceMode.tun.name,
-                  label: l10n.settingsTunnelModeTun,
-                ),
-                SettingsPickerOption(
-                  value: TunnelInterfaceMode.systemProxy.name,
-                  label: l10n.settingsTunnelModeSystemProxy,
-                ),
-              ],
-              currentValue: advanced.tunnelMode.name,
-              isSelected: (a, b) => a == b,
-            );
-            if (!mounted || result == null) return;
-            await ref.read(settingsControllerProvider.notifier).setTunnelInterfaceMode(
-                  TunnelInterfaceMode.values.firstWhere(
-                    (m) => m.name == result,
-                    orElse: () => TunnelInterfaceMode.tun,
-                  ),
-                );
-          },
+          value: l10n.settingsTunnelModeTun,
         ),
       ],
     );
@@ -661,56 +665,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               isSelected: (a, b) => a == b,
             );
             if (!mounted || result == null) return;
-            await ref.read(settingsControllerProvider.notifier).setKillSwitchMode(
-                  KillSwitchMode.values.firstWhere(
-                    (m) => m.name == result,
-                    orElse: () => KillSwitchMode.off,
-                  ),
-                );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProtocolSection(BuildContext context) {
-    final l10n = context.l10n;
-    final advanced = ref.watch(settingsControllerProvider).advanced;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle(context, l10n.settingsSectionProtocol),
-        const SizedBox(height: 12),
-        _buildPickerTile(
-          context,
-          title: l10n.settingsTransportProtocol,
-          value: _transportProtocolLabel(advanced.transportProtocol, l10n),
-          onTap: () async {
-            await ref.read(hapticsServiceProvider).selection();
-            final result = await SettingsPickerSheet.show<String>(
-              context: context,
-              title: l10n.settingsTransportProtocol,
-              options: TransportProtocol.values
-                  .map(
-                    (p) => SettingsPickerOption(
-                      value: p.name,
-                      label: _transportProtocolLabel(p, l10n),
-                    ),
-                  )
-                  .toList(),
-              currentValue: advanced.transportProtocol.name,
-              isSelected: (a, b) => a == b,
+            final mode = KillSwitchMode.values.firstWhere(
+              (m) => m.name == result,
+              orElse: () => KillSwitchMode.off,
             );
-            if (!mounted || result == null) return;
-            final protocol = TransportProtocol.values.firstWhere(
-              (p) => p.name == result,
-              orElse: () => TransportProtocol.openVpn,
-            );
-            await ref.read(settingsControllerProvider.notifier).setTransportProtocol(protocol);
+            await ref.read(settingsControllerProvider.notifier).setKillSwitchMode(mode);
             if (!mounted) return;
-            if (!_isProtocolAvailable(protocol)) {
-              _showPendingSnackBar(context);
+            if (mode == KillSwitchMode.strict) {
+              final alwaysOn = await isAlwaysOnVpnEnabled();
+              if (!alwaysOn && mounted) {
+                await _promptKillSwitchAlwaysOn(context);
+              }
             }
           },
         ),
@@ -718,136 +683,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildProxyShareSection(BuildContext context) {
+  Widget _buildSmartStableSection(BuildContext context) {
     final l10n = context.l10n;
-    final advanced = ref.watch(settingsControllerProvider).advanced;
+    final settings = ref.watch(settingsControllerProvider);
+    final smartStable = ref.watch(smartStableProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(context, l10n.settingsSectionProxyShare),
+        _buildSectionTitle(context, l10n.smartStableTitle),
         const SizedBox(height: 12),
         _buildSwitchTile(
           context,
-          value: advanced.proxyShareEnabled,
-          title: l10n.settingsProxyShare,
-          subtitle: l10n.settingsProxyShareSubtitle,
-          icon: Icons.share_outlined,
+          value: smartStable.tuningEnabled,
+          title: l10n.settingsSmartStableToggle,
+          subtitle: l10n.settingsSmartStableToggleSubtitle,
+          icon: Icons.speed_rounded,
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setProxyShareEnabled(v);
-              if (v && mounted) {
-                _showPendingSnackBar(context);
+              final notifier = ref.read(smartStableProvider.notifier);
+              if (v) {
+                notifier.enableTuning();
+              } else {
+                notifier.disableTuning();
+              }
+              if (mounted &&
+                  ref.read(sessionControllerProvider).status ==
+                      SessionStatus.connected) {
+                showTopSnackBar(context, l10n.settingsRuleEditorReconnectHint);
               }
             }());
           },
         ),
-        if (advanced.proxyShareEnabled) ...[
-          const SizedBox(height: 8),
-          _buildPickerTile(
-            context,
-            title: l10n.settingsProxyShareMode,
-            value: _proxyShareModeLabel(advanced.proxyShareMode, l10n),
-            onTap: () async {
-              await ref.read(hapticsServiceProvider).selection();
-              final result = await SettingsPickerSheet.show<String>(
-                context: context,
-                title: l10n.settingsProxyShareMode,
-                options: [
-                  SettingsPickerOption(
-                    value: ProxyShareMode.http.name,
-                    label: l10n.settingsProxyShareHttp,
-                  ),
-                  SettingsPickerOption(
-                    value: ProxyShareMode.socks5.name,
-                    label: l10n.settingsProxyShareSocks5,
-                  ),
-                  SettingsPickerOption(
-                    value: ProxyShareMode.lan.name,
-                    label: l10n.settingsProxyShareLan,
-                  ),
-                ],
-                currentValue: advanced.proxyShareMode.name,
-                isSelected: (a, b) => a == b,
-              );
-              if (!mounted || result == null) return;
-              await ref.read(settingsControllerProvider.notifier).setProxyShareMode(
-                    ProxyShareMode.values.firstWhere(
-                      (m) => m.name == result,
-                      orElse: () => ProxyShareMode.http,
-                    ),
-                  );
-            },
-          ),
-        ],
-      ],
-    );
-  }
-
-  void _showPendingSnackBar(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.settingsSnackbarPending)),
-    );
-  }
-
-  String _killSwitchLabel(KillSwitchMode mode, AppLocalizations l10n) {
-    return switch (mode) {
-      KillSwitchMode.off => l10n.settingsKillSwitchOff,
-      KillSwitchMode.strict => l10n.settingsKillSwitchStrict,
-      KillSwitchMode.smart => l10n.settingsKillSwitchSmart,
-    };
-  }
-
-  String _appSplitModeLabel(SplitTunnelMode mode, AppLocalizations l10n) {
-    return switch (mode) {
-      SplitTunnelMode.allTraffic => l10n.settingsAppSplitOff,
-      SplitTunnelMode.includeApps => l10n.settingsAppSplitInclude,
-      SplitTunnelMode.excludeApps => l10n.settingsAppSplitExclude,
-    };
-  }
-
-  String _tunnelModeLabel(TunnelInterfaceMode mode, AppLocalizations l10n) {
-    return switch (mode) {
-      TunnelInterfaceMode.tun => l10n.settingsTunnelModeTun,
-      TunnelInterfaceMode.systemProxy => l10n.settingsTunnelModeSystemProxy,
-    };
-  }
-
-  String _transportProtocolLabel(TransportProtocol protocol, AppLocalizations l10n) {
-    final base = switch (protocol) {
-      TransportProtocol.wireGuard => l10n.settingsProtocolWireGuard,
-      TransportProtocol.openVpn => l10n.settingsProtocolOpenVpn,
-      TransportProtocol.realityVless => l10n.settingsProtocolRealityVless,
-      TransportProtocol.hysteria2 => l10n.settingsProtocolHysteria2,
-      TransportProtocol.tuic => l10n.settingsProtocolTuic,
-    };
-    if (_isProtocolAvailable(protocol)) {
-      return base;
-    }
-    return '$base (${l10n.settingsProtocolComingSoon})';
-  }
-
-  bool _isProtocolAvailable(TransportProtocol protocol) {
-    return protocol == TransportProtocol.openVpn;
-  }
-
-  String _proxyShareModeLabel(ProxyShareMode mode, AppLocalizations l10n) {
-    return switch (mode) {
-      ProxyShareMode.http => l10n.settingsProxyShareHttp,
-      ProxyShareMode.socks5 => l10n.settingsProxyShareSocks5,
-      ProxyShareMode.lan => l10n.settingsProxyShareLan,
-    };
-  }
-
-  Widget _buildDiagnosticsSection(BuildContext context) {
-    final l10n = context.l10n;
-    final settings = ref.watch(settingsControllerProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle(context, l10n.settingsSectionDiagnostics),
-        const SizedBox(height: 12),
         _buildSwitchTile(
           context,
           value: settings.networkQualityMonitoring,
@@ -875,9 +743,271 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           },
         ),
         const SizedBox(height: 8),
-        _buildLogsSection(context),
+        _buildSwitchTile(
+          context,
+          value: settings.logConfig.enabled,
+          title: l10n.settingsLogEnabled,
+          subtitle: l10n.settingsLogEnabledSubtitle,
+          icon: Icons.description_outlined,
+          onChanged: (v) {
+            unawaited(() async {
+              await ref.read(hapticsServiceProvider).selection();
+              await ref.read(settingsControllerProvider.notifier).setLogEnabled(v);
+            }());
+          },
+        ),
+        if (settings.logConfig.enabled) ...[
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.primary),
+            title: Text(l10n.settingsClearLogs),
+            subtitle: Text(l10n.settingsClearLogsSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              await ref.read(hapticsServiceProvider).selection();
+              await ref.read(vpnLoggerProvider).clearUserLogs();
+              if (mounted) {
+                showTopSnackBar(context, l10n.settingsClearLogsDone);
+              }
+            },
+          ),
+          _buildLogPathTile(context),
+        ],
       ],
     );
+  }
+
+  static const _vpnChannel = MethodChannel('com.example.vpn/VpnChannel');
+
+  Future<void> _openLogDirectory(String path) async {
+    if (path.isEmpty) return;
+    if (isAndroidNative) {
+      try {
+        await _vpnChannel.invokeMethod('openLogDirectory', {'path': path});
+        if (mounted) {
+          showTopSnackBar(context, context.l10n.settingsLogPathOpened);
+        }
+      } on PlatformException catch (e) {
+        if (mounted) {
+          showTopSnackBar(context, e.message ?? context.l10n.settingsLogPathCopied);
+        }
+      }
+    }
+  }
+
+  Future<void> _copyLogPathAndNotify(String path) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: path));
+      if (mounted) {
+        showTopSnackBar(context, context.l10n.settingsLogPathCopied);
+      }
+    } catch (_) {
+      if (mounted) {
+        showTopSnackBar(context, path);
+      }
+    }
+  }
+
+  Widget _buildLogPathTile(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final logger = ref.read(vpnLoggerProvider);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: FutureBuilder<String?>(
+        future: logger.logDirectory,
+        builder: (context, snapshot) {
+          final path = snapshot.data ?? '';
+          final displayPath =
+              path.isEmpty ? l10n.settingsLogPathLoading : path;
+          return FrostedGlass(
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            surface: GlassSurface.flat,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.folder_outlined,
+                    color: theme.colorScheme.primary, size: 24),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.settingsLogPath,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onLongPress: path.isNotEmpty
+                            ? () async {
+                                await ref
+                                    .read(hapticsServiceProvider)
+                                    .selection();
+                                await _copyLogPathAndNotify(path);
+                              }
+                            : null,
+                        child: Text(
+                          displayPath,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface
+                                .withOpacity(0.7),
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (path.isNotEmpty)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () async {
+                        await ref.read(hapticsServiceProvider).selection();
+                        await _openLogDirectory(path);
+                      },
+                      borderRadius: BorderRadius.circular(24),
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Icon(Icons.open_in_new,
+                            size: 22, color: theme.colorScheme.primary),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _coreProtocolLabel(String p) => switch (p) {
+        'hysteria2' => 'Hysteria2',
+        'wireguard' => 'WireGuard',
+        _ => 'Reality (VLESS)',
+      };
+
+  String _coreProtocolHint(String p) {
+    final zh = Localizations.localeOf(context).languageCode.startsWith('zh');
+    return switch (p) {
+      'reality' => zh ? '（轻量稳定，日常推荐）' : ' (Lightweight, daily use)',
+      'hysteria2' => zh ? '（弱网/高丢包更佳）' : ' (Weak network / lossy links)',
+      'wireguard' => zh ? '（低延迟，适合游戏）' : ' (Low latency, gaming)',
+      _ => '',
+    };
+  }
+
+  String _trafficModeLabel(TrafficMode mode, AppLocalizations l10n) {
+    return switch (mode) {
+      TrafficMode.global => l10n.settingsTrafficModeGlobal,
+      TrafficMode.auto => l10n.settingsTrafficModeAuto,
+      TrafficMode.rule => l10n.settingsTrafficModeRule,
+    };
+  }
+
+  Widget _buildProtocolSection(BuildContext context) {
+    final l10n = context.l10n;
+    final coreProtocol = ref.watch(preferencesControllerProvider).coreProtocol;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, l10n.settingsSectionProtocol),
+        const SizedBox(height: 12),
+        _buildPickerTile(
+          context,
+          title: l10n.settingsTransportProtocol,
+          value: '${_coreProtocolLabel(coreProtocol)}${_coreProtocolHint(coreProtocol)}',
+          onTap: () async {
+            await ref.read(hapticsServiceProvider).selection();
+            final result = await SettingsPickerSheet.show<String>(
+              context: context,
+              title: l10n.settingsTransportProtocol,
+              options: [
+                SettingsPickerOption(
+                  value: 'reality',
+                  label: '${_coreProtocolLabel('reality')}${_coreProtocolHint('reality')}',
+                ),
+                SettingsPickerOption(
+                  value: 'hysteria2',
+                  label: '${_coreProtocolLabel('hysteria2')}${_coreProtocolHint('hysteria2')}',
+                ),
+                SettingsPickerOption(
+                  value: 'wireguard',
+                  label: '${_coreProtocolLabel('wireguard')}${_coreProtocolHint('wireguard')}',
+                ),
+              ],
+              currentValue: coreProtocol,
+              isSelected: (a, b) => a == b,
+            );
+            if (!mounted || result == null) return;
+            await ref.read(preferencesControllerProvider.notifier).setCoreProtocol(result);
+            if (mounted &&
+                ref.read(sessionControllerProvider).status ==
+                    SessionStatus.connected) {
+              showTopSnackBar(context, l10n.settingsRuleEditorReconnectHint);
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProxyShareSection(BuildContext context) {
+    final l10n = context.l10n;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, l10n.settingsSectionProxyShare),
+        const SizedBox(height: 12),
+        // VPN sharing (proxy share) stays locked / in-development per product
+        // decision: the host/guest P2P sharing flow is not production-ready, so
+        // it is shown grayed instead of exposing the half-built screen.
+        _lockedPickerTile(
+          context,
+          title: l10n.settingsProxyShare,
+          value: l10n.statusDisconnected,
+        ),
+      ],
+    );
+  }
+
+  String _killSwitchLabel(KillSwitchMode mode, AppLocalizations l10n) {
+    return switch (mode) {
+      KillSwitchMode.off => l10n.settingsKillSwitchOff,
+      KillSwitchMode.strict => l10n.settingsKillSwitchStrict,
+      KillSwitchMode.smart => l10n.settingsKillSwitchSmart,
+    };
+  }
+
+  String _appSplitModeLabel(SplitTunnelMode mode, AppLocalizations l10n) {
+    return switch (mode) {
+      SplitTunnelMode.allTraffic => l10n.settingsAppSplitOff,
+      SplitTunnelMode.includeApps => l10n.settingsAppSplitInclude,
+      SplitTunnelMode.excludeApps => l10n.settingsAppSplitExclude,
+    };
+  }
+
+  String _tunnelModeLabel(TunnelInterfaceMode mode, AppLocalizations l10n) {
+    return switch (mode) {
+      TunnelInterfaceMode.tun => l10n.settingsTunnelModeTun,
+      TunnelInterfaceMode.systemProxy => l10n.settingsTunnelModeSystemProxy,
+    };
+  }
+
+  String _transportProtocolLabel(TransportProtocol protocol, AppLocalizations l10n) {
+    final locale = Localizations.localeOf(context);
+    if (locale.languageCode == 'zh') {
+      return protocol.labelZh();
+    }
+    return protocol.labelEn();
   }
 
   Widget _buildUsageSection(BuildContext context, DataUsageState usage) {
@@ -923,7 +1053,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             FilledButton.tonal(
               onPressed: () => _handleLimitTap(context, usage.monthlyLimitBytes),
-              child: Text(usage.hasLimit ? l10n.settingsUsageLimit : l10n.settingsSetLimit),
+              child: Text(
+                usage.hasLimit ? l10n.settingsUsageLimit : l10n.settingsRechargeTraffic,
+              ),
             ),
             OutlinedButton(
               onPressed: _handleResetUsage,
@@ -990,9 +1122,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             subtitle: Text(username.isEmpty ? '—' : username),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const AccountSettingsScreen(),
+              Navigator.of(context).push<void>(
+                PageRouteBuilder<void>(
+                  opaque: true,
+                  pageBuilder: (_, __, ___) => const AccountSettingsScreen(),
+                  transitionsBuilder: (_, animation, __, child) =>
+                      FadeTransition(opacity: animation, child: child),
+                  transitionDuration: const Duration(milliseconds: 200),
                 ),
               );
             },
@@ -1005,25 +1141,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(color: Theme.of(context).colorScheme.primary),
               ),
             ),
+          if (auth.status == AuthStatus.banned)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                auth.message ?? l10n.authAccountBanned,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
         ],
       ],
     );
   }
 
-  static const _systemLocaleValue = '__system__';
-
   Widget _buildLanguageSection(BuildContext context, PreferencesState preferences) {
     final l10n = context.l10n;
     final locales = AppLocalizations.supportedLocales;
-    final langOptions = [
-      SettingsPickerOption<String>(value: _systemLocaleValue, label: l10n.settingsLanguageSystem),
-      ...locales.map(
-        (locale) => SettingsPickerOption<String>(
-          value: localeToTag(locale),
-          label: localeDisplayName(locale),
-        ),
-      ),
-    ];
+    final langOptions = locales
+        .map(
+          (locale) => SettingsPickerOption<String>(
+            value: localeToTag(locale),
+            label: AppLocalizations.localeDisplayNameWithCoverage(locale),
+          ),
+        )
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1040,201 +1181,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: l10n.settingsLanguage,
               options: langOptions,
               currentValue: preferences.localeCode ?? PreferencesState.defaultLocaleCode,
-              isSelected: (a, b) => (a ?? _systemLocaleValue) == b,
+              isSelected: (a, b) => a == b,
             );
             if (!mounted || result == null) return;
-            await ref.read(preferencesControllerProvider.notifier).setLocale(
-              result == _systemLocaleValue ? null : result,
-            );
+            await ref.read(preferencesControllerProvider.notifier).setLocale(result);
           },
         ),
-      ],
-    );
-  }
-
-  static const _vpnChannel = MethodChannel('com.example.vpn/VpnChannel');
-
-  Future<void> _openLogDirectory(String path) async {
-    if (path.isEmpty) return;
-    if (isAndroidNative) {
-      try {
-        await _vpnChannel.invokeMethod('openLogDirectory', {'path': path});
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.l10n.settingsLogPathOpened)),
-          );
-        }
-      } on PlatformException catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message ?? context.l10n.settingsLogPathCopied)),
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> _copyLogPathAndNotify(String path) async {
-    try {
-      await Clipboard.setData(ClipboardData(text: path));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.settingsLogPathCopied)),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(path)),
-        );
-      }
-    }
-  }
-
-  Widget _buildLogPathTile(BuildContext context) {
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
-    final logger = ref.read(vpnLoggerProvider);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: FutureBuilder<String?>(
-      future: logger.logDirectory,
-      builder: (context, snapshot) {
-        final path = snapshot.data ?? '';
-        final displayPath = path.isEmpty ? l10n.settingsLogPathLoading : path;
-        return FrostedGlass(
-          borderRadius: BorderRadius.circular(16),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          surface: GlassSurface.flat,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.folder_outlined, color: theme.colorScheme.primary, size: 24),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.settingsLogPath,
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    GestureDetector(
-                      onLongPress: path.isNotEmpty
-                          ? () async {
-                              await ref.read(hapticsServiceProvider).selection();
-                              await _copyLogPathAndNotify(path);
-                            }
-                          : null,
-                      child: Text(
-                        displayPath,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.7),
-                          fontFamily: 'monospace',
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (path.isNotEmpty)
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () async {
-                      await ref.read(hapticsServiceProvider).selection();
-                      await _openLogDirectory(path);
-                    },
-                    borderRadius: BorderRadius.circular(24),
-                    child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Icon(Icons.open_in_new, size: 22, color: theme.colorScheme.primary),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-      ),
-    );
-  }
-
-  Widget _buildLogsSection(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-    final logConfig = ref.watch(settingsControllerProvider).logConfig;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle(context, l10n.settingsSectionLogs),
-        const SizedBox(height: 12),
-        _buildSwitchTile(
-          context,
-          value: logConfig.enabled,
-          title: l10n.settingsLogEnabled,
-          subtitle: l10n.settingsLogEnabledSubtitle,
-          icon: Icons.description_outlined,
-          onChanged: (v) {
-            unawaited(() async {
-              await ref.read(hapticsServiceProvider).selection();
-              await ref.read(settingsControllerProvider.notifier).setLogEnabled(v);
-            }());
-          },
-        ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.delete_outline, color: theme.colorScheme.primary),
-          title: Text(l10n.settingsClearLogs),
-          subtitle: Text(l10n.settingsClearLogsSubtitle),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () async {
-            await ref.read(hapticsServiceProvider).selection();
-            await ref.read(vpnLoggerProvider).clearLogs();
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.settingsClearLogsDone)),
-              );
-            }
-          },
-        ),
-        const SizedBox(height: 8),
-        _buildLogPathTile(context),
-        _buildValueTile(context, l10n.settingsLogSizeLimit, '${logConfig.sizeLimitMb} MB', onTap: () async {
-          await ref.read(hapticsServiceProvider).selection();
-          final result = await SettingsPickerSheet.show<int>(
-            context: context,
-            title: l10n.settingsLogSizeLimit,
-            options: [5, 10, 20, 50, 100].map((e) => SettingsPickerOption(value: e, label: '$e MB')).toList(),
-            currentValue: logConfig.sizeLimitMb,
-            isSelected: (a, b) => a == b,
-          );
-          if (!mounted || result == null) return;
-          await ref.read(settingsControllerProvider.notifier).setLogSizeLimitMb(result);
-        }),
-        _buildValueTile(context, l10n.settingsLogCountLimit, '${logConfig.countLimit}', onTap: () async {
-          await ref.read(hapticsServiceProvider).selection();
-          final result = await SettingsPickerSheet.show<int>(
-            context: context,
-            title: l10n.settingsLogCountLimit,
-            options: [3, 5, 7, 10, 20].map((e) => SettingsPickerOption(value: e, label: '$e')).toList(),
-            currentValue: logConfig.countLimit,
-            isSelected: (a, b) => a == b,
-          );
-          if (!mounted || result == null) return;
-          await ref.read(settingsControllerProvider.notifier).setLogCountLimit(result);
-        }),
       ],
     );
   }
 
   String _languageDisplayValue(String? code, AppLocalizations l10n) {
     final locale = parseLocaleFromTag(code ?? PreferencesState.defaultLocaleCode);
-    return localeDisplayName(locale);
+    return AppLocalizations.localeDisplayNameWithCoverage(locale);
   }
 
   Widget _buildPickerTile(
@@ -1325,13 +1284,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return ref.read(authControllerProvider).session?.trafficPolicy.serverMaxLimitBytes;
   }
 
+  Future<void> _promptKillSwitchAlwaysOn(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final l10n = ctx.l10n;
+        return AlertDialog(
+          title: Text(l10n.settingsKillSwitchPromptTitle),
+          content: Text(l10n.settingsKillSwitchPromptBody),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l10n.commonLater)),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                AppSettings.openAppSettings(type: AppSettingsType.vpn);
+              },
+              child: Text(l10n.settingsOpenVpnSettings),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<_LimitDialogResult?> _showLimitDialog(BuildContext context, int? currentLimit) async {
     final l10n = context.l10n;
     final serverMax = _serverMaxLimitBytes();
     final maxGb = serverMax != null
         ? serverMax / (1024 * 1024 * 1024)
         : 10000.0;
-    final minMb = 1.0;
+    final minGb = 1.0;
     final formKey = GlobalKey<FormState>();
     final controller = TextEditingController(
       text: currentLimit != null
@@ -1370,9 +1352,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     hintText: l10n.settingsLimitHint,
-                    helperText: serverMax != null
-                        ? l10n.settingsLimitHelperServerMax(maxGb.toStringAsFixed(0))
-                        : l10n.settingsLimitHelperDefault,
+                    helperText: l10n.settingsLimitHelper,
                   ),
                   validator: (value) {
                     final trimmed = value?.trim() ?? '';
@@ -1383,10 +1363,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     if (parsed == null || parsed <= 0) {
                       return l10n.settingsLimitErrorInvalid;
                     }
-                    final bytes = (parsed * 1024 * 1024 * 1024).round();
-                    if (bytes < (minMb * 1024 * 1024).round()) {
+                    if (parsed < minGb) {
                       return l10n.settingsLimitErrorMinMb;
                     }
+                    final bytes = (parsed * 1024 * 1024 * 1024).round();
                     if (serverMax != null && bytes > serverMax) {
                       return l10n.settingsLimitErrorExceedsServer;
                     }
@@ -1396,30 +1376,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: Text(l10n.close),
+                      ),
+                    ),
+                    if (currentLimit != null) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(ctx).pop(const _LimitDialogResult.clear()),
+                          child: Text(l10n.settingsRemoveLimit),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          if (formKey.currentState?.validate() ?? false) {
+                            final parsed = double.parse(controller.text.trim());
+                            final bytes = (parsed * 1024 * 1024 * 1024).round();
+                            Navigator.of(ctx).pop(_LimitDialogResult(bytes));
+                          }
+                        },
+                        child: Text(l10n.ok),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          actions: [
-            if (currentLimit != null)
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(const _LimitDialogResult.clear()),
-                child: Text(l10n.settingsRemoveLimit),
-              ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(l10n.close),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  final parsed = double.parse(controller.text.trim());
-                  final bytes = (parsed * 1024 * 1024 * 1024).round();
-                  Navigator.of(ctx).pop(_LimitDialogResult(bytes));
-                }
-              },
-              child: Text(l10n.ok),
-            ),
-          ],
         ),
       );
       return result;
@@ -1442,15 +1434,83 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
     if (!mounted) return;
     final l10n = context.l10n;
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.snackbarLimitSaved)));
-    }
+    showTopSnackBar(context, l10n.snackbarLimitSaved);
   }
 
   Future<void> _handleResetUsage() async {
     await ref.read(hapticsServiceProvider).selection();
     await ref.read(dataUsageControllerProvider.notifier).resetUsage();
+    if (!mounted) return;
+    final l10n = context.l10n;
+    showTopSnackBar(context, l10n.snackbarTrafficReset);
+  }
+
+  Future<bool> _confirmDiscardUnsavedRules(BuildContext context) async {
+    final l10n = context.l10n;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.settingsRuleEditorUnsavedTitle),
+        content: Text(l10n.settingsRuleEditorUnsavedBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.settingsRuleEditorUnsavedStay),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.settingsRuleEditorUnsavedDiscard),
+          ),
+        ],
+      ),
+    );
+    if (discard == true) {
+      await ref.read(settingsControllerProvider.notifier).discardUnsavedRules();
+    }
+    return discard ?? false;
+  }
+
+  Future<void> _pickSavedRule(BuildContext context) async {
+    final l10n = context.l10n;
+    final saved = await SdrlRuleStore.listSavedRules();
+    if (!mounted) return;
+    if (saved.isEmpty) {
+      showTopSnackBar(context, l10n.settingsRulePickerEmpty);
+      return;
+    }
+    final picked = await SettingsPickerSheet.show<String>(
+      context: context,
+      title: l10n.settingsRulePicker,
+      options: saved
+          .map((r) => SettingsPickerOption(value: r.name, label: r.name))
+          .toList(),
+      currentValue: ref.read(settingsControllerProvider).routing.ruleDb.savedRuleName,
+      isSelected: (a, b) => a == b,
+    );
+    if (!mounted || picked == null) return;
+    final source = await SdrlRuleStore.loadNamedSource(picked);
+    if (source == null || !mounted) return;
+    final compiled = await SdrlCompiler.compile(source);
+    if (!compiled.ok || !mounted) {
+      showTopSnackBar(
+        context,
+        compiled.errors.isNotEmpty
+            ? compiled.firstErrorMessage
+            : l10n.settingsRuleEditorCompileErrorHint,
+      );
+      return;
+    }
+    await SdrlRuleStore.activateNamedRule(picked);
+    await SdrlCompiler.persistResult(compiled, source);
+    final connected =
+        ref.read(sessionControllerProvider).status == SessionStatus.connected;
+    await ref.read(settingsControllerProvider.notifier).saveCompiledCustomRules(
+          text: source,
+          sourceHash: compiled.sourceHash,
+          savedRuleName: SdrlRuleStore.sanitizeFileName(picked),
+          pendingReconnect: connected,
+        );
+    if (mounted) setState(() {});
   }
 }
 
@@ -1462,4 +1522,44 @@ class _LimitDialogResult {
 
   final int? limitBytes;
   final bool clear;
+}
+
+class _RuleEditorHint extends ConsumerWidget {
+  const _RuleEditorHint({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final localeTag = ref.watch(preferencesControllerProvider).localeCode;
+    final docUrl = LegalUrls.sdrlTutorialFor(localeTag);
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontSize: 11,
+      height: 1.35,
+    );
+
+    return Text.rich(
+      TextSpan(
+        style: muted,
+        children: [
+          TextSpan(text: l10n.settingsRuleEditorHintBody),
+          TextSpan(
+            text: l10n.settingsRuleEditorSdrlHintLink,
+            style: muted?.copyWith(
+              color: theme.colorScheme.primary,
+              decoration: TextDecoration.underline,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => launchUrl(
+                    Uri.parse(docUrl),
+                    mode: LaunchMode.externalApplication,
+                  ),
+          ),
+          TextSpan(text: l10n.settingsRuleEditorHintSuffix),
+        ],
+      ),
+    );
+  }
 }

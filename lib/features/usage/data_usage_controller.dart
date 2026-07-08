@@ -73,6 +73,15 @@ class DataUsageController extends StateNotifier<DataUsageState> {
     await _persist();
   }
 
+  Future<void> syncUsedFromServerGb(double usedGb) async {
+    final serverUsed = (usedGb * 1024 * 1024 * 1024).round();
+    state = state.copyWith(
+      usedBytes: serverUsed,
+      lastUpdated: DateTime.now().toUtc(),
+    );
+    await _persist();
+  }
+
   Future<void> resetUsage() async {
     state = DataUsageState(
       periodStart: DateTime.now().toUtc(),

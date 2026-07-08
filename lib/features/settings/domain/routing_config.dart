@@ -5,7 +5,7 @@ import 'traffic_mode.dart';
 /// Routing/tunnel configuration persisted and used by OpenVPN.
 class RoutingConfig extends Equatable {
   const RoutingConfig({
-    this.mode = TrafficMode.global,
+    this.mode = TrafficMode.auto,
     this.autoRouteSystem = true,
     this.bypassLan = true,
     this.ruleDb = const RuleDatabase(),
@@ -43,7 +43,7 @@ class RoutingConfig extends Equatable {
     return RoutingConfig(
       mode: TrafficMode.values.firstWhere(
         (m) => m.name == json['mode'],
-        orElse: () => TrafficMode.global,
+        orElse: () => TrafficMode.auto,
       ),
       autoRouteSystem: json['autoRouteSystem'] as bool? ?? true,
       bypassLan: json['bypassLan'] as bool? ?? true,

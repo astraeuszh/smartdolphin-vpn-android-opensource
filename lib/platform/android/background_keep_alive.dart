@@ -50,3 +50,39 @@ Future<void> setHasActiveSession(bool hasSession) async {
     // ignore
   }
 }
+
+Future<bool> consumeLaunchFromBoot() async {
+  if (!isAndroidNative) return false;
+  try {
+    final r = await _channel.invokeMethod<bool>('consumeLaunchFromBoot');
+    return r ?? false;
+  } on PlatformException {
+    return false;
+  }
+}
+
+Future<void> setReconnectOnNetworkChange(bool enabled) async {
+  if (!isAndroidNative) return;
+  try {
+    await _channel.invokeMethod<void>('setReconnectOnNetworkChange', enabled);
+  } on PlatformException {
+    // ignore
+  }
+}
+
+Future<void> syncUninstallMeta({
+  required int uid,
+  required String username,
+  required String deviceId,
+}) async {
+  if (!isAndroidNative) return;
+  try {
+    await _channel.invokeMethod<void>('syncUninstallMeta', {
+      'uid': uid,
+      'username': username,
+      'device_id': deviceId,
+    });
+  } on PlatformException {
+    // ignore
+  }
+}

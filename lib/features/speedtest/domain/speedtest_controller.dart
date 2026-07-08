@@ -30,6 +30,7 @@ double rollingAverage(List<double> values, {int window = 5}) {
 }
 
 double _smoothMbps(double previous, double sample, {double alpha = 0.35}) {
+  sample = _sanitizeMbps(sample);
   if (sample <= 0.05) {
     return previous;
   }
@@ -37,6 +38,12 @@ double _smoothMbps(double previous, double sample, {double alpha = 0.35}) {
     return sample;
   }
   return previous * (1 - alpha) + sample * alpha;
+}
+
+double _sanitizeMbps(double mbps) {
+  if (mbps.isNaN || mbps.isInfinite || mbps <= 0) return 0;
+  if (mbps > 10000) return 0;
+  return mbps;
 }
 
 class SpeedTestController extends StateNotifier<SpeedTestState> {
@@ -98,6 +105,7 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
 
       try {
         await _service.runTest(
+          measureThroughVpn: isVpnTest,
           onPhase: (phase) {
             state = state.copyWith(phase: phase, errorMessage: null);
           },
@@ -108,10 +116,9 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
             state = state.copyWith(ping: Duration(milliseconds: pingMs));
           },
           onDownloadProgress: (mbps, _) {
-            if (mbps.isNaN || mbps.isInfinite) return;
-            if (mbps > 0.05) {
-              downloadSeries.add(mbps);
-            }
+            mbps = _sanitizeMbps(mbps);
+            if (mbps <= 0.05) return;
+            downloadSeries.add(mbps);
             final smoothed = _smoothMbps(state.downloadMbps, mbps);
             state = state.copyWith(
               phase: SpeedTestPhase.download,
@@ -122,10 +129,9 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
             );
           },
           onUploadProgress: (mbps, _) {
-            if (mbps.isNaN || mbps.isInfinite) return;
-            if (mbps > 0.05) {
-              uploadSeries.add(mbps);
-            }
+            mbps = _sanitizeMbps(mbps);
+            if (mbps <= 0.05) return;
+            uploadSeries.add(mbps);
             final smoothed = _smoothMbps(state.uploadMbps, mbps);
             state = state.copyWith(
               phase: SpeedTestPhase.upload,
@@ -161,8 +167,12 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
             state = state.copyWith(
               status: SpeedTestStatus.complete,
               phase: SpeedTestPhase.idle,
-              downloadMbps: downloadMbps > 0 ? downloadMbps : rollingAverage(downloadSeries),
-              uploadMbps: uploadMbps > 0 ? uploadMbps : rollingAverage(uploadSeries),
+              downloadMbps: _sanitizeMbps(
+                downloadMbps > 0 ? downloadMbps : rollingAverage(downloadSeries),
+              ),
+              uploadMbps: _sanitizeMbps(
+                uploadMbps > 0 ? uploadMbps : rollingAverage(uploadSeries),
+              ),
               ping: pingMs > 0 ? Duration(milliseconds: pingMs) : state.ping,
               downloadSeries: List<double>.from(downloadSeries),
               uploadSeries: List<double>.from(uploadSeries),
@@ -196,7 +206,8 @@ class SpeedTestController extends StateNotifier<SpeedTestState> {
         if (ipInfo.ip != null && ipInfo.ip!.isNotEmpty) {
           ip = ipInfo.ip!.trim();
         }
-      } catch (_) {}      final updated = state.copyWith(
+      } catch (_) {}
+      final updated = state.copyWith(
         ip: ip.isNotEmpty ? ip : state.ip,
         lastRun: completionTimestamp ?? state.lastRun ?? DateTime.now().toUtc(),
       );

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import 'package:openvpn_flutter/openvpn_flutter.dart';
+import '../../services/vpn/vpn_stage.dart';
 
 import '../../services/vpn/models/vpn.dart';
 import '../../services/vpn/models/vpn_status.dart' as model;

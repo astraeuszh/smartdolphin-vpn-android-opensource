@@ -7,8 +7,8 @@ class ProtocolConfig extends Equatable {
     this.protocol = VpnProtocol.wireGuard,
     this.mtu = 1280,
     this.keepaliveSeconds = 25,
-    this.dnsOption = VpnDnsOption.cloudflare,
-    this.customDnsServers = const ['1.1.1.1', '1.0.0.1'],
+    this.dnsOption = VpnDnsOption.google,
+    this.customDnsServers = const ['8.8.8.8'],
   });
 
   final VpnProtocol protocol;
@@ -19,10 +19,17 @@ class ProtocolConfig extends Equatable {
 
   List<String> get resolvedDnsServers {
     switch (dnsOption) {
-      case VpnDnsOption.cloudflare:
-        return const ['1.1.1.1', '1.0.0.1'];
       case VpnDnsOption.google:
         return const ['8.8.8.8', '8.8.4.4'];
+      case VpnDnsOption.cloudflare:
+        return const ['1.1.1.1', '1.0.0.1'];
+      case VpnDnsOption.dns114:
+        return const ['114.114.114.114', '114.114.115.115'];
+      case VpnDnsOption.quad9:
+        return const ['9.9.9.9', '149.112.112.112'];
+      case VpnDnsOption.custom:
+        if (customDnsServers.isEmpty) return const ['8.8.8.8'];
+        return customDnsServers;
     }
   }
 

@@ -1,14 +1,16 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/legal_urls.dart';
+import '../features/settings/domain/preferences_controller.dart';
 import '../l10n/app_localizations.dart';
 
 typedef _LegalDocName = String Function(AppLocalizations l10n);
 
 /// Inline legal links used on login and settings screens.
-class LegalAgreementRichText extends StatelessWidget {
+class LegalAgreementRichText extends ConsumerWidget {
   const LegalAgreementRichText({
     super.key,
     required this.hintTemplate,
@@ -20,11 +22,11 @@ class LegalAgreementRichText extends StatelessWidget {
   final TextAlign textAlign;
   final bool wrapInBookTitleMarks;
 
-  static const _docs = <(String, _LegalDocName)>[
-    (LegalUrls.userAgreement, _userAgreementName),
-    (LegalUrls.openSourceLicense, _openSourceName),
-    (LegalUrls.legalNotice, _legalNoticeName),
-    (LegalUrls.disclaimer, _disclaimerName),
+  static const _docSlugs = <(String slug, _LegalDocName nameOf)>[
+    ('user-agreement', _userAgreementName),
+    ('open-source-license', _openSourceName),
+    ('legal-notice', _legalNoticeName),
+    ('disclaimer', _disclaimerName),
   ];
 
   static String _userAgreementName(AppLocalizations l) => l.legalUserAgreement;
@@ -33,8 +35,10 @@ class LegalAgreementRichText extends StatelessWidget {
   static String _disclaimerName(AppLocalizations l) => l.legalDisclaimer;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
+    final localeTag = ref.watch(preferencesControllerProvider).localeCode;
+    final docs = LegalUrls.docsFor(localeTag);
     final theme = Theme.of(context);
     final base = theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
@@ -52,8 +56,9 @@ class LegalAgreementRichText extends StatelessWidget {
     final placeholderIndex = hintTemplate.indexOf(placeholder);
 
     final docSpans = <InlineSpan>[];
-    for (var i = 0; i < _docs.length; i++) {
-      final (url, nameOf) = _docs[i];
+    for (var i = 0; i < docs.length; i++) {
+      final (url, slug) = docs[i];
+      final nameOf = _docSlugs.firstWhere((d) => d.$1 == slug).$2;
       var label = nameOf(l10n);
       if (wrapInBookTitleMarks && l10n.locale.languageCode == 'zh') {
         label = '《$label》';
@@ -66,7 +71,7 @@ class LegalAgreementRichText extends StatelessWidget {
             ..onTap = () => _open(context, url),
         ),
       );
-      if (i < _docs.length - 1) {
+      if (i < docs.length - 1) {
         docSpans.add(TextSpan(text: separator, style: base));
       }
     }

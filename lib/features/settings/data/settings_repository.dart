@@ -50,7 +50,13 @@ class SettingsRepository {
   }
 
   Future<void> saveRouting(RoutingConfig config) async {
-    await _prefs.setString(_routingKey, json.encode(config.toJson()));
+    var toSave = config;
+    if (config.ruleDb.customRules.length > 8192) {
+      toSave = config.copyWith(
+        ruleDb: config.ruleDb.copyWith(customRules: ''),
+      );
+    }
+    await _prefs.setString(_routingKey, json.encode(toSave.toJson()));
   }
 
   LogConfig loadLog() {

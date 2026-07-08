@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../widgets/legal_agreement_rich_text.dart';
 import '../../../l10n/app_localizations.dart';
@@ -11,10 +13,15 @@ import '../data/auth_repository.dart';
 import '../domain/auth_controller.dart';
 import 'auth_gate_screen.dart';
 
+/// Login portal — same model as the Windows client:
+/// two buttons (Sign in / Register) open smartdolphinvpn.com in the browser
+/// with a one-time challenge, then the app polls until the browser approves.
+/// The QR option (scan from another signed-in device) is kept at its old spot.
+const _siteLoginBase = 'https://smartdolphinvpn.com/login';
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.startAsRegister = false});
 
-  /// 从设置页「注册」进入时为 true。
   final bool startAsRegister;
 
   @override
@@ -22,168 +29,179 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _userCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  final _pass2Ctrl = TextEditingController();
-  final _codeCtrl = TextEditingController();
-  late bool _isRegister;
-  bool _obscure = true;
-  bool _obscure2 = true;
-  int _codeCooldown = 0;
-  Timer? _cooldownTimer;
+  bool _qrLoginMode = false;
+  String? _qrChallengeId;
+  String? _qrPayload;
+  String? _qrStatus;
+  Timer? _qrPollTimer;
 
-  @override
-  void initState() {
-    super.initState();
-    _isRegister = widget.startAsRegister;
-  }
+  // Browser sign-in / register flow
+  bool _browserWaiting = false;
+  String? _browserChallengeId;
+  Timer? _browserPollTimer;
+  String? _error;
 
   @override
   void dispose() {
-    _cooldownTimer?.cancel();
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _userCtrl.dispose();
-    _passCtrl.dispose();
-    _pass2Ctrl.dispose();
-    _codeCtrl.dispose();
+    _qrPollTimer?.cancel();
+    _browserPollTimer?.cancel();
     super.dispose();
   }
 
-  void _startCooldown() {
-    _cooldownTimer?.cancel();
-    setState(() => _codeCooldown = 60);
-    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
+  // --- browser sign-in / register -----------------------------------------
+
+  Future<void> _startBrowser(String action) async {
+    if (_browserWaiting) return;
+    setState(() {
+      _browserWaiting = true;
+      _error = null;
+    });
+    final repo = ref.read(authRepositoryProvider);
+    try {
+      final device = await repo.deviceId();
+      final data = await repo.createQrLoginChallenge();
+      final id = data['challenge_id'] as String?;
+      if (id == null || id.isEmpty) {
+        throw ConsoleAuthException('challenge_failed', 'Failed to create login request');
       }
-      if (_codeCooldown <= 1) {
-        t.cancel();
-        setState(() => _codeCooldown = 0);
-      } else {
-        setState(() => _codeCooldown -= 1);
-      }
+      _browserChallengeId = id;
+      final url = Uri.parse(
+        '$_siteLoginBase?challenge=${Uri.encodeComponent(id)}'
+        '&client=android&action=$action&device_id=${Uri.encodeComponent(device)}',
+      );
+      final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
+      if (!ok) throw ConsoleAuthException('browser_failed', 'Could not open the browser');
+      _startBrowserPolling();
+    } on ConsoleAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _browserWaiting = false;
+        _error = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _browserWaiting = false;
+        _error = '$e';
+      });
+    }
+  }
+
+  void _startBrowserPolling() {
+    _browserPollTimer?.cancel();
+    _browserPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final id = _browserChallengeId;
+      if (id == null || !mounted || !_browserWaiting) return;
+      try {
+        final repo = ref.read(authRepositoryProvider);
+        final data = await repo.pollQrLoginChallenge(id);
+        if (data['status'] == 'pending') return;
+        await ref.read(authControllerProvider.notifier).completeQrLogin(data);
+        if (!mounted) return;
+        final auth = ref.read(authControllerProvider);
+        if (auth.status == AuthStatus.authenticated ||
+            auth.status == AuthStatus.pending ||
+            auth.status == AuthStatus.banned) {
+          _browserPollTimer?.cancel();
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute<void>(builder: (_) => const AuthGateScreen()),
+            (_) => false,
+          );
+        }
+      } on ConsoleAuthException catch (e) {
+        if (e.code != 'qr_pending' && mounted) setState(() => _error = e.message);
+      } catch (_) {}
     });
   }
 
-  Future<void> _sendCode() async {
-    final l10n = AppLocalizations.of(context);
-    final email = _emailCtrl.text.trim();
-    if (!_looksLikeEmail(email)) {
-      _toast(l10n.authEnterValidEmail);
+  void _cancelBrowser() {
+    _browserPollTimer?.cancel();
+    setState(() {
+      _browserWaiting = false;
+      _browserChallengeId = null;
+    });
+  }
+
+  // --- QR sign-in (scan from another signed-in device) --------------------
+
+  Future<void> _toggleQrLoginMode() async {
+    if (_qrLoginMode) {
+      _qrPollTimer?.cancel();
+      setState(() {
+        _qrLoginMode = false;
+        _qrChallengeId = null;
+        _qrPayload = null;
+        _qrStatus = null;
+      });
       return;
     }
-    final repo = ref.read(authRepositoryProvider);
-    try {
-      await repo.sendRegisterCode(email);
-      _startCooldown();
-      if (mounted) {
-        _toast(l10n.authCodeSent);
-      }
-    } on ConsoleAuthException catch (e) {
-      _toast(_mapAuthError(e, l10n));
-    } catch (e) {
-      _toast(e.toString());
-    }
+    setState(() {
+      _qrLoginMode = true;
+      _qrStatus = null;
+    });
+    await _refreshQrChallenge();
   }
 
-  String _mapAuthError(ConsoleAuthException e, AppLocalizations l10n) {
-    switch (e.code) {
-      case 'invalid_email':
-        return l10n.authErrorInvalidEmail;
-      case 'email_unreachable':
-        return l10n.authErrorEmailUnreachable;
-      case 'code_cooldown':
-        return l10n.authErrorCodeCooldown(_codeCooldown > 0 ? _codeCooldown : 60);
-      case 'email_taken':
-        return l10n.authErrorEmailTaken;
-      case 'username_taken':
-        return l10n.authErrorUsernameTaken;
-      case 'illegal_char':
-        return l10n.authErrorIllegalChar;
-      case 'invalid_verification_code':
-        return l10n.authErrorInvalidVerificationCode;
-      default:
-        return e.message;
-    }
-  }
-
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  bool _looksLikeEmail(String email) {
-    final re = RegExp(
-      r'^[a-zA-Z0-9](?:[a-zA-Z0-9._%+-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)+$',
-    );
-    return re.hasMatch(email.trim());
-  }
-
-  Future<void> _submit() async {
+  Future<void> _refreshQrChallenge() async {
     final l10n = AppLocalizations.of(context);
-    final ctrl = ref.read(authControllerProvider.notifier);
-    if (_isRegister) {
-      final name = _nameCtrl.text.trim();
-      final email = _emailCtrl.text.trim().toLowerCase();
-      final pass = _passCtrl.text;
-      final pass2 = _pass2Ctrl.text;
-      final code = _codeCtrl.text.trim();
-      if (name.isEmpty) {
-        _toast(l10n.authEnterName);
-        return;
-      }
-      if (!_looksLikeEmail(email)) {
-        _toast(l10n.authEnterEmail);
-        return;
-      }
-      if (pass.length < 8) {
-        _toast(l10n.authPasswordRule);
-        return;
-      }
-      if (pass != pass2) {
-        _toast(l10n.authPasswordMismatch);
-        return;
-      }
-      if (code.length != 6 || int.tryParse(code) == null) {
-        _toast(l10n.authEnterVerificationCode);
-        return;
-      }
-      await ctrl.register(
-        displayName: name,
-        email: email,
-        password: pass,
-        verificationCode: code,
-      );
-    } else {
-      final user = _userCtrl.text.trim();
-      final pass = _passCtrl.text;
-      if (user.isEmpty || pass.isEmpty) {
-        _toast(l10n.authEnterCredentials);
-        return;
-      }
-      await ctrl.login(user, pass);
+    try {
+      final repo = ref.read(authRepositoryProvider);
+      final data = await repo.createQrLoginChallenge();
+      final qr = data['qr'] as Map<String, dynamic>? ?? {};
+      final payload = jsonEncode(qr);
+      if (!mounted) return;
+      setState(() {
+        _qrChallengeId = data['challenge_id'] as String?;
+        _qrPayload = payload;
+        _qrStatus = l10n.authQrWaiting;
+      });
+      _startQrPolling();
+    } on ConsoleAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _qrPayload = null;
+        _qrStatus = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _qrPayload = null;
+        _qrStatus = '$e';
+      });
     }
-    if (!mounted) return;
-    final auth = ref.read(authControllerProvider);
-    if (auth.status == AuthStatus.authenticated ||
-        auth.status == AuthStatus.pending ||
-        auth.status == AuthStatus.banned) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(builder: (_) => const AuthGateScreen()),
-        (_) => false,
-      );
-    }
+  }
+
+  void _startQrPolling() {
+    _qrPollTimer?.cancel();
+    _qrPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final id = _qrChallengeId;
+      if (id == null || !mounted || !_qrLoginMode) return;
+      try {
+        final repo = ref.read(authRepositoryProvider);
+        final data = await repo.pollQrLoginChallenge(id);
+        if (data['status'] == 'pending') return;
+        await ref.read(authControllerProvider.notifier).completeQrLogin(data);
+        if (!mounted) return;
+        final auth = ref.read(authControllerProvider);
+        if (auth.status == AuthStatus.authenticated ||
+            auth.status == AuthStatus.pending ||
+            auth.status == AuthStatus.banned) {
+          _qrPollTimer?.cancel();
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute<void>(builder: (_) => const AuthGateScreen()),
+            (_) => false,
+          );
+        }
+      } on ConsoleAuthException catch (e) {
+        if (e.code != 'qr_pending' && mounted) setState(() => _qrStatus = e.message);
+      } catch (_) {}
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = ref.watch(authControllerProvider);
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final busy = auth.status == AuthStatus.loading;
 
     return Scaffold(
       body: SafeArea(
@@ -192,180 +210,130 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.asset(
-                        'assets/icons/appicon.png',
-                        width: 72,
-                        height: 72,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Icon(
-                          Icons.shield_outlined,
-                          size: 72,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Smart Dolphin VPN',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _isRegister ? l10n.authRegisterSubtitle : l10n.authLoginSubtitle,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  if (_isRegister) ...[
-                    TextField(
-                      controller: _nameCtrl,
-                      decoration: InputDecoration(
-                        labelText: l10n.authFieldName,
-                        border: const OutlineInputBorder(),
-                      ),
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _emailCtrl,
-                      decoration: InputDecoration(
-                        labelText: l10n.authFieldEmail,
-                        border: const OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      autocorrect: false,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 16),
-                  ] else
-                    TextField(
-                      controller: _userCtrl,
-                      decoration: InputDecoration(
-                        labelText: l10n.authFieldUsername,
-                        border: const OutlineInputBorder(),
-                      ),
-                      textInputAction: TextInputAction.next,
-                    ),
-                  if (!_isRegister) const SizedBox(height: 16),
-                  TextField(
-                    controller: _passCtrl,
-                    decoration: InputDecoration(
-                      labelText: l10n.authFieldPassword,
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscure ? Icons.visibility_off : Icons.visibility,
-                        ),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                    obscureText: _obscure,
-                    textInputAction:
-                        _isRegister ? TextInputAction.next : TextInputAction.done,
-                    onSubmitted: (_) => busy ? null : _submit(),
-                  ),
-                  if (_isRegister) ...[
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _pass2Ctrl,
-                      decoration: InputDecoration(
-                        labelText: l10n.authFieldConfirmPassword,
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscure2 ? Icons.visibility_off : Icons.visibility,
-                          ),
-                          onPressed: () =>
-                              setState(() => _obscure2 = !_obscure2),
-                        ),
-                      ),
-                      obscureText: _obscure2,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _codeCtrl,
-                            decoration: InputDecoration(
-                              labelText: l10n.authFieldVerificationCode,
-                              border: const OutlineInputBorder(),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.asset(
+                            'assets/icons/appicon.png',
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Icon(
+                              Icons.shield_outlined,
+                              size: 72,
+                              color: theme.colorScheme.primary,
                             ),
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(6),
-                            ],
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => busy ? null : _submit(),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          height: 56,
-                          child: OutlinedButton(
-                            onPressed: busy || _codeCooldown > 0 ? null : _sendCode,
-                            child: Text(
-                              _codeCooldown > 0 ? '${_codeCooldown}s' : l10n.authGetCode,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Smart Dolphin VPN',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.authLoginSubtitle,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      if (_qrLoginMode) ...[
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: theme.colorScheme.outlineVariant),
                             ),
+                            child: _qrPayload == null
+                                ? const SizedBox(
+                                    width: 220,
+                                    height: 220,
+                                    child: Center(child: CircularProgressIndicator()),
+                                  )
+                                : QrImageView(
+                                    data: _qrPayload!,
+                                    version: QrVersions.auto,
+                                    size: 220,
+                                    backgroundColor: Colors.white,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _qrStatus ?? l10n.authQrWaiting,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(onPressed: _refreshQrChallenge, child: Text(l10n.authQrRefresh)),
+                      ] else if (_browserWaiting) ...[
+                        const Center(child: CircularProgressIndicator()),
+                        const SizedBox(height: 16),
+                        Text(
+                          l10n.authQrWaiting,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(onPressed: _cancelBrowser, child: Text(l10n.cancel)),
+                      ] else ...[
+                        FilledButton(
+                          onPressed: () => _startBrowser('login'),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(l10n.authSignIn),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                          onPressed: () => _startBrowser('register'),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(l10n.authSignUp),
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                  if (auth.message != null && auth.status == AuthStatus.error)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        auth.code != null
-                            ? _mapAuthError(ConsoleAuthException(
-                                auth.code!, auth.message!), l10n)
-                            : auth.message!,
-                        style: TextStyle(color: theme.colorScheme.error),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.colorScheme.error),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: LegalAgreementRichText(hintTemplate: l10n.authLegalAgreementHint),
                       ),
-                    ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: busy ? null : _submit,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: busy
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(_isRegister ? l10n.authSignUp : l10n.authSignIn),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: busy
-                        ? null
-                        : () => setState(() => _isRegister = !_isRegister),
-                    child: Text(
-                      _isRegister ? l10n.authHaveAccount : l10n.authNoAccount,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: LegalAgreementRichText(
-                      hintTemplate: l10n.authLegalAgreementHint,
+                  // QR toggle kept at its original position (top-right).
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: IconButton(
+                      tooltip: _qrLoginMode ? l10n.authQrUsePassword : l10n.authQrUseScan,
+                      iconSize: 22,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _browserWaiting ? null : _toggleQrLoginMode,
+                      icon: Icon(_qrLoginMode ? Icons.keyboard_outlined : Icons.qr_code_2),
                     ),
                   ),
                 ],

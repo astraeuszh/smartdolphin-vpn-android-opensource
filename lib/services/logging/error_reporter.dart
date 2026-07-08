@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,7 +23,7 @@ class ErrorReporter {
     try {
       final logger = _ref.read(vpnLoggerProvider);
       logger.system('vpn_error code=$errorCode details=$details');
-      final snapshot = await logger.buildFeedbackSnapshot();
+      final snapshot = await logger.buildErrorFeedbackSnapshot();
       await ConsoleFeedback().submit(
         session: session,
         errorCode: '0x${errorCode.toRadixString(16).padLeft(8, '0').toUpperCase()}',

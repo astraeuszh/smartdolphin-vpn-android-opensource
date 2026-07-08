@@ -5,7 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:openvpn_flutter/openvpn_flutter.dart';
+import '../../../services/vpn/vpn_stage.dart';
 
 import '../../../core/device/device_memory_tier_provider.dart';
 import '../../../core/device/memory_tier.dart';
@@ -20,19 +20,28 @@ import '../../../services/storage/prefs.dart';
 import '../../../services/time/session_clock.dart';
 import '../../../services/time/session_clock_provider.dart';
 import '../../../services/device/battery_exemption_service.dart';
+import '../../../services/remote/console_traffic.dart';
 import '../../../services/logging/error_reporter.dart';
 import '../../../services/logging/vpn_logger.dart';
-import '../../../services/vpn/openvpn_port.dart';
+import '../../../services/vpn/clash_api_client.dart';
+import '../../../services/vpn/dolphin_core_port.dart';
+import '../../../services/vpn/node_table.dart';
+import '../../../services/vpn/proxy_share_service.dart';
 import '../../../services/vpn/vpn_provider.dart';
 import '../../../services/vpn/models/vpn.dart';
+import '../../settings/domain/preferences_controller.dart';
 import '../../servers/data/static_servers.dart';
 import '../../servers/domain/server.dart';
 import '../../servers/domain/server_providers.dart';
+import '../../settings/domain/advanced_settings_config.dart';
 import '../../settings/domain/settings_controller.dart';
+import '../../settings/domain/split_tunnel_config.dart';
 import '../../settings/domain/traffic_mode.dart';
 import '../../settings/domain/vpn_protocol.dart';
+import '../../../services/apps/installed_apps_service.dart';
 import '../../speedtest/domain/speedtest_controller.dart';
 import '../../speedtest/domain/speedtest_state.dart';
+import '../../dashboard/domain/ip_info_provider.dart';
 import '../../game_mode/domain/game_decel_tier_controller.dart';
 import '../../game_mode/domain/game_mode_controller.dart';
 import '../../game_mode/domain/game_mode_overlay_provider.dart';
@@ -46,7 +55,9 @@ import 'session_status.dart';
 const _sessionMetaPrefsKey = 'session_meta_v1';
 
 const sessionDuration = kMaxSessionWallDuration;
-const _dataLimitMessage = '已达到流量上限，无法继续使用';
+const _dataLimitMessage = '本月可用流量已用完，请下月再试或联系管理员';
+const _violationThrottleMessage =
+    '当前账户因违反社区规则已被限制流量使用，请遵循社区规则';
 const _connectionTimeoutDuration = Duration(seconds: 30);
 
 class SessionController extends StateNotifier<SessionState> {
@@ -69,11 +80,14 @@ class SessionController extends StateNotifier<SessionState> {
     _stageSubscription = _vpnPort.stageStream.listen((stage) {
       unawaited(_handleVpnStage(stage));
     });
+    _ref.listen<AuthState>(authControllerProvider, (_, __) {
+      unawaited(_applyAccountTrafficPolicyFromServer());
+    });
     _bootstrap();
   }
 
   final Ref _ref;
-  final OpenVpnPort _vpnPort;
+  final DolphinCorePort _vpnPort;
   final SessionClock _clock;
   final SettingsController _settings;
   final SessionNotificationService _notificationService;
@@ -95,6 +109,12 @@ class SessionController extends StateNotifier<SessionState> {
   bool _manualDisconnectInProgress = false;
   int? _lastTickRx;
   int? _lastTickTx;
+  int _bytesSinceTrafficReport = 0;
+  bool _networkWasLost = false;
+  bool? _appliedAccountThrottle;
+  bool _accountTrafficReconnectBusy = false;
+  int _tunnelHealthFailures = 0;
+  bool _tunnelHealthReconnectBusy = false;
 
   static int _parseBytes(dynamic value) {
     if (value == null) return 0;
@@ -159,9 +179,25 @@ class SessionController extends StateNotifier<SessionState> {
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
       final hasNetwork = results.isNotEmpty &&
           !results.every((r) => r == ConnectivityResult.none);
-      if (!hasNetwork && state.status == SessionStatus.connecting && _pendingConnection != null) {
-        _log('Network lost during connection');
-        _abortConnectionForNetworkLost();
+      if (!hasNetwork) {
+        _networkWasLost = true;
+        if (state.status == SessionStatus.connecting && _pendingConnection != null) {
+          _log('Network lost during connection');
+          _abortConnectionForNetworkLost();
+        }
+        return;
+      }
+      if (_networkWasLost &&
+          _ref.read(settingsControllerProvider).autoConnect.reconnectOnNetworkChange) {
+        _networkWasLost = false;
+        final server = _currentServer;
+        if (server != null &&
+            state.status != SessionStatus.connected &&
+            state.status != SessionStatus.connecting &&
+            !_manualDisconnectInProgress) {
+          _log('Network restored; attempting reconnect to ${server.name}');
+          unawaited(_tryAutoReconnect(server));
+        }
       }
     });
   }
@@ -183,9 +219,37 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   Future<void> _bootstrap() async {
-    _intentSubscription = _vpnPort.intentActions.listen(_handleIntentAction);
-    await _restoreSession();
     _pendingAutoConnect = true;
+    _intentSubscription = _vpnPort.intentActions.listen(_handleIntentAction);
+    await _ref.read(preferencesControllerProvider.notifier).ready;
+    await _ref.read(settingsControllerProvider.notifier).profileMigrationReady;
+    await _restoreSession();
+    await _reconnectAfterProfileMigrationIfNeeded();
+  }
+
+  /// After OTA profile migration the native BoxService may still run the old
+  /// VLESS/global config while prefs already say Hysteria2 + smart split.
+  Future<void> _reconnectAfterProfileMigrationIfNeeded() async {
+    if (!isAndroidNative) return;
+    final prefs = await _ref.read(prefsStoreProvider.future);
+    if (prefs.getBool(androidTunnelReconnectPrefKey) != true) return;
+    await prefs.remove(androidTunnelReconnectPrefKey);
+
+    final server = _resolveHistoryServer();
+    if (server == null) {
+      _log('Profile migration reconnect skipped: no server');
+      return;
+    }
+    final nativeUp = await _vpnPort.isConnected();
+    if (!nativeUp && state.status != SessionStatus.connected) {
+      return;
+    }
+    _log('Profile migration: reconnecting with current protocol + smart split');
+    _currentServer = server;
+    await disconnect(userInitiated: false);
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (_manualDisconnectInProgress) return;
+    await connect(server: server);
   }
 
   void _handleIntentAction(String action) {
@@ -319,10 +383,18 @@ class SessionController extends StateNotifier<SessionState> {
     await _ref.read(serverCatalogProvider.notifier).rememberSelection(server);
     _reconnectAttempts = 0;
     _queuedServer = null;
+    _tunnelHealthFailures = 0;
+    _tunnelHealthReconnectBusy = false;
     if (isAndroidNative) {
       unawaited(setHasActiveSession(true));
       unawaited(maybeRequestBatteryExemptionOnce(_ref));
     }
+    final adv = _ref.read(settingsControllerProvider).advanced;
+    unawaited(ProxyShareService.sync(
+      vpnConnected: true,
+      enabled: adv.proxyShareEnabled,
+      mode: adv.proxyShareMode,
+    ));
 
     final remaining = await _clock.remaining(
       startElapsedMs: pending.startElapsedMs,
@@ -334,14 +406,41 @@ class SessionController extends StateNotifier<SessionState> {
       state: state,
     );
     _startTicker();
+    _startConnectivityWatch();
+    // The egress IP is only known AFTER the tunnel is up, so refresh it through
+    // the VPN (the pre-connect IP captured above is the local one).
+    unawaited(_refreshPublicIpAfterConnect());
+  }
+
+  /// Fetches the public IP through the live tunnel and updates the dashboard so
+  /// it shows the VPN exit IP (not the local pre-connect IP).
+  Future<void> _refreshPublicIpAfterConnect() async {
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (state.status != SessionStatus.connected) return;
+    try {
+      final info = await fetchIpInfo();
+      if (state.status != SessionStatus.connected) return;
+      final ip = info.ip;
+      if (ip != null && ip.isNotEmpty) {
+        _activeMeta = _activeMeta?.copyWith(publicIp: ip);
+        state = state.copyWith(publicIp: ip, meta: _activeMeta);
+      }
+      _ref.invalidate(ipInfoProvider);
+    } catch (_) {
+      // best-effort; dashboard keeps the last known IP
+    }
   }
 
   Future<void> _handleRemoteDisconnect() async {
     final server = _currentServer;
+    final killSwitch = _ref.read(settingsControllerProvider).advanced.killSwitchMode;
     if (server != null && _ref.read(settingsControllerProvider).autoConnect.reconnectOnNetworkChange) {
       _log('Unexpected disconnect; attempting auto-reconnect to ${server.name}');
       await _tryAutoReconnect(server);
       return;
+    }
+    if (killSwitch != KillSwitchMode.off && isAndroidNative) {
+      unawaited(_notificationService.showKillSwitchAlert());
     }
     _setError(ecNodeDisconnected, details: 'Remote disconnect');
     await _forceDisconnect(clearPrefs: true, preserveError: true);
@@ -470,11 +569,12 @@ class SessionController extends StateNotifier<SessionState> {
       }
     }
     if (state.status == SessionStatus.connected) {
-      _log('Ignoring connect: already connected');
-      return;
+      _log('Hard reconnect: tearing down existing Dolphin-Core tunnel first');
+      await disconnect(userInitiated: false);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
     }
     // Prevent double-connect: if we're already connecting to the same server,
-    // ignore. A second connect() would call disconnect() first (in openvpn_port)
+    // ignore. A second connect() would call disconnect() first (in dolphin_core_port)
     // and tear down the tunnel we're about to establish.
     if (state.status == SessionStatus.connecting &&
         _pendingConnection != null &&
@@ -517,8 +617,11 @@ class SessionController extends StateNotifier<SessionState> {
     }
     _vpnPort.setMemoryTier(tier);
 
-    // 请求 VPN 权限（已有权限时几乎无延迟）
-    final prepared = await _vpnPort.prepare();
+    // 请求 VPN 权限（已有权限时几乎无延迟）。加超时：长时间后台后原生 prepare 可能不返回，
+    // 否则会卡在 connecting 直到 30s 连接超时，期间切节点等操作无响应。
+    final prepared = await _vpnPort
+        .prepare()
+        .timeout(const Duration(seconds: 12), onTimeout: () => false);
     _log('VPN permission request result: $prepared');
     if (!prepared) {
       _setError(ecVpnPermissionDenied, details: 'VPN permission required');
@@ -530,18 +633,39 @@ class SessionController extends StateNotifier<SessionState> {
       final settingsState = _ref.read(settingsControllerProvider);
       final smartStable = _ref.read(smartStableProvider);
       _vpnPort.setSmartStableTuning(smartStable.tuningEnabled);
+      final tp = _ref.read(authControllerProvider).session?.trafficPolicy;
+      final wantThrottle = tp?.isViolationSpeedLimit == true;
+      _vpnPort.setAccountTrafficThrottle(wantThrottle);
+      _appliedAccountThrottle = wantThrottle;
       _vpnPort.setGameTrafficMode(_ref.read(gameModeControllerProvider));
       _vpnPort.setGameDecelTier(_ref.read(gameDecelTierProvider));
       _vpnPort.setGameModeOverlayActive(_ref.read(gameModeOverlayActiveProvider));
-      _vpnPort.setRoutingConfig(settingsState.routing);
+
+      var routing = settingsState.routing;
+      final advanced = settingsState.advanced;
+      if (advanced.tunnelMode == TunnelInterfaceMode.systemProxy) {
+        routing = routing.copyWith(autoRouteSystem: false);
+      } else if (routing.mode == TrafficMode.global) {
+        routing = routing.copyWith(autoRouteSystem: true);
+      }
+      _vpnPort.setAdvancedConfig(advanced);
+      _vpnPort.setRoutingConfig(routing);
+      final coreProto = _ref.read(preferencesControllerProvider).coreProtocol;
+      _vpnPort.setProtocol(sdProtocolFromName(coreProto));
+      final node = nodeForHostOrCountry(server.ip, server.countryName);
+      _log('Dolphin-Core: protocol=$coreProto node=${node.tag} host=${node.host}');
       _vpnPort.setDnsServers(settingsState.protocol.resolvedDnsServers);
+      _vpnPort.setSplitTunnel(
+        settingsState.splitTunnel.mode,
+        settingsState.splitTunnel.selectedPackages.toList(),
+      );
       final initialIp = _ref.read(speedTestControllerProvider).ip;
       final startElapsed = await _clock.elapsedRealtime();
 
       // SmartDolphin 自有节点：优先使用 static_servers 中的配置，避免缓存数据损坏
       final configBase64 = _resolveConfigBase64(server);
 
-      // Convert Server to Vpn model for OpenVPN connection
+      // Convert Server to Vpn model for Dolphin-Core connection
       final vpnServer = Vpn(
         hostName: server.hostName ?? server.name,
         ip: server.ip ?? '',
@@ -555,7 +679,7 @@ class SessionController extends StateNotifier<SessionState> {
 
       // Validate that we have a configuration
       if (configBase64.isEmpty) {
-        _log('Missing OpenVPN config for server ${server.id}');
+        _log('Missing node config for server ${server.id}');
         _setError(ecNodeConfigFailed, details: 'No config for server ${server.id}');
         return;
       }
@@ -563,12 +687,12 @@ class SessionController extends StateNotifier<SessionState> {
       try {
         final decodedConfig = vpnServer.openVpnConfig;
         if (decodedConfig.trim().isEmpty) {
-          _log('Missing OpenVPN config for server ${server.id}');
+          _log('Missing node config for server ${server.id}');
           _setError(ecNodeConfigFailed, details: 'Empty config');
           return;
         }
       } on AppError catch (error) {
-        _log('Invalid OpenVPN config for server ${server.id}: $error');
+        _log('Invalid node config for server ${server.id}: $error');
         _setError(ecNodeConfigFailed, details: error.toString());
         return;
       }
@@ -586,7 +710,7 @@ class SessionController extends StateNotifier<SessionState> {
       _log('Config length: ${vpnServer.openVpnConfig.length}');
       
       final connected = await _vpnPort.connect(vpnServer);
-      _log('OpenVPN connect() returned $connected');
+      _log('Dolphin-Core connect() returned $connected');
       if (!connected) {
         _cancelConnectionTimeout();
         _stopConnectivityWatch();
@@ -630,12 +754,21 @@ class SessionController extends StateNotifier<SessionState> {
       }
       _applyQueuedServerSelection();
 
-      // Tear down VPN and notification in background
+      // Tear down VPN and notification in background. A bounded timeout is critical: after the OS
+      // reclaims the VPN service during long background, a native call can hang forever; without a
+      // timeout the `finally` below never runs, _manualDisconnectInProgress stays true, and every
+      // later tap (connect/switch/disconnect) is silently ignored — the UI looks frozen until the
+      // app is force-killed. This was the "后台过久后切节点/模式 → 界面卡死" bug.
       try {
-        await _vpnPort.disconnect();
+        await _vpnPort.disconnect().timeout(const Duration(seconds: 6), onTimeout: () {});
       } catch (e) {
         _log('disconnect: VPN tear-down error (ignored): $e');
       }
+      unawaited(ProxyShareService.sync(
+        vpnConnected: false,
+        enabled: false,
+        mode: ProxyShareMode.http,
+      ));
       try {
         await _notificationService.clear();
       } catch (_) {}
@@ -647,20 +780,26 @@ class SessionController extends StateNotifier<SessionState> {
           final meta = previousState.meta;
           final stats = <String, dynamic>{};
           try {
-            stats.addAll(await _vpnPort.getTunnelStats());
+            stats.addAll(await _vpnPort
+                .getTunnelStats()
+                .timeout(const Duration(seconds: 4), onTimeout: () => <String, dynamic>{}));
           } catch (_) {}
           Duration? actualDuration;
           if (meta != null) {
             try {
-              final nowMs = await _clock.elapsedRealtime();
+              final nowMs = await _clock
+                  .elapsedRealtime()
+                  .timeout(const Duration(seconds: 4), onTimeout: () => meta.startElapsedMs);
               actualDuration = Duration(milliseconds: (nowMs - meta.startElapsedMs).clamp(0, meta.durationMs).toInt());
             } catch (_) {}
           }
           final sessionForHistory = actualDuration != null
               ? previousState.copyWith(duration: actualDuration)
               : previousState;
-          await _settings.recordSessionEnd(sessionForHistory, server: server, stats: stats);
-          await _clearPersistedState();
+          await _settings
+              .recordSessionEnd(sessionForHistory, server: server, stats: stats)
+              .timeout(const Duration(seconds: 6), onTimeout: () {});
+          await _clearPersistedState().timeout(const Duration(seconds: 4), onTimeout: () {});
         } catch (_) {}
       }
     } catch (e, st) {
@@ -706,7 +845,7 @@ class SessionController extends StateNotifier<SessionState> {
     _cancelConnectionTimeout();
     _stopConnectivityWatch();
     _stopTicker();
-    await _vpnPort.disconnect();
+    await _vpnPort.disconnect().timeout(const Duration(seconds: 6), onTimeout: () {});
     if (clearPrefs) {
       await _clearPersistedMeta();
     }
@@ -784,11 +923,29 @@ class SessionController extends StateNotifier<SessionState> {
           final delta = (rx - _lastTickRx!) + (tx - _lastTickTx!);
           if (delta > 0) {
             await _ref.read(dataUsageControllerProvider.notifier).addUsageBytes(delta);
+            _bytesSinceTrafficReport += delta;
           }
         }
         _lastTickRx = rx;
         _lastTickTx = tx;
       } catch (_) {}
+      if (_tickCounter % 15 == 0) {
+        unawaited(_ref.read(authControllerProvider.notifier).refreshSession());
+      }
+      if (_tickCounter % 30 == 0 && _bytesSinceTrafficReport > 0) {
+        final session = _ref.read(authControllerProvider).session;
+        if (session != null) {
+          final reportBytes = _bytesSinceTrafficReport;
+          _bytesSinceTrafficReport = 0;
+          unawaited(() async {
+            try {
+              await ConsoleTraffic().reportBytes(session: session, bytes: reportBytes);
+              await _ref.read(authControllerProvider.notifier).refreshSession();
+              await _applyAccountTrafficPolicyFromServer();
+            } catch (_) {}
+          }());
+        }
+      }
       final usage = _ref.read(dataUsageControllerProvider);
       if (usage.limitExceeded) {
         await _forceDisconnect(clearPrefs: true, markExpired: false);
@@ -809,6 +966,10 @@ class SessionController extends StateNotifier<SessionState> {
           state: state,
         );
       }
+      // 每 ~60s 探测 Clash API，长时间连接（息屏/后台）隧道僵死时自动硬重连。
+      if (_tickCounter % 30 == 0) {
+        unawaited(_evaluateTunnelHealth());
+      }
     });
   }
 
@@ -818,18 +979,87 @@ class SessionController extends StateNotifier<SessionState> {
     _lastTickRx = null;
     _lastTickTx = null;
     _tickCounter = 0;
+    _tunnelHealthFailures = 0;
+  }
+
+  /// After long background, verify the tunnel still carries traffic; reconnect if dead.
+  Future<void> checkTunnelHealthOnResume() async {
+    if (state.status != SessionStatus.connected) return;
+    if (_manualDisconnectInProgress || _pendingConnection != null) return;
+    _log('Tunnel health check on app resume');
+    await _evaluateTunnelHealth(resumeTriggered: true);
+  }
+
+  Future<void> _evaluateTunnelHealth({bool resumeTriggered = false}) async {
+    if (_tunnelHealthReconnectBusy ||
+        _accountTrafficReconnectBusy ||
+        _manualDisconnectInProgress ||
+        _pendingConnection != null) {
+      return;
+    }
+    if (state.status != SessionStatus.connected) return;
+    final server = _currentServer;
+    if (server == null) return;
+
+    final apiUp = await ClashApiClient.isAvailable();
+    int? delay;
+    if (apiUp) {
+      delay = await ClashApiClient.proxyDelayMs(
+        timeoutMs: resumeTriggered ? 5000 : 3500,
+      );
+    }
+    final healthy = apiUp && delay != null;
+
+    if (healthy) {
+      _tunnelHealthFailures = 0;
+      return;
+    }
+
+    _tunnelHealthFailures++;
+    _log(
+      'Tunnel unhealthy (failures=$_tunnelHealthFailures, api=$apiUp, delay=$delay)',
+    );
+
+    if (_tunnelHealthFailures < 3) return;
+    await _hardReconnectForDeadTunnel(server);
+  }
+
+  Future<void> _hardReconnectForDeadTunnel(Server server) async {
+    if (_tunnelHealthReconnectBusy) return;
+    _tunnelHealthReconnectBusy = true;
+    _tunnelHealthFailures = 0;
+    try {
+      _log('Dead tunnel detected; hard reconnect to ${server.name}');
+      await disconnect(userInitiated: false);
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (_manualDisconnectInProgress) return;
+      await connect(server: server, fromSmartStableReconnect: true);
+    } finally {
+      _tunnelHealthReconnectBusy = false;
+    }
   }
 
 
 
-  Future<void> autoConnectIfEnabled({required BuildContext context}) async {
+  Future<void> autoConnectIfEnabled({
+    required BuildContext context,
+    bool fromBoot = false,
+  }) async {
     if (!_pendingAutoConnect) return;
     _pendingAutoConnect = false;
     final settings = _ref.read(settingsControllerProvider);
-    if (!settings.autoConnect.connectOnLaunch) {
+    final ac = settings.autoConnect;
+    final shouldConnect =
+        ac.connectOnLaunch || (fromBoot && ac.connectOnBoot);
+    if (!shouldConnect) {
       return;
     }
-    final server = _ref.read(selectedServerProvider);
+    Server? server;
+    for (var i = 0; i < 20; i++) {
+      server = _ref.read(selectedServerProvider);
+      if (server != null) break;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
     if (server == null) {
       return;
     }
@@ -857,6 +1087,50 @@ class SessionController extends StateNotifier<SessionState> {
     _queuedServer = server;
     if (state.status != SessionStatus.connected) {
       _applyQueuedServerSelection();
+    }
+  }
+
+  /// 管理员开启/关闭账户限速后，重连使 Dolphin-Core 隧道 shaping 生效。
+  Future<void> reconnectToApplyAccountTrafficPolicy() async {
+    if (state.status != SessionStatus.connected) return;
+    if (_manualDisconnectInProgress ||
+        _pendingConnection != null ||
+        _accountTrafficReconnectBusy) {
+      _log('reconnectToApplyAccountTrafficPolicy skipped: operation in progress');
+      return;
+    }
+    final server = _currentServer ?? _ref.read(selectedServerProvider);
+    if (server == null) {
+      _log('reconnectToApplyAccountTrafficPolicy: no server');
+      return;
+    }
+    _accountTrafficReconnectBusy = true;
+    try {
+      _log('reconnectToApplyAccountTrafficPolicy: ${server.name}');
+      await disconnect(userInitiated: false);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (_manualDisconnectInProgress) return;
+      await connect(
+        server: server,
+        fromSmartStableReconnect: true,
+      );
+    } finally {
+      _accountTrafficReconnectBusy = false;
+    }
+  }
+
+  Future<void> _applyAccountTrafficPolicyFromServer() async {
+    final tp = _ref.read(authControllerProvider).session?.trafficPolicy;
+    final want = tp?.isViolationSpeedLimit == true;
+    if (_appliedAccountThrottle == want) {
+      _vpnPort.setAccountTrafficThrottle(want);
+      return;
+    }
+    _log('Account traffic throttle changed ($_appliedAccountThrottle -> $want)');
+    _appliedAccountThrottle = want;
+    _vpnPort.setAccountTrafficThrottle(want);
+    if (state.status == SessionStatus.connected) {
+      await reconnectToApplyAccountTrafficPolicy();
     }
   }
 
@@ -927,6 +1201,28 @@ class SessionController extends StateNotifier<SessionState> {
     if (_manualDisconnectInProgress) return;
     _ref.read(selectedServerProvider.notifier).select(server);
     await connect(context: context, server: server);
+  }
+
+  Future<List<String>> _resolveBypassPackages(SplitTunnelConfig split) async {
+    if (split.mode == SplitTunnelMode.allTraffic) {
+      return const [];
+    }
+    if (split.mode == SplitTunnelMode.excludeApps) {
+      return split.selectedPackages.toList();
+    }
+    if (split.selectedPackages.isEmpty) {
+      return const [];
+    }
+    try {
+      final apps = await InstalledAppsService().fetchInstalledApps();
+      return apps
+          .map((a) => a.packageName)
+          .where((pkg) => !split.selectedPackages.contains(pkg))
+          .toList();
+    } catch (e) {
+      _log('Failed to resolve include-app bypass list: $e');
+      return const [];
+    }
   }
 }
 

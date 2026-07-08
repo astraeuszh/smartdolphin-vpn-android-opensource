@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/app.dart';
+import '../../../l10n/app_localizations.dart';
 import '../game_mode/domain/game_mode_overlay_provider.dart';
 import '../session/domain/session_controller.dart';
 import '../session/domain/session_status.dart';
@@ -12,7 +12,7 @@ import '../settings/domain/settings_controller.dart';
 import 'smart_stable_notifier.dart';
 import 'smart_stable_probe.dart';
 
-/// 仅前台 SmartStable 探测 + 弹窗（游戏模式、冷却、已启用调优时不弹）。
+/// SmartStable 弱网提示：非模态横幅，不阻断 VPN 使用；仅用户点「启动」才重连。
 class SmartStableLifecycle extends ConsumerStatefulWidget {
   const SmartStableLifecycle({super.key, required this.child});
 
@@ -25,17 +25,24 @@ class SmartStableLifecycle extends ConsumerStatefulWidget {
 
 class _SmartStableLifecycleState extends ConsumerState<SmartStableLifecycle>
     with WidgetsBindingObserver {
-  bool _dialogInFlight = false;
+  bool _busy = false;
   DateTime? _lastResumeHandledAt;
+  DateTime? _lastPeriodicProbeAt;
+  Timer? _periodicTimer;
+  bool _showBanner = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _periodicTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+      unawaited(_maybeOffer(fromPeriodic: true));
+    });
   }
 
   @override
   void dispose() {
+    _periodicTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -43,105 +50,121 @@ class _SmartStableLifecycleState extends ConsumerState<SmartStableLifecycle>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(_onResumed());
+      unawaited(_maybeOffer());
     }
   }
 
-  Future<void> _onResumed() async {
-    if (kIsWeb) {
-      return;
-    }
-    if (ref.read(gameModeOverlayActiveProvider)) {
-      return;
-    }
-    if (!ref.read(settingsControllerProvider).networkQualityMonitoring) {
-      return;
-    }
-
-    final session = ref.read(sessionControllerProvider);
-    if (session.status != SessionStatus.connected) {
+  Future<void> _maybeOffer({bool fromPeriodic = false}) async {
+    if (kIsWeb || _busy || _showBanner) return;
+    if (ref.read(gameModeOverlayActiveProvider)) return;
+    if (!ref.read(settingsControllerProvider).networkQualityMonitoring) return;
+    if (ref.read(sessionControllerProvider).status != SessionStatus.connected) {
       return;
     }
 
     final now = DateTime.now();
-    if (_lastResumeHandledAt != null &&
-        now.difference(_lastResumeHandledAt!) < const Duration(seconds: 2)) {
-      return;
+    if (fromPeriodic) {
+      if (_lastPeriodicProbeAt != null &&
+          now.difference(_lastPeriodicProbeAt!) < const Duration(minutes: 3)) {
+        return;
+      }
+      _lastPeriodicProbeAt = now;
+    } else {
+      if (_lastResumeHandledAt != null &&
+          now.difference(_lastResumeHandledAt!) < const Duration(seconds: 2)) {
+        return;
+      }
+      _lastResumeHandledAt = now;
     }
-    _lastResumeHandledAt = now;
 
     final st = ref.read(smartStableProvider);
-    if (st.tuningEnabled) {
-      return;
-    }
-    if (st.suppressDeclineUntilNextUserConnect) {
-      return;
-    }
+    if (st.tuningEnabled) return;
+    if (st.suppressDeclineUntilNextUserConnect) return;
     if (st.promptCooldownUntil != null && now.isBefore(st.promptCooldownUntil!)) {
       return;
     }
 
     final bad = await shouldOfferSmartStableProbe();
-    if (!bad || !mounted) {
-      return;
-    }
-
+    if (!bad || !mounted) return;
     if (ref.read(sessionControllerProvider).status != SessionStatus.connected) {
       return;
     }
+    setState(() => _showBanner = true);
+  }
 
-    if (_dialogInFlight) {
-      return;
+  Future<void> _onAccept() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _showBanner = false;
+    });
+    ref.read(smartStableProvider.notifier).enableTuning();
+    final navCtx = context;
+    if (navCtx.mounted &&
+        ref.read(sessionControllerProvider).status == SessionStatus.connected) {
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .reconnectForSmartStable(navCtx);
     }
-    _dialogInFlight = true;
-    try {
-      final navCtx = ref.read(navigatorKeyProvider).currentContext;
-      if (navCtx == null || !navCtx.mounted) {
-        return;
-      }
+    if (mounted) setState(() => _busy = false);
+  }
 
-      final accepted = await showDialog<bool>(
-        context: navCtx,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Text('SmartStable'),
-          content: const Text(
-            '当前网络环境极度异常（可能处于隧道、山林、高铁、劣质 WiFi 等场景），是否启动 Smart Dolphin VPN 自研的 SmartStable 服务以优化连接稳定性？',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('暂不需要'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('启动'),
-            ),
-          ],
-        ),
-      );
-
-      if (!mounted) {
-        return;
-      }
-      if (accepted == true) {
-        ref.read(smartStableProvider.notifier).enableTuning();
-        final session = ref.read(sessionControllerProvider);
-        if (session.status == SessionStatus.connected && navCtx.mounted) {
-          unawaited(
-            ref.read(sessionControllerProvider.notifier).reconnectForSmartStable(
-                  navCtx,
-                ),
-          );
-        }
-      } else if (accepted == false) {
-        ref.read(smartStableProvider.notifier).suppressAfterDecline();
-      }
-    } finally {
-      _dialogInFlight = false;
-    }
+  void _onDecline() {
+    ref.read(smartStableProvider.notifier).suppressAfterDecline();
+    setState(() => _showBanner = false);
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        if (_showBanner)
+          Positioned(
+            left: 12,
+            right: 12,
+            top: MediaQuery.paddingOf(context).top + 8,
+            child: Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(14),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      context.l10n.smartStableTitle,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      context.l10n.smartStablePrompt,
+                      style: const TextStyle(fontSize: 13, height: 1.35),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: _onDecline,
+                          child: Text(context.l10n.smartStableDecline),
+                        ),
+                        FilledButton(
+                          onPressed: _busy ? null : _onAccept,
+                          child: Text(context.l10n.smartStableStart),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }

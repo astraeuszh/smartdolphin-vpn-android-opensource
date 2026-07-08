@@ -10,14 +10,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../core/platform/runtime_platform.dart';
 import '../../../services/analytics/analytics_service.dart';
 import '../../../services/notifications/session_notification_service.dart';
-import '../../../services/vpn/vpn_provider.dart';
 import '../../../widgets/server_tile.dart';
 import '../../home/home_screen.dart';
 import '../../servers/data/country_card.dart';
-import '../../../l10n/app_localizations.dart';
 import '../../../l10n/country_names.dart';
 import '../../servers/domain/server.dart';
 import '../../servers/domain/server_display_name.dart';
@@ -259,7 +258,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                     onPressed: () {
                       _goToPage(2);
                     },
-                    child: const Text('Skip'),
+                    child: Text(context.l10n.tutorialSkip),
                   ),
                 ),
             ],
@@ -287,7 +286,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
         : onboardingState.selectedServer;
 
     if (server == null) {
-      _showSnackBar('Choose a server before connecting.');
+      _showSnackBar(context.l10n.onboardingChooseServerFirst);
       return;
     }
 
@@ -334,9 +333,9 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     try {
       await ref.read(sessionControllerProvider.notifier).disconnect();
       unawaited(analytics.logEvent('connect_cancelled'));
-      _showSnackBar('Connection cancelled.');
+      _showSnackBar(context.l10n.onboardingConnectionCancelled);
     } catch (error) {
-      _showSnackBar('Unable to cancel connection: $error');
+      _showSnackBar(context.l10n.onboardingUnableCancelConnection('$error'));
     }
   }
 
@@ -349,7 +348,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       controller.setNotificationsGranted(granted);
       controller.setShowNotificationDenied(!granted);
       if (!granted) {
-        _showSnackBar('Notifications are optional, but recommended for status updates.');
+        _showSnackBar(context.l10n.onboardingNotificationsOptional);
       }
       return granted;
     } on PlatformException catch (error) {
@@ -357,7 +356,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       controller.setNotificationsPrompted(true);
       controller.setNotificationsGranted(false);
       controller.setShowNotificationDenied(true);
-      _showSnackBar('Unable to request notifications: ${error.message}');
+      _showSnackBar(context.l10n.onboardingUnableRequestNotifications('${error.message}'));
       return false;
     }
   }
@@ -369,6 +368,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       showDragHandle: true,
       builder: (context) {
         final theme = Theme.of(context);
+        final l10n = context.l10n;
         return Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           child: Column(
@@ -376,27 +376,24 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'How SmartDolphin VPN works',
+                l10n.onboardingHowItWorksTitle,
                 style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               _DiagramStep(
                 icon: Icons.public,
-                title: 'SmartDolphin servers',
-                description:
-                    'Connect to SmartDolphin-operated VPN nodes in Hong Kong, United States, and Singapore.',
+                title: l10n.onboardingSlideServersTitle,
+                description: l10n.onboardingHowItWorksServersDesc,
               ),
               _DiagramStep(
                 icon: Icons.vpn_lock,
-                title: 'Encrypted tunnel',
-                description:
-                    'Your traffic flows through an encrypted OpenVPN tunnel before heading to the internet.',
+                title: l10n.onboardingSlideTunnelTitle,
+                description: l10n.onboardingHowItWorksTunnelDesc,
               ),
               _DiagramStep(
                 icon: Icons.account_circle_outlined,
-                title: 'Account & console',
-                description:
-                    'Sign in with your SmartDolphin account to manage access, traffic policy, and session limits.',
+                title: l10n.onboardingSlideAccountTitle,
+                description: l10n.onboardingHowItWorksAccountDesc,
               ),
             ],
           ),
@@ -412,6 +409,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       showDragHandle: true,
       builder: (context) {
         final theme = Theme.of(context);
+        final l10n = context.l10n;
         return Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           child: Column(
@@ -419,13 +417,13 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'About the quick speed test',
+                l10n.onboardingAboutSpeedTestTitle,
                 style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              const _BulletLine('Measures download, upload, and latency via M-Lab NDT7 (Measurement Lab / MIT).'),
-              const _BulletLine('Traffic goes to the nearest M-Lab test server selected by their locate API.'),
-              const _BulletLine('You can opt out anytime; skipping has no impact on VPN usage.'),
+              _BulletLine(l10n.onboardingAboutSpeedTestBullet1),
+              _BulletLine(l10n.onboardingAboutSpeedTestBullet2),
+              _BulletLine(l10n.onboardingAboutSpeedTestBullet3),
             ],
           ),
         );
@@ -439,20 +437,21 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       useSafeArea: true,
       showDragHandle: true,
       builder: (context) {
+        final l10n = context.l10n;
         return Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Know the risks',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              Text(
+                l10n.onboardingRisksTitle,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              const _BulletLine('SmartDolphin servers are operated by us; do not share your account credentials.'),
-              const _BulletLine('Throughput and uptime can fluctuate; switch region if a server feels slow.'),
-              const _BulletLine('Understand your local laws when using VPNs to bypass censorship.'),
+              _BulletLine(l10n.onboardingRisksBullet1),
+              _BulletLine(l10n.onboardingRisksBullet2),
+              _BulletLine(l10n.onboardingRisksBullet3),
             ],
           ),
         );
@@ -467,6 +466,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       showDragHandle: true,
       builder: (context) {
         final theme = Theme.of(context);
+        final l10n = context.l10n;
         return Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
           child: Column(
@@ -474,7 +474,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Connection failed',
+                l10n.onboardingConnectionFailed,
                 style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
@@ -490,7 +490,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                       onPressed: () {
                         Navigator.of(context).pop();
                       },
-                      child: const Text('Try again'),
+                      child: Text(l10n.onboardingTryAgain),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -499,7 +499,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                       onPressed: () {
                         Navigator.of(context).pop();
                       },
-                      child: const Text('Close'),
+                      child: Text(l10n.close),
                     ),
                   ),
                 ],
@@ -522,13 +522,13 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
 
   Future<void> _openAlwaysOnSettings() async {
     if (!isAndroidNative) {
-      _showSnackBar('Always-on VPN settings are only available on Android devices.');
+      _showSnackBar(context.l10n.onboardingAlwaysOnVpnAndroidOnly);
       return;
     }
     try {
       await AppSettings.openAppSettings(type: AppSettingsType.vpn);
     } catch (error) {
-      _showSnackBar('Unable to open VPN settings: $error');
+      _showSnackBar(context.l10n.onboardingUnableOpenVpnSettings('$error'));
     }
   }
 
@@ -565,7 +565,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       if (data == null) {
         final path = file.path;
         if (path == null) {
-          _showSnackBar('Unable to read the selected file.');
+          _showSnackBar(context.l10n.onboardingUnableReadFile);
           return null;
         }
         data = await File(path).readAsBytes();
@@ -574,7 +574,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       final content = utf8.decode(bytes);
       return _parseOvpn(content, file.name);
     } catch (error) {
-      _showSnackBar('Unable to import configuration: $error');
+      _showSnackBar(context.l10n.onboardingUnableImportConfig('$error'));
       return null;
     }
   }
@@ -586,12 +586,12 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       orElse: () => '',
     );
     if (remoteLine.isEmpty) {
-      _showSnackBar('The selected .ovpn file is missing a remote directive.');
+      _showSnackBar(context.l10n.onboardingOvpnMissingRemote);
       return null;
     }
     final parts = remoteLine.split(RegExp(r'\s+'));
     if (parts.length < 3) {
-      _showSnackBar('The remote directive must include host and port.');
+      _showSnackBar(context.l10n.onboardingRemoteMustIncludeHostPort);
       return null;
     }
     final host = parts[1];
@@ -602,7 +602,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     );
     final cipher = cipherLine.isNotEmpty ? cipherLine.split(RegExp(r'\s+')).skip(1).join(' ') : null;
     final name = filename.replaceAll('.ovpn', '').trim().isEmpty
-        ? 'Imported server'
+        ? context.l10n.onboardingImportedServer
         : filename.replaceAll('.ovpn', '').trim();
     return ImportedOvpnConfig(
       name: name,
@@ -615,7 +615,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
 
   Future<void> _openLink(Uri uri) async {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      _showSnackBar('Unable to open ${uri.toString()}');
+      _showSnackBar(context.l10n.onboardingUnableOpenUrl(uri.toString()));
     }
   }
 
@@ -812,6 +812,7 @@ class _WelcomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -827,27 +828,30 @@ class _WelcomePage extends StatelessWidget {
               ),
               const SizedBox(height: 32),
               Text(
-                'Free VPN with community servers',
+                l10n.onboardingIntroTitle,
                 style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              const _BulletLine('OpenVPN tunnel for reliable connectivity'),
-              const _BulletLine('Connect to public servers from VPNGate'),
-              const _BulletLine('No account. Import your own .ovpn if you like.'),
+              _BulletLine(l10n.onboardingIntroBullet1),
+              _BulletLine(l10n.onboardingIntroBullet2),
+              _BulletLine(l10n.onboardingIntroBullet3),
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: onGetStarted,
-                child: const Text('Get started'),
+                child: Text(l10n.onboardingGetStarted),
               ),
               const SizedBox(height: 12),
               TextButton(
                 onPressed: onLearnMore,
-                child: const Text('Learn how it works'),
+                child: Text(l10n.onboardingLearnHowItWorks),
               ),
               const SizedBox(height: 24),
               Row(
                 children: [
-                  TextButton(onPressed: onPrivacyPolicy, child: const Text('Privacy Policy')),
+                  TextButton(
+                    onPressed: onPrivacyPolicy,
+                    child: Text(l10n.onboardingPrivacyPolicy),
+                  ),
                 ],
               ),
             ],
@@ -882,6 +886,7 @@ class _SpeedTestPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
       child: Column(
@@ -895,12 +900,12 @@ class _SpeedTestPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'Check your connection speed',
+            l10n.onboardingSpeedTestTitle,
             style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
-            'We use a Flutter library to measure download and upload so you know what to expect before connecting.',
+            l10n.onboardingSpeedTestBody,
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
@@ -911,12 +916,12 @@ class _SpeedTestPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Running a test sends traffic to test endpoints. Your IP is visible to them.',
+                    l10n.onboardingSpeedTestDisclaimer,
                     style: theme.textTheme.bodyMedium,
                   ),
                   TextButton(
                     onPressed: onLearnMore,
-                    child: const Text('Learn more'),
+                    child: Text(l10n.onboardingLearnMore),
                   ),
                 ],
               ),
@@ -926,15 +931,15 @@ class _SpeedTestPage extends StatelessWidget {
           SwitchListTile.adaptive(
             value: state.optIn,
             onChanged: onToggleOptIn,
-            title: const Text('I want to run a quick speed test now'),
+            title: Text(l10n.onboardingSpeedTestOptIn),
           ),
           if (state.showUnavailableBanner)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: MaterialBanner(
-                content: const Text('Speed test unavailable right now. You can continue.'),
+                content: Text(l10n.onboardingSpeedTestUnavailable),
                 actions: [
-                  TextButton(onPressed: onDismissBanner, child: const Text('Dismiss')),
+                  TextButton(onPressed: onDismissBanner, child: Text(l10n.onboardingDismiss)),
                 ],
               ),
             ),
@@ -946,7 +951,7 @@ class _SpeedTestPage extends StatelessWidget {
           if (state.optIn && state.status == OnboardingSpeedTestStatus.running)
             FilledButton(
               onPressed: onCancelTest,
-              child: const Text('Cancel test'),
+              child: Text(l10n.onboardingCancelTest),
             )
           else
             FilledButton(
@@ -954,13 +959,15 @@ class _SpeedTestPage extends StatelessWidget {
                   ? (state.status == OnboardingSpeedTestStatus.completed ? onContinue : onRunTest)
                   : onContinue,
               child: Text(state.optIn
-                  ? (state.status == OnboardingSpeedTestStatus.completed ? 'Continue' : 'Run quick test')
-                  : 'Continue'),
+                  ? (state.status == OnboardingSpeedTestStatus.completed
+                      ? l10n.onboardingContinue
+                      : l10n.onboardingRunQuickTest)
+                  : l10n.onboardingContinue),
             ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: onSkip,
-            child: const Text('Skip'),
+            child: Text(l10n.tutorialSkip),
           ),
         ],
       ),
@@ -1004,6 +1011,7 @@ class _ConnectPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final baseline = state.speedTestSummary;
     final isConnecting = state.connecting;
 
@@ -1020,7 +1028,7 @@ class _ConnectPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'Pick a server and connect',
+            l10n.onboardingConnectTitle,
             style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
@@ -1030,28 +1038,31 @@ class _ConnectPage extends StatelessWidget {
               child: Chip(
                 avatar: const Icon(Icons.speed, size: 18),
                 label: Text(
-                  'Baseline: ${baseline.downloadMbps.toStringAsFixed(0)}↓ / ${baseline.uploadMbps.toStringAsFixed(0)}↑',
+                  l10n.onboardingBaseline(
+                    baseline.downloadMbps.toStringAsFixed(0),
+                    baseline.uploadMbps.toStringAsFixed(0),
+                  ),
                 ),
               ),
             ),
           const SizedBox(height: 16),
-          _SectionHeader(title: 'Server'),
+          _SectionHeader(title: l10n.onboardingSectionServer),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             children: [
               ChoiceChip(
-                label: const Text('Best server (Auto)'),
+                label: Text(l10n.onboardingBestServerAuto),
                 selected: state.serverMode == OnboardingServerMode.auto,
                 onSelected: (_) => unawaited(onSelectAuto()),
               ),
               ChoiceChip(
-                label: const Text('Browse community list'),
+                label: Text(l10n.onboardingBrowseCommunityList),
                 selected: state.serverMode == OnboardingServerMode.manual,
                 onSelected: (_) => unawaited(onSelectManual()),
               ),
               ChoiceChip(
-                label: const Text('Import .ovpn'),
+                label: Text(l10n.onboardingImportOvpn),
                 selected: state.serverMode == OnboardingServerMode.imported,
                 onSelected: (_) => unawaited(onImport()),
               ),
@@ -1063,51 +1074,51 @@ class _ConnectPage extends StatelessWidget {
           if (state.serverMode == OnboardingServerMode.imported && state.importedConfig != null)
             _ImportedConfigCard(config: state.importedConfig!, onClear: onClearImport),
           const SizedBox(height: 24),
-          _SectionHeader(title: 'Options'),
+          _SectionHeader(title: l10n.onboardingSectionOptions),
           const SizedBox(height: 8),
           SwitchListTile.adaptive(
             value: preferences.autoReconnect,
             onChanged: onToggleAutoReconnect,
-            title: const Text('Auto reconnect in background'),
+            title: Text(l10n.onboardingAutoReconnect),
           ),
           ListTile(
-            title: const Text('Always-on VPN'),
-            subtitle: const Text('Open system settings to enable Android’s kill-switch.'),
+            title: Text(l10n.onboardingAlwaysOnVpn),
+            subtitle: Text(l10n.onboardingAlwaysOnVpnSubtitle),
             onTap: () {
               unawaited(onOpenAlwaysOnSettings());
             },
             trailing: const Icon(Icons.open_in_new),
           ),
           const SizedBox(height: 16),
-          _SectionHeader(title: 'Permissions'),
+          _SectionHeader(title: l10n.onboardingSectionPermissions),
           const SizedBox(height: 8),
           ListTile(
             leading: const Icon(Icons.vpn_lock),
-            title: const Text('VPN permission'),
-            subtitle: const Text('Requested when you connect for the first time.'),
+            title: Text(l10n.onboardingVpnPermission),
+            subtitle: Text(l10n.onboardingVpnPermissionSubtitle),
           ),
           ListTile(
             leading: Icon(
               state.notificationsGranted ? Icons.notifications_active : Icons.notifications_none,
             ),
-            title: const Text('Notifications for status and controls'),
+            title: Text(l10n.onboardingNotificationsTitle),
             subtitle: Text(state.notificationsPrompted
                 ? (state.notificationsGranted
-                    ? 'Enabled for session updates.'
-                    : 'Permission denied. You can try again later.')
-                : 'Recommended on Android 13+ to show tunnel status.'),
+                    ? l10n.onboardingNotificationsEnabledSubtitle
+                    : l10n.onboardingNotificationsDeniedSubtitle)
+                : l10n.onboardingNotificationsRecommendedSubtitle),
             trailing: TextButton(
               onPressed: () {
                 unawaited(onEnableNotifications());
               },
-              child: const Text('Enable'),
+              child: Text(l10n.onboardingEnable),
             ),
           ),
           if (state.showNotificationDenied)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Notifications will be disabled for now.',
+                l10n.onboardingNotificationsDisabledForNow,
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
               ),
             ),
@@ -1120,7 +1131,7 @@ class _ConnectPage extends StatelessWidget {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Allow & Connect'),
+                : Text(l10n.onboardingAllowAndConnect),
           ),
           const SizedBox(height: 12),
           if (isConnecting)
@@ -1129,12 +1140,12 @@ class _ConnectPage extends StatelessWidget {
                 unawaited(onCancelConnect());
               },
               icon: const Icon(Icons.close),
-              label: const Text('Cancel connection'),
+              label: Text(l10n.onboardingCancelConnection),
             )
           else
             OutlinedButton(
               onPressed: onConnectWithoutNotifications,
-              child: const Text('Connect without notifications'),
+              child: Text(l10n.onboardingConnectWithoutNotifications),
             ),
           const SizedBox(height: 12),
           TextButton(
@@ -1144,18 +1155,18 @@ class _ConnectPage extends StatelessWidget {
               }
               unawaited(onSkipSetup());
             },
-            child: const Text('Set this up later'),
+            child: Text(l10n.onboardingSetupLater),
           ),
           const SizedBox(height: 24),
           Text(
-            'VPNGate servers are run by volunteers. Availability and speed vary. Some operators may keep logs. Use at your own discretion.',
+            l10n.onboardingVpnGateDisclaimer,
             style: theme.textTheme.bodySmall,
           ),
           TextButton(
             onPressed: () {
               unawaited(onShowRisks());
             },
-            child: const Text('Know the risks'),
+            child: Text(l10n.onboardingKnowTheRisks),
           ),
         ],
       ),
@@ -1171,17 +1182,18 @@ class _SpeedProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final gaugeStatus = () {
       switch (state.status) {
         case OnboardingSpeedTestStatus.running:
-          return 'Testing…';
+          return l10n.onboardingSpeedTestTesting;
         case OnboardingSpeedTestStatus.completed:
-          return 'Result ready';
+          return l10n.onboardingSpeedTestResultReady;
         case OnboardingSpeedTestStatus.error:
-          return 'Unavailable';
+          return l10n.onboardingSpeedTestUnavailableShort;
         case OnboardingSpeedTestStatus.idle:
         default:
-          return state.optIn ? 'Ready' : 'Skipped';
+          return state.optIn ? l10n.onboardingSpeedTestReady : l10n.onboardingSpeedTestSkipped;
       }
     }();
 
@@ -1193,10 +1205,10 @@ class _SpeedProgress extends StatelessWidget {
           children: [
             Center(
               child: SpeedGauge(
-                speed: state.downloadMbps,
-                statusLabel: gaugeStatus,
-                title: 'Download',
+                needleValue: state.downloadMbps.clamp(0, 100),
+                displayValue: state.downloadMbps,
                 maxValue: 100,
+                statusLabel: gaugeStatus,
               ),
             ),
             const SizedBox(height: 16),
@@ -1204,7 +1216,7 @@ class _SpeedProgress extends StatelessWidget {
               LinearProgressIndicator(value: state.progress > 0 ? state.progress : null),
               const SizedBox(height: 8),
               Text(
-                'Collecting download and upload samples…',
+                l10n.onboardingSpeedTestCollecting,
                 style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withOpacity(0.7),
                     ),
@@ -1216,11 +1228,11 @@ class _SpeedProgress extends StatelessWidget {
               children: [
                 Expanded(
                   child: _MetricTile(
-                    label: 'Download',
+                    label: l10n.onboardingLabelDownload,
                     value: state.downloadMbps > 0
                         ? '${state.downloadMbps.toStringAsFixed(1)} Mbps'
                         : state.isRunning
-                            ? 'Measuring…'
+                            ? l10n.onboardingSpeedTestMeasuring
                             : '--',
                     icon: Icons.download,
                   ),
@@ -1228,11 +1240,11 @@ class _SpeedProgress extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _MetricTile(
-                    label: 'Upload',
+                    label: l10n.onboardingLabelUpload,
                     value: state.uploadMbps > 0
                         ? '${state.uploadMbps.toStringAsFixed(1)} Mbps'
                         : state.isRunning
-                            ? 'Pending…'
+                            ? l10n.onboardingSpeedTestPending
                             : '--',
                     icon: Icons.upload,
                   ),
@@ -1241,11 +1253,11 @@ class _SpeedProgress extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _MetricTile(
-              label: 'Latency',
+              label: l10n.onboardingLabelLatency,
               value: state.latency != null
                   ? '${state.latency!.inMilliseconds} ms'
                   : state.isRunning
-                      ? 'Checking…'
+                      ? l10n.onboardingSpeedTestChecking
                       : '--',
               icon: Icons.podcasts,
             ),
@@ -1333,10 +1345,14 @@ class _ServerSummaryCard extends StatelessWidget {
             if (server.downloadSpeed != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text('Recent throughput: ${(server.downloadSpeed! / 1000).toStringAsFixed(1)} Mbps'),
+                child: Text(
+                  l10n.onboardingRecentThroughput(
+                    (server.downloadSpeed! / 1000).toStringAsFixed(1),
+                  ),
+                ),
               ),
             if (server.sessions != null)
-              Text('Active sessions: ${server.sessions}'),
+              Text(l10n.onboardingActiveSessions(server.sessions!)),
           ],
         ),
       ),
@@ -1370,13 +1386,13 @@ class _ImportedConfigCard extends StatelessWidget {
                 IconButton(
                   onPressed: onClear,
                   icon: const Icon(Icons.close),
-                  tooltip: 'Remove',
+                  tooltip: context.l10n.commonRemove,
                 ),
               ],
             ),
-            Text('Remote: ${config.remote}'),
+            Text(context.l10n.onboardingRemoteLabel(config.remote)),
             if (config.cipher != null)
-              Text('Cipher: ${config.cipher}'),
+              Text(context.l10n.onboardingCipherLabel(config.cipher!)),
           ],
         ),
       ),

@@ -113,6 +113,7 @@ class OnboardingSpeedTestController
 
     try {
       await _service.runTest(
+        measureThroughVpn: false,
         onPhase: (phase) {
           final progress = switch (phase) {
             SpeedTestPhase.locating => 0.05,
