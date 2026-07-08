@@ -1,10 +1,10 @@
-package astraeus.smartdolphin.vpn.vpn
+﻿package com.smartdolphin.vpn.vpn
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import astraeus.smartdolphin.vpn.MainActivity
+import com.smartdolphin.vpn.MainActivity
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

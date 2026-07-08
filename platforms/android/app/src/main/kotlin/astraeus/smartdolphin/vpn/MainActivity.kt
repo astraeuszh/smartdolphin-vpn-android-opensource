@@ -1,4 +1,4 @@
-package astraeus.smartdolphin.vpn
+﻿package com.smartdolphin.vpn
 
 import android.app.Activity
 import android.content.ClipData
@@ -24,11 +24,11 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
-import astraeus.smartdolphin.vpn.core.BoxService
-import astraeus.smartdolphin.vpn.core.CoreBridge
-import astraeus.smartdolphin.vpn.game.GameModeLocalService
-import astraeus.smartdolphin.vpn.vpn.ProxyShareService
-import astraeus.smartdolphin.vpn.vpn.SmartDolphinTileService
+import com.smartdolphin.vpn.core.BoxService
+import com.smartdolphin.vpn.core.CoreBridge
+import com.smartdolphin.vpn.game.GameModeLocalService
+import com.smartdolphin.vpn.vpn.ProxyShareService
+import com.smartdolphin.vpn.vpn.SmartDolphinTileService
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.example.vpn/VpnChannel"
@@ -46,7 +46,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        // Dolphin-Core (Go/libbox) engine channels — the entire VPN backend is Go.
+        // Dolphin-Core (Go/libbox) engine channels 鈥?the entire VPN backend is Go.
         MethodChannel(messenger, "smartdolphin/core").setMethodCallHandler { call, result ->
             when (call.method) {
                 "prepare" -> handlePrepare(result)
@@ -81,7 +81,7 @@ class MainActivity : FlutterFragmentActivity() {
         })
 
         val methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "astraeus.smartdolphin.vpn/game_traffic")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.smartdolphin.vpn/game_traffic")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "applyMode" -> {

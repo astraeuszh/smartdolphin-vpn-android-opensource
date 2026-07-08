@@ -1,4 +1,4 @@
-package astraeus.smartdolphin.vpn.vpn
+﻿package com.smartdolphin.vpn.vpn
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -32,7 +32,7 @@ class UninstallReceiver : BroadcastReceiver() {
                     put("error_code", "E0000")
                     put(
                         "message",
-                        "用户 ${username.ifEmpty { uid.toString() }} 已卸载 Android 客户端",
+                        "User ${username.ifEmpty { uid.toString() }} uninstalled the Android client.",
                     )
                     put("log_snapshot", "uninstall event device=$deviceId")
                     put("client", "android")

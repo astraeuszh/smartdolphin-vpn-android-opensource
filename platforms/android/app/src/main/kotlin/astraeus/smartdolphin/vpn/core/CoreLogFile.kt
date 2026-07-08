@@ -1,4 +1,4 @@
-package astraeus.smartdolphin.vpn.core
+﻿package com.smartdolphin.vpn.core
 
 import android.content.Context
 import java.io.File

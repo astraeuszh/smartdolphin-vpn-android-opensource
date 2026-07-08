@@ -1,4 +1,4 @@
-package astraeus.smartdolphin.vpn.vpn
+﻿package com.smartdolphin.vpn.vpn
 
 import android.util.Log
 import java.io.InputStream
@@ -8,7 +8,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** 简易 HTTP CONNECT / SOCKS5 代理，供「代理共享」在 VPN 连接后向局域网设备提供出口。 */
+/** 绠€鏄?HTTP CONNECT / SOCKS5 浠ｇ悊锛屼緵銆屼唬鐞嗗叡浜€嶅湪 VPN 杩炴帴鍚庡悜灞€鍩熺綉璁惧鎻愪緵鍑哄彛銆?*/
 object ProxyShareService {
     private const val TAG = "ProxyShareService"
     private const val HTTP_PORT = 8080

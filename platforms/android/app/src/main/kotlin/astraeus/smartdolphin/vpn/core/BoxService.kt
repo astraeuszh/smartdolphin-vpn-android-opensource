@@ -1,4 +1,4 @@
-package astraeus.smartdolphin.vpn.core
+﻿package com.smartdolphin.vpn.core
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -47,8 +47,8 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
 
     companion object {
         private const val TAG = "BoxService"
-        const val ACTION_START = "astraeus.smartdolphin.vpn.START"
-        const val ACTION_STOP = "astraeus.smartdolphin.vpn.STOP"
+        const val ACTION_START = "com.smartdolphin.vpn.START"
+        const val ACTION_STOP = "com.smartdolphin.vpn.STOP"
         const val EXTRA_CONFIG = "config"
         private const val NOTIF_CHANNEL = "dolphin_vpn"
         private const val NOTIF_ID = 7301
@@ -92,7 +92,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                 Thread {
                     synchronized(boxLock) {
                         // A second START without STOP (reconnect / stale service) must not
-                        // stack two libbox instances — that leaves a zombie tun that looks
+                        // stack two libbox instances 鈥?that leaves a zombie tun that looks
                         // "connected" but carries no traffic after hours in background.
                         teardownBox(emitDisconnected = false)
                         startBox(config)
@@ -121,14 +121,14 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
             server.start()
             commandServer = server
             // options MUST be non-null: the Go side dereferences it directly
-            // (command_server.go StartOrReloadService) → nil would SIGSEGV the core.
+            // (command_server.go StartOrReloadService) 鈫?nil would SIGSEGV the core.
             server.startOrReloadService(config, OverrideOptions())
 
             startStatusClient()
             defaultInterfaceReady = false
             scheduleDefaultInterfaceRefresh()
             if (!waitForDefaultInterfaceReady(10_000)) {
-                Log.w(TAG, "Default physical NIC not ready at connect time — continuing with scheduled refresh")
+                Log.w(TAG, "Default physical NIC not ready at connect time 鈥?continuing with scheduled refresh")
                 CoreLogFile.append("startBox warning: default interface not ready yet")
             }
             CoreBridge.emitStage("connected")
@@ -372,7 +372,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
         }
     }
 
-    /** Re-publish default NIC after service (re)start — libbox reload can miss the first update. */
+    /** Re-publish default NIC after service (re)start 鈥?libbox reload can miss the first update. */
     private fun scheduleDefaultInterfaceRefresh() {
         for (delay in REFRESH_DELAYS_MS) {
             mainHandler.postDelayed({ pushDefaultInterface(defaultInterfaceListener) }, delay)
@@ -426,7 +426,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                 return
             }
             // Index MUST match an entry from getInterfaces() or libbox filters the
-            // interface list to empty → "no available network interface" on every dial.
+            // interface list to empty 鈫?"no available network interface" on every dial.
             val index = findInterfaceIndexForName(name)
             if (index <= 0) {
                 Log.w(TAG, "pushDefaultInterface -> index unresolved for '$name', clearing default")
@@ -474,7 +474,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                 for (ia in ni.interfaceAddresses) {
                     var host = ia.address.hostAddress ?: continue
                     // Strip IPv6 zone/scope id (e.g. "fe80::1%rmnet_data0"): sing-box's
-                    // netip.ParsePrefix panics on a zone in a prefix → crashes the whole core.
+                    // netip.ParsePrefix panics on a zone in a prefix 鈫?crashes the whole core.
                     val zone = host.indexOf('%')
                     if (zone >= 0) host = host.substring(0, zone)
                     val pfx = ia.networkPrefixLength.toInt()

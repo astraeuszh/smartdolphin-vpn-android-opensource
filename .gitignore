@@ -32,6 +32,16 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+**/build/
+dist/
+
+# Local Flutter compatibility junctions for the monorepo layout.
+apps/mobile-flutter/android/
+apps/mobile-flutter/assets/
+apps/mobile-flutter/test/
+apps/mobile-flutter/web/
+platforms/.dart_tool/
+platforms/.flutter-plugins-dependencies
 archive/
 
 # Symbolication related

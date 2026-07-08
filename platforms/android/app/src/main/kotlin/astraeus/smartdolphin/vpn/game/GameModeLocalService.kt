@@ -1,4 +1,4 @@
-package astraeus.smartdolphin.vpn.game
+﻿package com.smartdolphin.vpn.game
 
 import android.app.GameManager
 import android.app.GameState
@@ -16,11 +16,11 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import astraeus.smartdolphin.vpn.MainActivity
+import com.smartdolphin.vpn.MainActivity
 
 /**
- * 游戏加速（本机、无 Root、不经 VPN）：前台 + 可选唤醒锁 + 系统 GameManager 提示。
- * 效果因机型而异，不保证固定毫秒数，但属于无 Root 下常见「尽力」手段。
+ * 娓告垙鍔犻€燂紙鏈満銆佹棤 Root銆佷笉缁?VPN锛夛細鍓嶅彴 + 鍙€夊敜閱掗攣 + 绯荤粺 GameManager 鎻愮ず銆?
+ * 鏁堟灉鍥犳満鍨嬭€屽紓锛屼笉淇濊瘉鍥哄畾姣鏁帮紝浣嗗睘浜庢棤 Root 涓嬪父瑙併€屽敖鍔涖€嶆墜娈点€?
  */
 class GameModeLocalService : Service() {
 
@@ -61,7 +61,7 @@ class GameModeLocalService : Service() {
         super.onDestroy()
     }
 
-    /** 加速：唤醒锁 + 向系统上报「游戏中」（对本应用进程；部分 ROM 会调整调度）。减速：全部释放。 */
+    /** 鍔犻€燂細鍞ら啋閿?+ 鍚戠郴缁熶笂鎶ャ€屾父鎴忎腑銆嶏紙瀵规湰搴旂敤杩涚▼锛涢儴鍒?ROM 浼氳皟鏁磋皟搴︼級銆傚噺閫燂細鍏ㄩ儴閲婃斁銆?*/
     private fun applyAccelHints(mode: String) {
         releaseAccelHints()
         if (mode == MODE_ACCEL) {
@@ -100,7 +100,7 @@ class GameModeLocalService : Service() {
         wakeLock = null
     }
 
-    /** API 33+：GameState / setGameState 才齐全；向系统上报「不可中断对战」类状态（对本应用进程）。 */
+    /** API 33+锛欸ameState / setGameState 鎵嶉綈鍏紱鍚戠郴缁熶笂鎶ャ€屼笉鍙腑鏂鎴樸€嶇被鐘舵€侊紙瀵规湰搴旂敤杩涚▼锛夈€?*/
     private fun reportGamePlayingStateIfAvailable() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         try {
@@ -128,9 +128,9 @@ class GameModeLocalService : Service() {
 
     private fun buildNotification(mode: String): Notification {
         val (title, text) = if (mode == MODE_DECEL) {
-            "游戏模式 · 减速" to "降低本机资源占用（未使用 VPN 隧道）"
+            "Game Mode - Low load" to "Local resource usage is reduced without using the VPN tunnel."
         } else {
-            "游戏加速" to "本机侧已尽力优化（前台、唤醒、系统提示）"
+            "Game acceleration" to "Local game-side optimizations are active."
         }
         val openIntent = PendingIntent.getActivity(
             this,
@@ -154,11 +154,11 @@ class GameModeLocalService : Service() {
     companion object {
         private const val TAG = "GameModeLocal"
 
-        /** 单次会话最长持有唤醒锁，防止异常未释放时永久耗电 */
+        /** 鍗曟浼氳瘽鏈€闀挎寔鏈夊敜閱掗攣锛岄槻姝㈠紓甯告湭閲婃斁鏃舵案涔呰€楃數 */
         private const val WAKE_MAX_MS = 10L * 60L * 60L * 1000L
 
         private const val CHANNEL_ID = "game_mode_local_v1"
-        private const val CHANNEL_NAME = "游戏模式"
+        private const val CHANNEL_NAME = "娓告垙妯″紡"
         private const val NOTIFICATION_ID = 0x4741
         private const val EXTRA_MODE = "mode"
         const val MODE_ACCEL = "accel"

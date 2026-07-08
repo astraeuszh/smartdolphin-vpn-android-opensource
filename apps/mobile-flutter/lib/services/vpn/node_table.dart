@@ -1,9 +1,6 @@
 import 'dart:convert';
 
-/// Canonical node table + sing-box config generation for the Dolphin-Core
-/// (sing-box) engine. Mirrors the Windows client's node_table.go so the same
-/// nodes / credentials are used across platforms.
-
+/// Canonical node table and sing-box config generation for Dolphin-Core.
 const String kVlessUuid = 'e6171791-01a9-47b9-8371-e5c8a1b84ffb';
 const String kRealityPbk = '-vjbn6uLtRHtqFwM9GOX2tLJasW8F9fS5MsQdf9cfGo';
 const String kRealityShort = 'd4cd34b97f9631a6';
@@ -13,7 +10,13 @@ const String kWgPrivateKey = 'REDACTED_WIREGUARD_PRIVATE_KEY';
 const String kWgPeerPubKey = 'REDACTED_WIREGUARD_PEER_PUBLIC_KEY';
 const String kWgLocalAddr = '10.7.0.2/32';
 
-/// Supported transport protocols (must match Windows ProtoReality/…).
+const List<String> kNodeIpCidrs = [
+  '206.245.157.199/32',
+  '166.88.197.246/32',
+  '192.124.176.24/32',
+  '2605:e440:16::334/128',
+];
+
 enum SdProtocol { reality, hysteria2, wireguard }
 
 SdProtocol sdProtocolFromName(String? name) {
@@ -39,18 +42,35 @@ class SdNode {
     required this.flag,
   });
 
-  final String tag; // outbound tag + UI identity
-  final String host; // server IP
-  final String h2Sni; // Hysteria2 TLS SNI
-  final int realityPort; // VLESS+Reality TCP port
-  final String flag; // country flag code (HK / US)
+  final String tag;
+  final String host;
+  final String h2Sni;
+  final int realityPort;
+  final String flag;
 }
 
-/// Authoritative node list (order = display order). Mirrors canonicalNodes().
 const List<SdNode> kNodes = [
-  SdNode(tag: '香港1', host: '38.76.194.13', h2Sni: 'astraeuszhao.com', realityPort: 443, flag: 'HK'),
-  SdNode(tag: '香港2', host: '154.219.104.222', h2Sni: 'smartdolphinvpn.com', realityPort: 8444, flag: 'HK'),
-  SdNode(tag: '美国', host: '154.9.26.253', h2Sni: 'smartdolphin.top', realityPort: 443, flag: 'US'),
+  SdNode(
+    tag: 'Netherlands',
+    host: '206.245.157.199',
+    h2Sni: 'astraeuszhao.com',
+    realityPort: 8444,
+    flag: 'NL',
+  ),
+  SdNode(
+    tag: 'United States',
+    host: '166.88.197.246',
+    h2Sni: 'smartdolphin.top',
+    realityPort: 8444,
+    flag: 'US',
+  ),
+  SdNode(
+    tag: 'Singapore',
+    host: '2605:e440:16::334',
+    h2Sni: 'smartdolphinvpn.com',
+    realityPort: 8444,
+    flag: 'SG',
+  ),
 ];
 
 SdNode nodeForHostOrCountry(String? host, String? country) {
@@ -61,11 +81,14 @@ SdNode nodeForHostOrCountry(String? host, String? country) {
   }
   if (country != null && country.isNotEmpty) {
     final c = country.toLowerCase();
-    if (c.contains('us') || c.contains('united') || c.contains('美')) {
+    if (c.contains('us') || c.contains('united') || c.contains('america')) {
       return kNodes.firstWhere((n) => n.flag == 'US', orElse: () => kNodes.first);
     }
-    if (c.contains('hk') || c.contains('hong') || c.contains('香港')) {
-      return kNodes.firstWhere((n) => n.flag == 'HK', orElse: () => kNodes.first);
+    if (c.contains('nl') || c.contains('netherlands') || c.contains('holland')) {
+      return kNodes.firstWhere((n) => n.flag == 'NL', orElse: () => kNodes.first);
+    }
+    if (c.contains('sg') || c.contains('singapore')) {
+      return kNodes.firstWhere((n) => n.flag == 'SG', orElse: () => kNodes.first);
     }
   }
   return kNodes.first;
@@ -92,7 +115,6 @@ const _cnDomainSuffixes = [
   '.oppo.com',
   '.allawntech.com',
   '.doubao.com',
-  '.douyin.com',
   '.amap.com',
   '.ctdns.cn',
   '.dnspod.cn',
@@ -100,7 +122,6 @@ const _cnDomainSuffixes = [
 
 const _localDnsResolverIps = ['223.5.5.5/32', '223.6.6.6/32'];
 
-/// Upstream DNS through the tunnel — matches Windows (DoH + local resolver bootstrap).
 Map<String, dynamic> _remoteDnsServer(bool forceDnsThroughTunnel) {
   if (forceDnsThroughTunnel) {
     return {
@@ -123,8 +144,6 @@ List<Map<String, dynamic>> _dnsRules({
   required bool blockLocalDns,
 }) {
   final rules = <Map<String, dynamic>>[
-    // Only direct-routed flows use AliDNS — NOT every outbound (that polluted
-    // foreign domains to China CDN IPs → SSL errors + 1000ms+ latency).
     {'outbound': 'direct', 'server': 'local-dns'},
   ];
   if (!globalMode) {
@@ -136,7 +155,6 @@ List<Map<String, dynamic>> _dnsRules({
   return rules;
 }
 
-/// Builds the node's sing-box outbound (tag = "proxy").
 Map<String, dynamic> _proxyOutbound(SdNode n, SdProtocol proto) {
   switch (proto) {
     case SdProtocol.hysteria2:
@@ -188,11 +206,6 @@ Map<String, dynamic> _proxyOutbound(SdNode n, SdProtocol proto) {
   }
 }
 
-/// Generates a full sing-box config JSON string for the Android (libbox) engine.
-///
-/// - [globalMode] true → route everything through the proxy; false → keep
-///   mainland-China traffic on the direct outbound (smart split).
-/// - [dnsServer] upstream DNS used through the tunnel (default 8.8.8.8).
 String buildSingBoxConfig({
   required SdNode node,
   required SdProtocol protocol,
@@ -214,24 +227,13 @@ String buildSingBoxConfig({
     'final': 'proxy',
     'rules': <Map<String, dynamic>>[
       {'protocol': 'dns', 'outbound': 'dns-out'},
-      // Node IPs must dial direct so the handshake never loops through the tunnel.
-      {
-        'ip_cidr': ['38.76.194.13/32', '154.219.104.222/32', '154.9.26.253/32'],
-        'outbound': 'direct',
-      },
-      // Local resolver must never loop through the proxy.
+      {'ip_cidr': kNodeIpCidrs, 'outbound': 'direct'},
       {'ip_cidr': _localDnsResolverIps, 'outbound': 'direct'},
       {
-        'domain': ['astraeuszhao.com', 'astraeuszhao.top', 'smartdolphin.top', 'smartdolphinvpn.com'],
+        'domain': ['astraeuszhao.com', 'smartdolphin.top', 'smartdolphinvpn.com'],
         'outbound': 'direct',
       },
-      // Loopback always bypasses the tunnel.
-      {
-        'ip_cidr': ['127.0.0.0/8'],
-        'outbound': 'direct',
-      },
-      // Private / link-local ranges bypass the tunnel only when "bypass LAN" is
-      // on (lets the user reach routers, printers, NAS, casting, etc. directly).
+      {'ip_cidr': ['127.0.0.0/8'], 'outbound': 'direct'},
       if (bypassLan)
         {
           'ip_cidr': ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16'],
@@ -247,8 +249,6 @@ String buildSingBoxConfig({
 
   final config = <String, dynamic>{
     'log': {'level': logLevel, 'timestamp': true},
-    // Foreign domains resolve via 8.8.8.8 through the exit node so CDN edges
-    // are near the VPN server — not China-optimised IPs from AliDNS (SSL errors).
     'dns': {
       'servers': [
         _remoteDnsServer(forceDnsThroughTunnel),
@@ -272,17 +272,11 @@ String buildSingBoxConfig({
         'mtu': mtu,
         'auto_route': autoRouteSystem,
         'strict_route': false,
-        'inet4_route_exclude_address': const [
-          '38.76.194.13/32',
-          '154.219.104.222/32',
-          '154.9.26.253/32',
-        ],
+        'inet4_route_exclude_address': kNodeIpCidrs,
         'stack': 'system',
         'sniff': true,
         'sniff_override_destination': true,
         'endpoint_independent_nat': true,
-        // Per-app split tunnelling. include wins over exclude (sing-box rejects
-        // both at once); empty → all apps go through the tunnel.
         if (includePackages.isNotEmpty) 'include_package': includePackages,
         if (includePackages.isEmpty && excludePackages.isNotEmpty) 'exclude_package': excludePackages,
       },

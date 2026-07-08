@@ -11,7 +11,7 @@ java {
 }
 
 android {
-    namespace = "astraeus.smartdolphin.vpn"
+    namespace = "com.smartdolphin.vpn"
     compileSdk = 36
     // NDK 26.x is the only fully-installed NDK here; 27.0.12077973 is a partial
     // (failed) install missing build/cmake/android.toolchain.cmake. The plugin
@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "vpn.smartdolphin.com"
+        applicationId = "com.smartdolphin.vpn"
         minSdk = 26
         targetSdk = 36
         versionCode = flutter.versionCode?.toInt() ?: 1
@@ -75,7 +75,7 @@ android {
 
 
 flutter {
-    source = "../.."
+    source = "../../../apps/mobile-flutter"
 }
 
 // Local Dolphin-Core (Go/libbox) archive lives in app/libs.

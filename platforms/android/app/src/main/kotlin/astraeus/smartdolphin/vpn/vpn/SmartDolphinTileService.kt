@@ -1,11 +1,11 @@
-package astraeus.smartdolphin.vpn.vpn
+﻿package com.smartdolphin.vpn.vpn
 
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import astraeus.smartdolphin.vpn.MainActivity
+import com.smartdolphin.vpn.MainActivity
 
 class SmartDolphinTileService : TileService() {
     override fun onStartListening() {
