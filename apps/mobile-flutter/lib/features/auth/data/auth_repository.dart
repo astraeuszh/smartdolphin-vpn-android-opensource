@@ -8,6 +8,7 @@ import '../../../services/platform/hardware_device_id.dart';
 import '../../../services/remote/console_auth.dart';
 import '../../../services/remote/console_qr_auth.dart';
 import '../domain/account_session.dart';
+import '../domain/traffic_policy.dart';
 
 const _storageKey = 'smartdolphin_auth_v2';
 const _deviceKey = 'smartdolphin_device_id';
@@ -51,7 +52,10 @@ class AuthRepository {
         deviceId: map['device_id'] as String? ?? '',
         banned: map['banned'] as bool? ?? false,
         permissionLevel: (map['permission_level'] as num?)?.toInt() ?? 0,
+        trafficPolicy: TrafficPolicy.fromJson(map),
         email: map['email'] as String? ?? '',
+        createdAt: (map['created_at'] as num?)?.toInt() ?? 0,
+        subscribedAt: (map['subscribed_at'] as num?)?.toInt() ?? 0,
       );
     } catch (_) {
       await _storage.delete(key: _storageKey);

@@ -75,6 +75,18 @@ class TrafficPolicy {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'has_traffic_policy': hasPolicy,
+        'throttle': throttled,
+        'throttle_message': throttleMessage,
+        'monthly_quota_gb': monthlyQuotaGb,
+        'monthly_used_gb': monthlyUsedGb,
+        'over_quota': overQuota,
+        'violation_count': risk.violationCount,
+        'traffic_limit_count': risk.trafficLimitCount,
+        'risk_penalty_until': risk.penaltyUntil,
+      };
+
   static double _asDouble(dynamic v) {
     if (v is num) return v.toDouble();
     return double.tryParse('$v') ?? 0;

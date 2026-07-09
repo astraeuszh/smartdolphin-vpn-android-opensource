@@ -75,7 +75,7 @@ android {
 
 
 flutter {
-    source = "../../../apps/mobile-flutter"
+    source = "../.."
 }
 
 // Local Dolphin-Core (Go/libbox) archive lives in app/libs.

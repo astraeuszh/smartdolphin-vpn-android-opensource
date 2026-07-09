@@ -118,6 +118,7 @@ class AccountSession {
         'email': email,
         'created_at': createdAt,
         'subscribed_at': subscribedAt,
+        ...trafficPolicy.toJson(),
       };
 
   static int _asInt(dynamic v) {

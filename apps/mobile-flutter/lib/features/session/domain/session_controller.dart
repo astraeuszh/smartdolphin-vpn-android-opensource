@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -613,7 +613,7 @@ class SessionController extends StateNotifier<SessionState> {
       _setError(ecNodeConfigFailed, details: 'Protocol not supported');
       return;
     }
-    // 立即显示「正在连接」状态，让用户感觉秒连
+    // Show the connecting state immediately so the UI responds to the tap.
     state = state.copyWith(
       status: SessionStatus.connecting,
       errorMessage: null,
@@ -621,7 +621,7 @@ class SessionController extends StateNotifier<SessionState> {
     await Future<void>.delayed(
         Duration.zero); // yield so UI paints orange immediately
 
-    // 连接前检查网络，已离线则立即报错
+    // Check local connectivity before starting the tunnel.
     final results = await Connectivity().checkConnectivity();
     final hasNetwork = results.isNotEmpty &&
         !results.every((r) => r == ConnectivityResult.none);
@@ -638,8 +638,8 @@ class SessionController extends StateNotifier<SessionState> {
     }
     _vpnPort.setMemoryTier(tier);
 
-    // 请求 VPN 权限（已有权限时几乎无延迟）。加超时：长时间后台后原生 prepare 可能不返回，
-    // 否则会卡在 connecting 直到 30s 连接超时，期间切节点等操作无响应。
+    // Request VPN permission with a timeout. Some Android builds can leave
+    // prepare() hanging after long background sessions.
     final prepared = await _vpnPort
         .prepare()
         .timeout(const Duration(seconds: 12), onTimeout: () => false);
@@ -685,7 +685,7 @@ class SessionController extends StateNotifier<SessionState> {
       final initialIp = _ref.read(speedTestControllerProvider).ip;
       final startElapsed = await _clock.elapsedRealtime();
 
-      // SmartDolphin 自有节点：优先使用 static_servers 中的配置，避免缓存数据损坏
+      // Prefer the bundled SmartDolphin node config over cached catalog data.
       final configBase64 = _resolveConfigBase64(server);
 
       // Convert Server to Vpn model for Dolphin-Core connection
@@ -783,8 +783,8 @@ class SessionController extends StateNotifier<SessionState> {
       // Tear down VPN and notification in background. A bounded timeout is critical: after the OS
       // reclaims the VPN service during long background, a native call can hang forever; without a
       // timeout the `finally` below never runs, _manualDisconnectInProgress stays true, and every
-      // later tap (connect/switch/disconnect) is silently ignored — the UI looks frozen until the
-      // app is force-killed. This was the "后台过久后切节点/模式 → 界面卡死" bug.
+      // later tap (connect/switch/disconnect) is silently ignored; the UI looks frozen until the
+      // app is force-killed.
       try {
         await _vpnPort
             .disconnect()
@@ -969,10 +969,10 @@ class SessionController extends StateNotifier<SessionState> {
         _lastTickRx = rx;
         _lastTickTx = tx;
       } catch (_) {}
-      if (_tickCounter % 15 == 0) {
+      if (_tickCounter % 60 == 0) {
         unawaited(_ref.read(authControllerProvider.notifier).refreshSession());
       }
-      if (_tickCounter % 30 == 0 && _bytesSinceTrafficReport > 0) {
+      if (_tickCounter % 150 == 0 && _bytesSinceTrafficReport > 0) {
         final session = _ref.read(authControllerProvider).session;
         if (session != null) {
           final reportBytes = _bytesSinceTrafficReport;
@@ -1010,8 +1010,8 @@ class SessionController extends StateNotifier<SessionState> {
           state: state,
         );
       }
-      // 每 ~60s 探测 Clash API，长时间连接（息屏/后台）隧道僵死时自动硬重连。
-      if (_tickCounter % 30 == 0) {
+      // Every ~5 minutes, check whether the local core API is still alive.
+      if (_tickCounter % 150 == 0) {
         unawaited(_evaluateTunnelHealth());
       }
     });
@@ -1131,7 +1131,7 @@ class SessionController extends StateNotifier<SessionState> {
     }
   }
 
-  /// 管理员开启/关闭账户限速后，重连使 Dolphin-Core 隧道 shaping 生效。
+  /// Reconnect so server-side account speed throttling takes effect.
   Future<void> reconnectToApplyAccountTrafficPolicy() async {
     if (state.status != SessionStatus.connected) return;
     if (_manualDisconnectInProgress ||
@@ -1177,7 +1177,7 @@ class SessionController extends StateNotifier<SessionState> {
     }
   }
 
-  /// 全屏游戏模式开关或减速偏好变化后，重连使隧道上的 shaper 与当前 overlay / 减速一致。
+  /// Reconnect so the tunnel shaper matches the current game-mode settings.
   Future<void> reconnectToApplyGameModeTunnel(BuildContext context) async {
     if (state.status != SessionStatus.connected) return;
     if (_manualDisconnectInProgress || _pendingConnection != null) {
@@ -1200,7 +1200,7 @@ class SessionController extends StateNotifier<SessionState> {
     );
   }
 
-  /// 断开并立即用当前节点重连，使 SmartStable（tun-mtu / mssfix）等新配置生效。
+  /// Reconnect with the current server so SmartStable tuning takes effect.
   Future<void> reconnectForSmartStable(BuildContext context) async {
     if (state.status != SessionStatus.connected) return;
     if (_manualDisconnectInProgress || _pendingConnection != null) {
@@ -1224,7 +1224,7 @@ class SessionController extends StateNotifier<SessionState> {
     );
   }
 
-  /// 直接切换节点：断开当前连接并连接到新节点
+  /// Switch server by disconnecting the current tunnel and connecting again.
   Future<void> switchToServerAndConnect({
     required BuildContext context,
     required Server server,

@@ -58,6 +58,8 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   final Ref _ref;
+  Future<void>? _refreshInFlight;
+  DateTime? _lastRefreshAt;
 
   AuthRepository get _repo => _ref.read(authRepositoryProvider);
 
@@ -70,6 +72,7 @@ class AuthController extends StateNotifier<AuthState> {
       state = const AuthState(status: AuthStatus.guest);
       return;
     }
+    _applySession(saved);
     try {
       final updated = await _repo.refresh(saved);
       _applySession(updated);
@@ -164,7 +167,28 @@ class AuthController extends StateNotifier<AuthState> {
     state = const AuthState(status: AuthStatus.guest);
   }
 
-  Future<void> refreshSession() async {
+  Future<void> refreshSession({bool force = false}) async {
+    final now = DateTime.now();
+    final last = _lastRefreshAt;
+    if (_refreshInFlight != null) {
+      await _refreshInFlight;
+      return;
+    }
+    if (!force &&
+        last != null &&
+        now.difference(last) < const Duration(minutes: 2)) {
+      return;
+    }
+    _refreshInFlight = _refreshSessionNow();
+    try {
+      await _refreshInFlight;
+    } finally {
+      _refreshInFlight = null;
+      _lastRefreshAt = DateTime.now();
+    }
+  }
+
+  Future<void> _refreshSessionNow() async {
     final saved = await _repo.loadSession() ?? state.session;
     if (saved == null) return;
     try {
@@ -248,8 +272,8 @@ class AuthController extends StateNotifier<AuthState> {
     if (s == null) return false;
     if (s.banned) return false;
     if (s.sessionToken.isNotEmpty) {
-      unawaited(refreshSession());
-      return s.canUseVpn;
+      await refreshSession(force: true);
+      return state.session?.canUseVpn ?? s.canUseVpn;
     }
     try {
       final updated = await _repo.refresh(s);
