@@ -6,7 +6,7 @@ import '../errors/error_dialog.dart';
 import 'startup_checker.dart';
 import '../../features/auth/presentation/auth_gate_screen.dart';
 import '../../services/logging/vpn_logger.dart';
-import '../../theme/theme.dart';
+import '../../services/remote/update_prompt.dart';
 
 /// Splash screen that runs startup self-check before showing main app.
 class SplashCheckScreen extends ConsumerStatefulWidget {
@@ -17,7 +17,6 @@ class SplashCheckScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashCheckScreenState extends ConsumerState<SplashCheckScreen> {
-  AppError? _checkError;
   bool _checkDone = false;
 
   @override
@@ -46,11 +45,13 @@ class _SplashCheckScreenState extends ConsumerState<SplashCheckScreen> {
     final err = await runStartupCheckAsync(ref);
     if (!mounted) return;
     setState(() {
-      _checkError = err;
       _checkDone = true;
     });
     if (err != null) {
       await _showErrorAndWait(err);
+    }
+    if (mounted) {
+      await checkAndPromptForUpdate(context, automatic: true);
     }
     if (!mounted) return;
     _navigateToHome();
@@ -85,7 +86,7 @@ class _SplashCheckScreenState extends ConsumerState<SplashCheckScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              theme.colorScheme.primaryContainer.withOpacity(0.3),
+              theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
               theme.colorScheme.surface,
             ],
           ),
@@ -95,10 +96,19 @@ class _SplashCheckScreenState extends ConsumerState<SplashCheckScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(flex: 2),
-              Icon(
-                Icons.shield_outlined,
-                size: 80,
-                color: theme.colorScheme.primary,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset(
+                  'assets/icons/appicon.png',
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(
+                    Icons.shield_outlined,
+                    size: 80,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
               Text(

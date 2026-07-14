@@ -1,10 +1,13 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/startup/splash_check_screen.dart';
+import '../features/auth/domain/auth_controller.dart';
 import '../features/smart_stable/smart_stable_lifecycle.dart';
+import '../services/logging/vpn_logger.dart';
 import '../features/settings/domain/preferences_controller.dart';
 import '../features/settings/domain/settings_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -32,6 +35,8 @@ class SmartDolphinApp extends ConsumerWidget {
       theme: buildHiVpnTheme(accentSeed: accentSeed),
       themeMode: ThemeMode.light,
       debugShowCheckedModeBanner: false,
+      themeAnimationDuration: Duration.zero,
+      themeAnimationCurve: Curves.linear,
       locale: parseLocaleFromTag(localeTag),
       localeResolutionCallback: (deviceLocale, supportedLocales) {
         final preferred = parseLocaleFromTag(localeTag);
@@ -61,13 +66,143 @@ class SmartDolphinApp extends ConsumerWidget {
       // Directionality/Theme/Localizations/MediaQuery from the app. Mounting it
       // above MaterialApp crashed every frame with "No Directionality widget found".
       builder: (context, child) {
-        return HiVpnGlassBackground(
-          child: SmartStableLifecycle(
-            child: child ?? const SizedBox.shrink(),
+        return Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) {
+            ref.read(vpnLoggerProvider).userAction(
+                  'pointer',
+                  'down',
+                  'x=${event.position.dx.round()}, y=${event.position.dy.round()}',
+                );
+          },
+          child: _ForegroundPresenceHeartbeat(
+            child: _AppLifecycleGate(
+              child: HiVpnGlassBackground(
+                child: SmartStableLifecycle(
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
+            ),
           ),
         );
       },
       home: const SplashCheckScreen(),
+    );
+  }
+}
+
+/// Keeps the admin presence indicator accurate while the app is visibly in
+/// use. It is intentionally inactive in the background and uses a relaxed
+/// cadence to avoid a persistent network or battery cost.
+class _ForegroundPresenceHeartbeat extends ConsumerStatefulWidget {
+  const _ForegroundPresenceHeartbeat({required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_ForegroundPresenceHeartbeat> createState() =>
+      _ForegroundPresenceHeartbeatState();
+}
+
+class _ForegroundPresenceHeartbeatState
+    extends ConsumerState<_ForegroundPresenceHeartbeat>
+    with WidgetsBindingObserver {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      _start();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _start();
+    } else {
+      _timer?.cancel();
+      _timer = null;
+      unawaited(ref
+          .read(authControllerProvider.notifier)
+          .setForegroundPresence(false));
+    }
+  }
+
+  void _start() {
+    _timer?.cancel();
+    unawaited(
+        ref.read(authControllerProvider.notifier).setForegroundPresence(true));
+    _timer = Timer.periodic(const Duration(seconds: 35), (_) {
+      unawaited(ref
+          .read(authControllerProvider.notifier)
+          .setForegroundPresence(true));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// Stops all Flutter tickers while the app is not visible and explicitly
+/// requests a fresh frame after Android recreates the rendering surface.
+class _AppLifecycleGate extends StatefulWidget {
+  const _AppLifecycleGate({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_AppLifecycleGate> createState() => _AppLifecycleGateState();
+}
+
+class _AppLifecycleGateState extends State<_AppLifecycleGate>
+    with WidgetsBindingObserver {
+  bool _foreground = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _foreground = WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final foreground = state == AppLifecycleState.resumed;
+    if (_foreground != foreground && mounted) {
+      setState(() => _foreground = foreground);
+    }
+    if (foreground) {
+      WidgetsBinding.instance.scheduleWarmUpFrame();
+      WidgetsBinding.instance.ensureVisualUpdate();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TickerMode(
+      enabled: _foreground,
+      child: RepaintBoundary(child: widget.child),
     );
   }
 }
@@ -103,37 +238,12 @@ String localeToTag(Locale locale) {
 
 String localeDisplayName(Locale locale) {
   final tag = localeToTag(locale);
-  const names = {
+  const names = <String, String>{
     'en': 'English',
-    'zh': '简体中文',
-    'zh_Hant_TW': '繁體中文',
-    'es': 'Español',
-    'pt_BR': 'Português',
-    'de': 'Deutsch',
-    'fr': 'Français',
-    'ja': '日本語',
-    'ko': '한국어',
+    'zh': '\u7b80\u4f53\u4e2d\u6587',
+    'zh_Hant_TW': '\u7e41\u9ad4\u4e2d\u6587',
+    'es': 'Espa\u00f1ol',
+    'ja': '\u65e5\u672c\u8a9e',
   };
   return names[tag] ?? tag;
-}
-
-class _AppError extends StatelessWidget {
-  const _AppError({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            'Failed to load preferences.\n$message',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
-  }
 }

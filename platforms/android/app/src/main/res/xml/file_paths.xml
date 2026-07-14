@@ -2,6 +2,8 @@
 <paths>
     <external-files-path name="vpn_core" path="vpn-core/" />
     <external-files-path name="vpn_core_logs" path="vpn-core/logs/" />
+    <external-files-path name="app_updates" path="updates/" />
     <files-path name="logs" path="logs/" />
     <files-path name="app_files" path="." />
+    <cache-path name="app_cache" path="." />
 </paths>

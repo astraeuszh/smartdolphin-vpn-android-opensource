@@ -8,6 +8,8 @@ import android.content.Intent
 import android.net.TrafficStats
 import android.net.Uri
 import android.net.VpnService
+import android.media.MediaRecorder
+import android.media.MediaPlayer
 import android.os.Build
 import android.provider.DocumentsContract
 import androidx.core.content.FileProvider
@@ -29,11 +31,15 @@ import com.smartdolphin.vpn.core.CoreBridge
 import com.smartdolphin.vpn.game.GameModeLocalService
 import com.smartdolphin.vpn.vpn.ProxyShareService
 import com.smartdolphin.vpn.vpn.SmartDolphinTileService
+import com.smartdolphin.vpn.update.NativeUpdateManager
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.example.vpn/VpnChannel"
     private val prefsName = "smartdolphin_vpn"
     private var prepareResult: MethodChannel.Result? = null
+    private var voiceRecorder: MediaRecorder? = null
+    private var voiceRecordingFile: File? = null
+    private var voicePlayer: MediaPlayer? = null
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -79,6 +85,50 @@ class MainActivity : FlutterFragmentActivity() {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) { CoreBridge.statusSink = events }
             override fun onCancel(arguments: Any?) { CoreBridge.statusSink = null }
         })
+
+        MethodChannel(messenger, "smartdolphin/voice_recorder").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> startVoiceRecording(result)
+                "amplitude" -> result.success(voiceRecorder?.maxAmplitude ?: 0)
+                "stop" -> stopVoiceRecording(result)
+                "cancel" -> cancelVoiceRecording(result)
+                "openMedia" -> openMedia(call.argument<String>("path"), result)
+                "playVoice" -> playVoice(call.argument<String>("path"), call.argument<Double>("speed") ?: 1.0, result)
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(messenger, "smartdolphin/update").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "enqueue" -> {
+                    val version = call.argument<String>("version") ?: ""
+                    val url = call.argument<String>("url") ?: ""
+                    if (version.isBlank() || url.isBlank()) {
+                        result.error("INVALID_UPDATE", "Missing version or URL", null)
+                    } else {
+                        val id = NativeUpdateManager.enqueue(
+                            applicationContext,
+                            version,
+                            url,
+                            call.argument<String>("sha256") ?: "",
+                            call.argument<Number>("size")?.toLong() ?: 0L,
+                        )
+                        result.success(id)
+                    }
+                }
+                "state" -> {
+                    val state = NativeUpdateManager.state(applicationContext)
+                    result.success(mapOf(
+                        "status" to state.status,
+                        "received" to state.received,
+                        "total" to state.total,
+                        "version" to state.version,
+                    ))
+                }
+                "install" -> result.success(NativeUpdateManager.openInstaller(applicationContext))
+                else -> result.notImplemented()
+            }
+        }
 
         val methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.smartdolphin.vpn/game_traffic")
@@ -224,6 +274,121 @@ class MainActivity : FlutterFragmentActivity() {
             Settings.Secure.getString(contentResolver, "always_on_vpn_app") == packageName
         } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun startVoiceRecording(result: MethodChannel.Result) {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 8114)
+            result.success(false)
+            return
+        }
+        try {
+            cancelVoiceRecording(null)
+            val file = File(cacheDir, "support_voice_${System.currentTimeMillis()}.m4a")
+            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else MediaRecorder()
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setAudioEncodingBitRate(64000)
+            recorder.setAudioSamplingRate(44100)
+            recorder.setOutputFile(file.absolutePath)
+            recorder.prepare()
+            recorder.start()
+            voiceRecorder = recorder
+            voiceRecordingFile = file
+            result.success(true)
+        } catch (e: Exception) {
+            cancelVoiceRecording(null)
+            result.error("VOICE_START", e.message, null)
+        }
+    }
+
+    private fun stopVoiceRecording(result: MethodChannel.Result?) {
+        val recorder = voiceRecorder
+        val file = voiceRecordingFile
+        voiceRecorder = null
+        voiceRecordingFile = null
+        if (recorder == null || file == null) {
+            result?.success(null)
+            return
+        }
+        try {
+            recorder.stop()
+            recorder.release()
+            result?.success(if (file.exists() && file.length() > 256) file.absolutePath else null)
+        } catch (_: Exception) {
+            runCatching { recorder.release() }
+            file.delete()
+            result?.success(null)
+        }
+    }
+
+    private fun cancelVoiceRecording(result: MethodChannel.Result?) {
+        val recorder = voiceRecorder
+        val file = voiceRecordingFile
+        voiceRecorder = null
+        voiceRecordingFile = null
+        runCatching { recorder?.stop() }
+        runCatching { recorder?.release() }
+        runCatching { file?.delete() }
+        result?.success(null)
+    }
+
+    private fun openMedia(path: String?, result: MethodChannel.Result) {
+        if (path.isNullOrBlank()) {
+            result.error("MEDIA_PATH", "Media path is empty", null)
+            return
+        }
+        val file = File(path)
+        if (!file.exists()) {
+            result.error("MEDIA_MISSING", "Media file is unavailable", null)
+            return
+        }
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        val mime = when (file.extension.lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "webp" -> "image/webp"
+            "mp4", "mkv", "webm" -> "video/*"
+            "m4a", "aac", "mp3", "wav" -> "audio/*"
+            "apk" -> "application/vnd.android.package-archive"
+            else -> "*/*"
+        }
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        if (intent.resolveActivity(packageManager) == null) {
+            result.error("MEDIA_VIEWER", "No media viewer is installed", null)
+            return
+        }
+        startActivity(Intent.createChooser(intent, "Open media"))
+        result.success(true)
+    }
+
+    private fun playVoice(path: String?, speed: Double, result: MethodChannel.Result) {
+        if (path.isNullOrBlank() || !File(path).exists()) {
+            result.error("VOICE_MISSING", "Voice file is unavailable", null)
+            return
+        }
+        try {
+            voicePlayer?.release()
+            voicePlayer = MediaPlayer().apply {
+                setDataSource(path)
+                playbackParams = android.media.PlaybackParams().setSpeed(speed.coerceIn(0.5, 2.0).toFloat())
+                setOnCompletionListener { player ->
+                    player.release()
+                    if (voicePlayer === player) voicePlayer = null
+                }
+                prepare()
+                start()
+            }
+            result.success(true)
+        } catch (e: Exception) {
+            voicePlayer?.release()
+            voicePlayer = null
+            result.error("VOICE_PLAY", e.message, null)
         }
     }
 

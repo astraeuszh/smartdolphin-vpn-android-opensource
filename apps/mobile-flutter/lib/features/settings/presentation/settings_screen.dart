@@ -38,6 +38,7 @@ import '../../../services/sdrl/sdrl_rule_store.dart';
 import '../../session/domain/session_controller.dart';
 import '../../session/domain/session_status.dart';
 import '../../../services/logging/vpn_logger.dart';
+import '../../../services/remote/update_prompt.dart';
 import '../../../widgets/legal_agreement_rich_text.dart';
 import '../../../widgets/frosted_glass.dart';
 
@@ -146,27 +147,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _checkForUpdate(BuildContext context) async {
     if (_checkingUpdate) return;
     setState(() => _checkingUpdate = true);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    setState(() => _checkingUpdate = false);
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        final l10n = ctx.l10n;
-        return AlertDialog(
-          title: Text(l10n.settingsUpdateAvailableTitle),
-          content: Text(l10n.settingsUpdateAvailableBody),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: Text(l10n.commonNo)),
-            FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: Text(l10n.commonYes)),
-          ],
-        );
-      },
-    );
+    try {
+      await checkAndPromptForUpdate(context);
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
   }
 
   Widget _sectionGap() {
@@ -702,7 +687,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildSecuritySection(BuildContext context) {
+  Widget _buildLegacySecuritySection(BuildContext context) {
     final l10n = context.l10n;
     final advanced = ref.watch(settingsControllerProvider).advanced;
 
@@ -752,6 +737,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 await _promptKillSwitchAlwaysOn(context);
               }
             }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSecuritySection(BuildContext context) {
+    final advanced = ref.watch(settingsControllerProvider).advanced;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, 'Network protection'),
+        const SizedBox(height: 12),
+        _buildSwitchTile(
+          context,
+          value: advanced.killSwitchMode == KillSwitchMode.strict,
+          title: 'Network disconnect protection',
+          subtitle:
+              'When the VPN disconnects, Android blocks network traffic until it reconnects.',
+          icon: Icons.shield_outlined,
+          onChanged: (enabled) {
+            unawaited(() async {
+              await ref.read(hapticsServiceProvider).selection();
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setKillSwitchMode(
+                    enabled ? KillSwitchMode.strict : KillSwitchMode.off,
+                  );
+              if (!enabled || !mounted) return;
+              if (!await isStrictKillSwitchReady() && mounted) {
+                await _promptKillSwitchAlwaysOn(context);
+              }
+            }());
           },
         ),
       ],

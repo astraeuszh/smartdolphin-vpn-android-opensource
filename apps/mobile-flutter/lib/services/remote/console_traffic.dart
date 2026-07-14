@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../features/auth/domain/account_session.dart';
 import 'console_endpoint.dart';
+import 'client_request_headers.dart';
 
 class ConsoleTraffic {
   ConsoleTraffic({http.Client? client}) : _client = client ?? http.Client();
@@ -32,7 +33,10 @@ class ConsoleTraffic {
     final resp = await _client
         .post(
           uri,
-          headers: {'Content-Type': 'application/json'},
+          headers: await ClientRequestHeaders.standard(
+            bearerToken: session.sessionToken,
+            json: true,
+          ),
           body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 12));

@@ -41,6 +41,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            versionNameSuffix = ""
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
             // Avoid llvm-strip/llvm-objcopy on Windows when NDK tools fail to launch (e.g. network drive).
@@ -75,7 +76,9 @@ android {
 
 
 flutter {
-    source = "../.."
+    // This Android project is shared into apps/mobile-flutter through a junction.
+    // Gradle resolves from the physical platforms/android directory.
+    source = "../../../apps/mobile-flutter"
 }
 
 // Local Dolphin-Core (Go/libbox) archive lives in app/libs.
@@ -91,6 +94,17 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     // Dolphin-Core engine (the entire VPN backend, compiled Go).
     implementation(":libbox@aar")
+}
+
+// Flutter applies generated metadata late in this shared Android project.
+// Preserve the version passed by `flutter build` instead of hardcoding it.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.outputs.forEach { output ->
+            output.versionName.set(flutter.versionName ?: "1.0.0")
+            output.versionCode.set(flutter.versionCode?.toInt() ?: 1)
+        }
+    }
 }
 
 configurations.all {
