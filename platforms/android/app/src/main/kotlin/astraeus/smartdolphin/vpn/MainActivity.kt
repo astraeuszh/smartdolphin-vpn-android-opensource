@@ -112,6 +112,8 @@ class MainActivity : FlutterFragmentActivity() {
                             url,
                             call.argument<String>("sha256") ?: "",
                             call.argument<Number>("size")?.toLong() ?: 0L,
+                            call.argument<String>("chunkManifestUrl") ?: "",
+                            call.argument<List<String>>("downloadUrls") ?: emptyList(),
                         )
                         result.success(id)
                     }

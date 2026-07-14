@@ -19,6 +19,8 @@ class UpdateCheckResult {
     required this.published,
     required this.sha256,
     required this.packageSize,
+    required this.downloadUrls,
+    required this.chunkManifestUrl,
   });
 
   final String versionName;
@@ -29,6 +31,8 @@ class UpdateCheckResult {
   final bool published;
   final String sha256;
   final int packageSize;
+  final List<String> downloadUrls;
+  final String chunkManifestUrl;
 
   String get minimumVersion => versionName;
 
@@ -60,6 +64,8 @@ class ConsoleUpdate {
       'url': update.apkUrl,
       'sha256': update.sha256,
       'size': update.packageSize,
+      'downloadUrls': update.downloadUrls,
+      'chunkManifestUrl': update.chunkManifestUrl,
     });
   }
 
@@ -97,6 +103,13 @@ class ConsoleUpdate {
       published: body['published'] == true,
       sha256: (body['sha256'] as String?)?.trim().toLowerCase() ?? '',
       packageSize: (body['package_size'] as num?)?.toInt() ?? 0,
+      downloadUrls: (body['download_urls'] as List<dynamic>?)
+              ?.map((value) => value.toString())
+              .where((value) => value.startsWith('https://'))
+              .toList() ??
+          const [],
+      chunkManifestUrl:
+          (body['chunk_manifest_url'] as String?)?.trim() ?? '',
     );
   }
 
