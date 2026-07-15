@@ -46,7 +46,8 @@ final homePacketLossProvider =
     } else {
       yield await NetworkStatsChannel.packetLossPercent('8.8.8.8', count: 8);
     }
-    // 12s: loss changes slowly; lighter on the proxy, radio, and UI.
-    await Future<void>.delayed(const Duration(seconds: 12));
+    // Loss changes slowly; probing six to eight ICMP packets every 12 seconds
+    // kept the radio awake on idle sessions. Match the latency cadence.
+    await Future<void>.delayed(const Duration(seconds: 30));
   }
 });
