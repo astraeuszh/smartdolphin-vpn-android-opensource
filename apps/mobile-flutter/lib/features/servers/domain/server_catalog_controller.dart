@@ -212,7 +212,11 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
       developer.log('✅State updated with ${mergedCards.length} cards',
           name: 'ServerCatalogController');
 
-      await _measureLatency(fullScan: true);
+      // A catalog is created with the home screen.  Do not wake every remote
+      // location just to paint the initial list: it burns radio/CPU time while
+      // the user has not asked to browse or speed-test nodes.  Probe the small
+      // preferred set now; the explicit refresh button remains a full scan.
+      await _measureLatency(fullScan: false);
       _latencyTimer = Timer.periodic(_latencyRefreshInterval, (_) {
         if (_latencyPaused) return;
         unawaited(_measureLatency(fullScan: false));
@@ -280,7 +284,7 @@ class ServerCatalogController extends StateNotifier<ServerCatalogState> {
     final selectedId =
         _ref.read(serverPreferencesRepositoryProvider)?.loadLastServerId();
     final connectedId = state.connectedServerId;
-    final pinnedCodes = {'NL', 'US', 'SG'};
+    final pinnedCodes = {'HK', 'US', 'SG'};
     final picked = <String, Server>{};
     for (final server in servers) {
       if (pinnedCodes.contains(server.countryCode.toUpperCase())) {
