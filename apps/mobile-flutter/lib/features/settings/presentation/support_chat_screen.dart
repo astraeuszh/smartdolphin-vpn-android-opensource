@@ -766,8 +766,8 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       });
       await _persist();
       _ensureActiveConversation();
-    } catch (_) {
-      if (mounted) _showSendError(const FormatException('support_delete'));
+    } catch (error) {
+      if (mounted) _showSendError(error);
     }
   }
 

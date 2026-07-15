@@ -51,6 +51,36 @@ class SupportChatApi {
     throw FormatException('support_network: $lastError');
   }
 
+  Future<http.Response> _deleteWithFallback(
+    String path, {
+    required Map<String, String> headers,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    Object? lastError;
+    http.Response? lastResponse;
+    for (final base in _bases) {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          final response = await _client
+              .delete(Uri.parse('$base$path'), headers: headers)
+              .timeout(timeout);
+          lastResponse = response;
+          // A real authorization/validation result must be returned to the
+          // caller.  Gateway 404/5xx pages are retried on the API hostname.
+          if ((response.statusCode >= 200 && response.statusCode < 300) ||
+              const {400, 401, 403, 409, 413, 422, 429}
+                  .contains(response.statusCode)) {
+            return response;
+          }
+        } on Object catch (error) {
+          lastError = error;
+        }
+      }
+    }
+    if (lastResponse != null) return lastResponse;
+    throw FormatException('support_network: $lastError');
+  }
+
   Future<Map<String, String>> _headers(AccountSession session,
           {bool json = true}) =>
       ClientRequestHeaders.standard(
@@ -176,13 +206,10 @@ class SupportChatApi {
 
   Future<void> deleteConversation(
       AccountSession session, String conversationId) async {
-    final response = await _client
-        .delete(
-          Uri.parse(
-              '${ConsoleEndpoint.base}/api/auth/support/conversations/$conversationId'),
-          headers: await _headers(session, json: false),
-        )
-        .timeout(const Duration(seconds: 20));
+    final response = await _deleteWithFallback(
+      '/api/auth/support/conversations/$conversationId',
+      headers: await _headers(session, json: false),
+    );
     final body = _jsonObject(response.body, 'support_delete');
     _requireSuccess(response, body, 'support_delete');
   }
