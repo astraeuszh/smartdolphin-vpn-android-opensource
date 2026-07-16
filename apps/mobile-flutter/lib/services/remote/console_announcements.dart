@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'console_endpoint.dart';
+import 'client_request_headers.dart';
 
 class ConsoleAnnouncement {
   const ConsoleAnnouncement({
@@ -44,7 +45,9 @@ class ConsoleAnnouncements {
 
   Future<List<ConsoleAnnouncement>> fetchPublished() async {
     final uri = Uri.parse('${ConsoleEndpoint.base}/api/client/announcements');
-    final resp = await _client.get(uri).timeout(const Duration(seconds: 18));
+    final resp = await _client
+        .get(uri, headers: await ClientRequestHeaders.standard())
+        .timeout(const Duration(seconds: 18));
     Map<String, dynamic> data;
     try {
       data = jsonDecode(resp.body) as Map<String, dynamic>;

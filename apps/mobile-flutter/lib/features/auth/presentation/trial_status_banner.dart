@@ -18,20 +18,39 @@ class TrialStatusBanner extends StatefulWidget {
   State<TrialStatusBanner> createState() => _TrialStatusBannerState();
 }
 
-class _TrialStatusBannerState extends State<TrialStatusBanner> {
+class _TrialStatusBannerState extends State<TrialStatusBanner>
+    with WidgetsBindingObserver {
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startTimer();
+      if (mounted) setState(() {});
+    } else {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 

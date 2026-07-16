@@ -27,6 +27,7 @@ class AuthGateScreen extends ConsumerWidget {
       case AuthStatus.authenticated:
       case AuthStatus.pending:
       case AuthStatus.banned:
+      case AuthStatus.expired:
         return const _AuthedShell();
     }
   }

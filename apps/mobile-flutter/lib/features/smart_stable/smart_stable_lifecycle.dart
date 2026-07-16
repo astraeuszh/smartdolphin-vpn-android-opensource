@@ -30,12 +30,21 @@ class _SmartStableLifecycleState extends ConsumerState<SmartStableLifecycle>
   DateTime? _lastPeriodicProbeAt;
   Timer? _periodicTimer;
   bool _showBanner = false;
+  bool _foreground = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _periodicTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+    _foreground = WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _startPeriodicTimer();
+  }
+
+  void _startPeriodicTimer() {
+    _periodicTimer?.cancel();
+    if (!_foreground) return;
+    _periodicTimer = Timer.periodic(const Duration(minutes: 10), (_) {
       unawaited(_maybeOffer(fromPeriodic: true));
     });
   }
@@ -49,13 +58,15 @@ class _SmartStableLifecycleState extends ConsumerState<SmartStableLifecycle>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _startPeriodicTimer();
     if (state == AppLifecycleState.resumed) {
       unawaited(_maybeOffer());
     }
   }
 
   Future<void> _maybeOffer({bool fromPeriodic = false}) async {
-    if (kIsWeb || _busy || _showBanner) return;
+    if (kIsWeb || !_foreground || _busy || _showBanner) return;
     if (ref.read(gameModeOverlayActiveProvider)) return;
     if (!ref.read(settingsControllerProvider).networkQualityMonitoring) return;
     if (ref.read(sessionControllerProvider).status != SessionStatus.connected) {
@@ -65,7 +76,7 @@ class _SmartStableLifecycleState extends ConsumerState<SmartStableLifecycle>
     final now = DateTime.now();
     if (fromPeriodic) {
       if (_lastPeriodicProbeAt != null &&
-          now.difference(_lastPeriodicProbeAt!) < const Duration(minutes: 3)) {
+          now.difference(_lastPeriodicProbeAt!) < const Duration(minutes: 10)) {
         return;
       }
       _lastPeriodicProbeAt = now;
@@ -80,7 +91,8 @@ class _SmartStableLifecycleState extends ConsumerState<SmartStableLifecycle>
     final st = ref.read(smartStableProvider);
     if (st.tuningEnabled) return;
     if (st.suppressDeclineUntilNextUserConnect) return;
-    if (st.promptCooldownUntil != null && now.isBefore(st.promptCooldownUntil!)) {
+    if (st.promptCooldownUntil != null &&
+        now.isBefore(st.promptCooldownUntil!)) {
       return;
     }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../connection/domain/tunnel_throughput_provider.dart';
@@ -16,20 +17,29 @@ class TrafficHistoryState {
   final List<double> uploadSamples;
   final List<double> downloadSamples;
 
-  static const int maxSamples = 60;
+  static const int maxSamples = 45;
 }
 
-class TrafficHistoryNotifier extends StateNotifier<TrafficHistoryState> {
+class TrafficHistoryNotifier extends StateNotifier<TrafficHistoryState>
+    with WidgetsBindingObserver {
   TrafficHistoryNotifier(this._ref) : super(const TrafficHistoryState()) {
-    _sub = _ref.listen(sessionControllerProvider, _onSessionChanged);
+    WidgetsBinding.instance.addObserver(this);
+    _foreground = WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _sub = _ref.listen(
+      sessionControllerProvider,
+      _onSessionChanged,
+      fireImmediately: true,
+    );
   }
 
   final Ref _ref;
   ProviderSubscription<dynamic>? _sub;
   Timer? _timer;
+  bool _foreground = true;
 
   void _onSessionChanged(dynamic prev, dynamic next) {
-    if (next.status == SessionStatus.connected) {
+    if (next.status == SessionStatus.connected && _foreground) {
       _startSampling();
     } else {
       _stopSampling();
@@ -39,7 +49,19 @@ class TrafficHistoryNotifier extends StateNotifier<TrafficHistoryState> {
 
   void _startSampling() {
     _stopSampling();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _sample());
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _sample());
+    _sample();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) {
+      _stopSampling();
+    } else if (_ref.read(sessionControllerProvider).status ==
+        SessionStatus.connected) {
+      _startSampling();
+    }
   }
 
   void _stopSampling() {
@@ -69,6 +91,7 @@ class TrafficHistoryNotifier extends StateNotifier<TrafficHistoryState> {
   @override
   void dispose() {
     _stopSampling();
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.close();
     super.dispose();
   }

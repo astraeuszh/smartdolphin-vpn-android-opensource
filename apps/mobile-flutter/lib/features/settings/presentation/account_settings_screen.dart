@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -11,6 +10,7 @@ import '../../../services/logging/vpn_core_layout.dart';
 import '../../../services/logging/vpn_logger.dart';
 import '../../../services/remote/console_auth.dart';
 import '../../../services/remote/console_feedback.dart';
+import '../../../services/remote/console_audit.dart';
 import '../../auth/domain/account_datetime.dart';
 import '../../auth/domain/auth_controller.dart';
 import '../../auth/domain/traffic_policy.dart';
@@ -19,10 +19,9 @@ import 'account_risk_screen.dart';
 import 'subscription_management_screen.dart';
 import '../domain/preferences_controller.dart';
 import 'feedback_ticket_screen.dart';
+import 'support_chat_screen.dart';
 
-const _websiteUrl = 'https://smartdolphin.top';
-// Password reset is handled on the website (no in-app email-code flow).
-const _passwordResetUrl = 'https://smartdolphinvpn.com';
+const _websiteUrl = 'https://smartdolphinvpn.com';
 
 class AccountSettingsScreen extends ConsumerStatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -35,11 +34,13 @@ class AccountSettingsScreen extends ConsumerStatefulWidget {
 class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   bool _refreshing = false;
   bool _busy = false;
+  String? _auditMode;
   Timer? _trialTimer;
 
   @override
   void initState() {
     super.initState();
+    unawaited(_loadAuditMode());
     _trialTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       final session = ref.read(authControllerProvider).session;
       if (session?.isTrial == true && mounted) setState(() {});
@@ -50,6 +51,17 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   void dispose() {
     _trialTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadAuditMode() async {
+    final session = ref.read(authControllerProvider).session;
+    if (session == null || session.sessionToken.trim().isEmpty) return;
+    try {
+      final mode = await ConsoleAudit().policy(session);
+      if (mounted && _auditMode == null) setState(() => _auditMode = mode);
+    } catch (_) {
+      // The settings page remains usable while the policy endpoint is offline.
+    }
   }
 
   Future<void> _refreshPolicy() async {
@@ -78,6 +90,60 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     }
   }
 
+  Future<void> _openAuditPolicy() async {
+    final session = ref.read(authControllerProvider).session;
+    if (session == null) return;
+    final l10n = context.l10n;
+    // Policy loading starts when the page opens. Never make the tap wait for
+    // the network: show the cached/default choice immediately, then only use
+    // the network when the user actually saves a different value.
+    final current = _auditMode ?? 'basic';
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.accountAuditPolicy),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(ctx).pop('basic'),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.accountAuditPolicyBasic),
+              trailing: current == 'basic' ? const Icon(Icons.check) : null,
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(ctx).pop('security'),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.accountAuditPolicySecurity),
+              trailing: current == 'security' ? const Icon(Icons.check) : null,
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(ctx).pop('enhanced'),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.accountAuditPolicyEnhanced),
+              trailing: current == 'enhanced' ? const Icon(Icons.check) : null,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (selected == null || selected == current) return;
+    setState(() => _busy = true);
+    try {
+      final confirmed = await ConsoleAudit().updatePolicy(session, selected);
+      if (!mounted) return;
+      setState(() => _auditMode = confirmed);
+      _snack(l10n.accountAuditPolicySaved);
+    } catch (_) {
+      if (mounted) _snack(l10n.accountRefreshFailed, isError: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _confirmLogout() async {
     final l10n = context.l10n;
     final ok = await showDialog<bool>(
@@ -101,125 +167,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     await ref.read(authControllerProvider.notifier).logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: (_) => const AuthGateScreen()),
+      _instantRoute(const AuthGateScreen()),
       (_) => false,
     );
-  }
-
-  Future<void> _openChangePassword() async {
-    final l10n = context.l10n;
-    final session = ref.read(authControllerProvider).session;
-    if (session == null) return;
-
-    final oldCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(l10n.accountChangePassword),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: oldCtrl,
-                      obscureText: true,
-                      decoration:
-                          InputDecoration(labelText: l10n.accountOldPassword),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: newCtrl,
-                      obscureText: true,
-                      decoration:
-                          InputDecoration(labelText: l10n.accountNewPassword),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: confirmCtrl,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                          labelText: l10n.accountConfirmPassword),
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () {
-                                Navigator.of(ctx).pop();
-                                unawaited(_openPasswordResetWebsite());
-                              },
-                        child: Text(l10n.accountForgotPassword),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: _busy ? null : () => Navigator.of(ctx).pop(),
-                  child: Text(l10n.cancel),
-                ),
-                FilledButton(
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          if (newCtrl.text.length < 6) {
-                            _snack(l10n.accountPasswordTooShort, isError: true);
-                            return;
-                          }
-                          if (newCtrl.text != confirmCtrl.text) {
-                            _snack(l10n.accountPasswordMismatch, isError: true);
-                            return;
-                          }
-                          setDialogState(() => _busy = true);
-                          try {
-                            await ref
-                                .read(authControllerProvider.notifier)
-                                .changePassword(
-                                  oldPassword: oldCtrl.text,
-                                  newPassword: newCtrl.text,
-                                );
-                            if (ctx.mounted) Navigator.of(ctx).pop();
-                            _snack(l10n.accountUpdateSuccess);
-                          } on ConsoleAuthException catch (e) {
-                            _snack(e.message, isError: true);
-                          } catch (e) {
-                            _snack('$e', isError: true);
-                          } finally {
-                            setDialogState(() => _busy = false);
-                          }
-                        },
-                  child: Text(l10n.accountSave),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    oldCtrl.dispose();
-    newCtrl.dispose();
-    confirmCtrl.dispose();
-  }
-
-  /// Forgot password is handled on the website now (no in-app email-code flow).
-  Future<void> _openPasswordResetWebsite() async {
-    final uri = Uri.parse(_passwordResetUrl);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        showTopSnackBar(context, context.l10n.accountOpenWebsiteFailed,
-            isError: true);
-      }
-    }
   }
 
   Future<void> _openChangeName() async {
@@ -371,6 +321,62 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     }
   }
 
+  Future<void> _openFeedbackReport() async {
+    final l10n = context.l10n;
+    final automatic = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.feedbackReportTitle),
+        content: Text(l10n.feedbackReportBody),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(l10n.feedbackManual)),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(l10n.feedbackAutomatic)),
+        ],
+      ),
+    );
+    if (!mounted || automatic == null) return;
+    if (!automatic) {
+      await Navigator.of(context).push(
+        _instantRoute(const FeedbackTicketScreen()),
+      );
+      return;
+    }
+    final logger = ref.read(vpnLoggerProvider);
+    final bytes = await logger.estimateFeedbackSnapshotBytes(
+      window: VpnCoreLayout.defaultFeedbackWindow,
+    );
+    if (!mounted) return;
+    final estimate = bytes.clamp(10, 500 * 1024 * 1024);
+    final label = estimate < 1024 * 1024
+        ? '${(estimate / 1024).toStringAsFixed(2)} KB'
+        : '${(estimate / (1024 * 1024)).toStringAsFixed(2)} MB';
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.feedbackAutomaticTitle),
+        content: Text(
+          l10n.feedbackAutomaticBody(label),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.commonCancel)),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              unawaited(_openAdminFeedback());
+            },
+            child: Text(l10n.commonContinue),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _snack(String message, {bool isError = false}) {
     if (!mounted) return;
     showTopSnackBar(context, message, isError: isError);
@@ -482,13 +488,21 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     color: Colors.red.shade700,
                   ),
                 ],
+                if (policy.isAccountLocked) ...[
+                  const SizedBox(height: 16),
+                  _warnCard(
+                    theme,
+                    'Account locked after ${policy.risk.totalStrikes} violations. VPN access is unavailable until support clears the restriction.',
+                    color: Colors.red.shade800,
+                  ),
+                ],
                 if (policy.isViolationSpeedLimit) ...[
                   const SizedBox(height: 16),
                   _warnCard(
                     theme,
                     policy.throttleMessage.isNotEmpty
-                        ? policy.throttleMessage
-                        : l10n.accountViolationSpeedLimitNotice,
+                        ? '${policy.throttleMessage}${policy.speedLimitMbps > 0 ? ' Current limit: ${policy.speedLimitMbps.toStringAsFixed(0)} Mbps.' : ''}'
+                        : '${l10n.accountViolationSpeedLimitNotice}${policy.speedLimitMbps > 0 ? ' Current limit: ${policy.speedLimitMbps.toStringAsFixed(0)} Mbps.' : ''}',
                     color: Colors.red.shade600,
                   ),
                 ],
@@ -500,7 +514,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     color: Colors.red.shade700,
                   ),
                 ],
-                if (policy.hasQuotaLimit && !policy.isQuotaExceeded) ...[
+                if (policy.hasQuotaLimit) ...[
                   const SizedBox(height: 24),
                   Text(
                     l10n.accountQuotaPlanTitle(policy.monthlyQuotaGb),
@@ -541,65 +555,63 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                         ),
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const SubscriptionManagementScreen(),
-                      ),
+                      _instantRoute(const SubscriptionManagementScreen()),
                     );
                   },
                 ),
-                _menuTile(
-                  icon: Icons.shield_outlined,
-                  title: l10n.riskTitle,
-                  subtitle: l10n.riskMenuSummary(
-                    policy.risk.violationCount,
-                    policy.risk.trafficLimitCount,
-                  ),
-                  onTap: _busy
-                      ? null
-                      : () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => AccountRiskScreen(
+                if (policy.risk.totalStrikes > 0 ||
+                    policy.isViolationSpeedLimit ||
+                    policy.isQuotaExceeded ||
+                    policy.isAccountLocked)
+                  _menuTile(
+                    icon: Icons.shield_outlined,
+                    title: l10n.riskTitle,
+                    subtitle: l10n.riskMenuSummary(
+                      policy.risk.violationCount,
+                      policy.risk.trafficLimitCount,
+                    ),
+                    onTap: _busy
+                        ? null
+                        : () {
+                            Navigator.of(context).push(
+                              _instantRoute(AccountRiskScreen(
                                 risk: policy.risk,
                                 policy: policy,
-                              ),
-                            ),
-                          );
-                        },
-                ),
-                _menuTile(
-                  icon: Icons.lock_outline,
-                  title: l10n.accountChangePassword,
-                  onTap: _busy ? null : _openChangePassword,
-                ),
+                              )),
+                            );
+                          },
+                  ),
                 _menuTile(
                   icon: Icons.badge_outlined,
                   title: l10n.accountChangeName,
                   onTap: _busy ? null : _openChangeName,
                 ),
+                _menuTile(
+                  icon: Icons.privacy_tip_outlined,
+                  title: l10n.accountAuditPolicy,
+                  subtitle: _auditMode == null
+                      ? l10n.accountAuditPolicySubtitle
+                      : switch (_auditMode) {
+                          'security' => l10n.accountAuditPolicySecurity,
+                          'enhanced' => l10n.accountAuditPolicyEnhanced,
+                          _ => l10n.accountAuditPolicyBasic,
+                        },
+                  onTap: _busy ? null : _openAuditPolicy,
+                ),
                 const Divider(height: 32),
                 _menuTile(
                   icon: Icons.support_agent_outlined,
-                  title: l10n.accountFeedbackAdmin,
-                  onTap: _busy ? null : _openAdminFeedback,
+                  title: 'Contact support',
+                  onTap: _busy
+                      ? null
+                      : () => Navigator.of(context).push(
+                            _instantRoute(const SupportChatScreen()),
+                          ),
                 ),
                 _menuTile(
                   icon: Icons.assignment_outlined,
-                  title: l10n.accountFeedbackTicket,
-                  onTap: _busy
-                      ? null
-                      : () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const FeedbackTicketScreen(),
-                            ),
-                          );
-                        },
-                ),
-                _menuTile(
-                  icon: Icons.language_outlined,
-                  title: l10n.accountContactUs,
-                  onTap: _openWebsite,
+                  title: 'Feedback report',
+                  onTap: _busy ? null : _openFeedbackReport,
                 ),
                 _menuTile(
                   icon: Icons.info_outline,
@@ -665,3 +677,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     );
   }
 }
+
+PageRoute<T> _instantRoute<T>(Widget child) => PageRouteBuilder<T>(
+      pageBuilder: (_, __, ___) => child,
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+    );

@@ -29,9 +29,6 @@
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
-            <!-- Keep this Activity portrait-only.  The app must never alter
-                 the device-wide auto-rotate preference; using "unspecified"
-                 lets OEM rotation suggestions appear during startup. -->
             android:screenOrientation="portrait"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"

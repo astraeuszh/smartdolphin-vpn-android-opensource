@@ -12,6 +12,7 @@ import '../domain/traffic_policy.dart';
 
 const _storageKey = 'smartdolphin_auth_v2';
 const _deviceKey = 'smartdolphin_device_id';
+const _browserChallengeKey = 'smartdolphin_browser_login_challenge';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository();
@@ -38,6 +39,15 @@ class AuthRepository {
     return id;
   }
 
+  Future<void> saveBrowserLoginChallenge(String challengeId) =>
+      _storage.write(key: _browserChallengeKey, value: challengeId);
+
+  Future<String?> loadBrowserLoginChallenge() =>
+      _storage.read(key: _browserChallengeKey);
+
+  Future<void> clearBrowserLoginChallenge() =>
+      _storage.delete(key: _browserChallengeKey);
+
   Future<AccountSession?> loadSession() async {
     final raw = await _storage.read(key: _storageKey);
     if (raw == null || raw.isEmpty) return null;
@@ -47,15 +57,24 @@ class AuthRepository {
         username: map['username'] as String? ?? '',
         password: map['password'] as String? ?? '',
         uid: (map['uid'] as num?)?.toInt() ?? 0,
+        publicUid: map['public_uid'] as String? ?? '',
         expireAt: (map['expire_at'] as num?)?.toInt() ?? 0,
         sessionToken: map['session_token'] as String? ?? '',
         deviceId: map['device_id'] as String? ?? '',
         banned: map['banned'] as bool? ?? false,
+        locked: map['locked'] as bool? ?? false,
+        banReason: map['ban_reason'] as String? ?? '',
         permissionLevel: (map['permission_level'] as num?)?.toInt() ?? 0,
         trafficPolicy: TrafficPolicy.fromJson(map),
         email: map['email'] as String? ?? '',
         createdAt: (map['created_at'] as num?)?.toInt() ?? 0,
         subscribedAt: (map['subscribed_at'] as num?)?.toInt() ?? 0,
+        mutedUntil: (map['muted_until'] as num?)?.toInt() ?? 0,
+        notificationId:
+            ((map['notification'] as Map?)?['id'] as num?)?.toInt() ?? 0,
+        notificationType: '${(map['notification'] as Map?)?['type'] ?? ''}',
+        notificationTitle: '${(map['notification'] as Map?)?['title'] ?? ''}',
+        notificationBody: '${(map['notification'] as Map?)?['body'] ?? ''}',
       );
     } catch (_) {
       await _storage.delete(key: _storageKey);
@@ -72,6 +91,10 @@ class AuthRepository {
 
   Future<void> clearSession() async {
     await _storage.delete(key: _storageKey);
+  }
+
+  Future<void> setPresence(AccountSession session, bool online) async {
+    await _api.setPresence(session, online);
   }
 
   Future<AccountSession> login(String username, String password) async {
@@ -235,6 +258,7 @@ class AuthRepository {
         username: username,
         password: session.password,
         uid: session.uid,
+        publicUid: session.publicUid,
         expireAt: session.expireAt,
         sessionToken: session.sessionToken,
         deviceId: session.deviceId,
@@ -242,6 +266,9 @@ class AuthRepository {
         permissionLevel: session.permissionLevel,
         trafficPolicy: session.trafficPolicy,
         email: session.email,
+        createdAt: session.createdAt,
+        subscribedAt: session.subscribedAt,
+        mutedUntil: session.mutedUntil,
       );
       await saveSession(updated);
       return updated;
@@ -275,6 +302,7 @@ class AuthRepository {
         username: session.username,
         password: session.password,
         uid: session.uid,
+        publicUid: session.publicUid,
         expireAt: session.expireAt,
         sessionToken: session.sessionToken,
         deviceId: session.deviceId,
@@ -282,6 +310,9 @@ class AuthRepository {
         permissionLevel: session.permissionLevel,
         trafficPolicy: session.trafficPolicy,
         email: email,
+        createdAt: session.createdAt,
+        subscribedAt: session.subscribedAt,
+        mutedUntil: session.mutedUntil,
       );
       await saveSession(updated);
       return updated;
@@ -321,6 +352,7 @@ class AuthRepository {
         username: session.username,
         password: newPassword,
         uid: session.uid,
+        publicUid: session.publicUid,
         expireAt: session.expireAt,
         sessionToken: session.sessionToken,
         deviceId: session.deviceId,
@@ -328,6 +360,9 @@ class AuthRepository {
         permissionLevel: session.permissionLevel,
         trafficPolicy: session.trafficPolicy,
         email: storedEmail.isNotEmpty ? storedEmail : target,
+        createdAt: session.createdAt,
+        subscribedAt: session.subscribedAt,
+        mutedUntil: session.mutedUntil,
       );
       await saveSession(updated);
       return updated;
@@ -355,6 +390,7 @@ class AuthRepository {
         username: session.username,
         password: newPassword,
         uid: session.uid,
+        publicUid: session.publicUid,
         expireAt: session.expireAt,
         sessionToken: session.sessionToken,
         deviceId: session.deviceId,
@@ -362,6 +398,9 @@ class AuthRepository {
         permissionLevel: session.permissionLevel,
         trafficPolicy: session.trafficPolicy,
         email: session.email,
+        createdAt: session.createdAt,
+        subscribedAt: session.subscribedAt,
+        mutedUntil: session.mutedUntil,
       );
       await saveSession(updated);
       return updated;

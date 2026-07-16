@@ -5,7 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/platform/runtime_platform.dart';
 import '../../../platform/android/background_keep_alive.dart';
 import '../../../services/remote/console_auth.dart';
+import '../../../services/notifications/session_notification_service.dart';
+import '../../../services/storage/prefs.dart';
 import '../../session/domain/session_controller.dart';
+import '../../settings/data/support_chat_repository.dart';
 import '../data/auth_repository.dart';
 import 'account_session.dart';
 
@@ -16,6 +19,7 @@ enum AuthStatus {
   authenticated,
   pending,
   banned,
+  expired,
   error
 }
 
@@ -64,6 +68,24 @@ class AuthController extends StateNotifier<AuthState> {
   AuthRepository get _repo => _ref.read(authRepositoryProvider);
 
   bool _isBannedAuthError(String code) => code == 'banned';
+  bool _isExpiredAuthError(String code) => code == 'account_expired';
+  bool _isDeletedAuthError(String code) => code == 'account_deleted';
+  bool _isRevokedAuthError(String code) =>
+      _isDeletedAuthError(code) || code == 'unauthorized';
+
+  Future<void> _clearDeletedAccount([AccountSession? account]) async {
+    final current = account ?? state.session ?? await _repo.loadSession();
+    unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+    if (current != null) {
+      try {
+        await SupportChatRepository.clearAccount(current);
+      } catch (_) {
+        // Cache cleanup must never keep a revoked account authenticated.
+      }
+    }
+    await _repo.clearSession();
+    state = const AuthState(status: AuthStatus.guest);
+  }
 
   Future<void> bootstrap() async {
     state = state.copyWith(status: AuthStatus.loading);
@@ -77,15 +99,22 @@ class AuthController extends StateNotifier<AuthState> {
       final updated = await _repo.refresh(saved);
       _applySession(updated);
     } on ConsoleAuthException catch (e) {
+      if (_isRevokedAuthError(e.code)) {
+        await _clearDeletedAccount(saved);
+        return;
+      }
       state = AuthState(
         status: _isBannedAuthError(e.code)
             ? AuthStatus.banned
-            : saved.isPending
-                ? AuthStatus.pending
-                : AuthStatus.authenticated,
+            : _isExpiredAuthError(e.code)
+                ? AuthStatus.expired
+                : saved.isPending
+                    ? AuthStatus.pending
+                    : AuthStatus.authenticated,
         session: saved,
         code: e.code,
-        message: _isBannedAuthError(e.code) && e.message.isNotEmpty
+        message: (_isBannedAuthError(e.code) || _isExpiredAuthError(e.code)) &&
+                e.message.isNotEmpty
             ? e.message
             : null,
       );
@@ -99,6 +128,7 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   void _applySession(AccountSession session) {
+    unawaited(_showAccountNotification(session));
     if (isAndroidNative) {
       unawaited(syncUninstallMeta(
         uid: session.uid,
@@ -106,13 +136,27 @@ class AuthController extends StateNotifier<AuthState> {
         deviceId: session.deviceId,
       ));
     }
-    if (session.banned) {
+    if (session.banned ||
+        session.locked ||
+        session.trafficPolicy.isAccountLocked) {
       unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
       state = AuthState(
         status: AuthStatus.banned,
         session: session,
-        code: 'banned',
+        code: session.banned ? 'banned' : 'risk_locked',
+        message: session.banned
+            ? null
+            : 'Account locked after 30 violations. Contact support to review this restriction.',
       );
+      return;
+    }
+    if (session.isExpired) {
+      unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+      state = const AuthState(
+        status: AuthStatus.expired,
+        code: 'account_expired',
+        message: '当前权限已到期，请联系管理员续权。',
+      ).copyWith(session: session);
       return;
     }
     if (session.isPending) {
@@ -124,6 +168,26 @@ class AuthController extends StateNotifier<AuthState> {
       return;
     }
     state = AuthState(status: AuthStatus.authenticated, session: session);
+  }
+
+  Future<void> _showAccountNotification(AccountSession session) async {
+    if (session.notificationId <= 0 ||
+        session.notificationTitle.trim().isEmpty ||
+        session.notificationBody.trim().isEmpty) {
+      return;
+    }
+    final prefs = await PrefsStore.create();
+    final key = 'account_notification.last.${session.uid}';
+    final seen = int.tryParse(prefs.getString(key) ?? '') ?? 0;
+    if (session.notificationId <= seen) return;
+    final service = _ref.read(sessionNotificationServiceProvider);
+    await service.initialize();
+    await service.showAccountMessage(
+      id: session.notificationId,
+      title: session.notificationTitle,
+      body: session.notificationBody,
+    );
+    await prefs.setString(key, session.notificationId.toString());
   }
 
   Future<void> login(String username, String password) async {
@@ -163,8 +227,38 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    final current = state.session;
+    if (current != null && current.sessionToken.isNotEmpty) {
+      try {
+        await _repo.setPresence(current, false);
+      } catch (_) {
+        // Logout must always clear local credentials even if the network is
+        // unavailable. The server-side presence TTL is the fallback.
+      }
+    }
+    if (current != null) {
+      try {
+        await SupportChatRepository.clearAccount(current);
+      } catch (_) {
+        // Logout remains authoritative even if a media cache file is locked.
+      }
+    }
     await _repo.clearSession();
     state = const AuthState(status: AuthStatus.guest);
+  }
+
+  Future<void> setForegroundPresence(bool online) async {
+    var current = state.session ?? await _repo.loadSession();
+    if (current == null || current.sessionToken.isEmpty) return;
+    try {
+      await _repo.setPresence(current, online);
+    } on ConsoleAuthException catch (error) {
+      if (error.code != 'unauthorized' || !online) return;
+      // A 401 is authoritative for the stored login. Keeping the old session
+      // here made deleted accounts and their local support history remain
+      // visible indefinitely while every authenticated request failed.
+      await _clearDeletedAccount(current);
+    }
   }
 
   Future<void> refreshSession({bool force = false}) async {
@@ -195,6 +289,10 @@ class AuthController extends StateNotifier<AuthState> {
       final updated = await _repo.refresh(saved);
       _applySession(updated);
     } on ConsoleAuthException catch (e) {
+      if (_isRevokedAuthError(e.code)) {
+        await _clearDeletedAccount(saved);
+        return;
+      }
       if (_isBannedAuthError(e.code)) {
         _applySession(
           saved.copyWithRemote({
@@ -202,6 +300,15 @@ class AuthController extends StateNotifier<AuthState> {
             'ban_reason': e.message,
           }),
         );
+        return;
+      }
+      if (_isExpiredAuthError(e.code)) {
+        unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+        state = AuthState(
+            status: AuthStatus.expired,
+            session: saved,
+            code: e.code,
+            message: '当前权限已到期，请联系管理员续权。');
         return;
       }
       state = AuthState(
@@ -280,10 +387,23 @@ class AuthController extends StateNotifier<AuthState> {
       _applySession(updated);
       return updated.canUseVpn;
     } on ConsoleAuthException catch (e) {
+      if (_isRevokedAuthError(e.code)) {
+        await _clearDeletedAccount(s);
+        return false;
+      }
       if (_isBannedAuthError(e.code)) {
         _applySession(
           s.copyWithRemote({'banned': true, 'ban_reason': e.message}),
         );
+        return false;
+      }
+      if (_isExpiredAuthError(e.code)) {
+        unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+        state = AuthState(
+            status: AuthStatus.expired,
+            session: s,
+            code: e.code,
+            message: '当前权限已到期，请联系管理员续权。');
         return false;
       }
       state = AuthState(

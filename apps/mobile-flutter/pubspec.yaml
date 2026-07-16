@@ -1,7 +1,7 @@
 name: smartdolphin_vpn
 description: "SmartDolphin VPN Android client"
 publish_to: 'none'
-version: 4.2.5+46205
+version: 4.2.6+46206
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

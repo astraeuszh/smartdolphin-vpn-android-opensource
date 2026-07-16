@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/startup/splash_check_screen.dart';
 import '../features/auth/domain/auth_controller.dart';
 import '../features/smart_stable/smart_stable_lifecycle.dart';
-import '../services/logging/vpn_logger.dart';
 import '../features/settings/domain/preferences_controller.dart';
 import '../features/settings/domain/settings_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -66,21 +65,11 @@ class SmartDolphinApp extends ConsumerWidget {
       // Directionality/Theme/Localizations/MediaQuery from the app. Mounting it
       // above MaterialApp crashed every frame with "No Directionality widget found".
       builder: (context, child) {
-        return Listener(
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: (event) {
-            ref.read(vpnLoggerProvider).userAction(
-                  'pointer',
-                  'down',
-                  'x=${event.position.dx.round()}, y=${event.position.dy.round()}',
-                );
-          },
-          child: _ForegroundPresenceHeartbeat(
-            child: _AppLifecycleGate(
-              child: HiVpnGlassBackground(
-                child: SmartStableLifecycle(
-                  child: child ?? const SizedBox.shrink(),
-                ),
+        return _ForegroundPresenceHeartbeat(
+          child: _AppLifecycleGate(
+            child: HiVpnGlassBackground(
+              child: SmartStableLifecycle(
+                child: child ?? const SizedBox.shrink(),
               ),
             ),
           ),
@@ -141,13 +130,22 @@ class _ForegroundPresenceHeartbeatState
 
   void _start() {
     _timer?.cancel();
-    unawaited(
-        ref.read(authControllerProvider.notifier).setForegroundPresence(true));
-    _timer = Timer.periodic(const Duration(seconds: 35), (_) {
-      unawaited(ref
-          .read(authControllerProvider.notifier)
-          .setForegroundPresence(true));
+    unawaited(_refreshPresence());
+    // The server TTL is 90 seconds. Sixty seconds avoids status flicker while
+    // leaving retry margin and using far fewer foreground radio wakeups.
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
+      unawaited(_refreshPresence());
     });
+  }
+
+  Future<void> _refreshPresence() async {
+    final auth = ref.read(authControllerProvider.notifier);
+    // Account status is the authoritative deletion/ban gate. Presence itself
+    // intentionally has a cheap Redis-only path and cannot detect deletion.
+    await auth.refreshSession();
+    if (ref.read(authControllerProvider).session != null) {
+      await auth.setForegroundPresence(true);
+    }
   }
 
   @override

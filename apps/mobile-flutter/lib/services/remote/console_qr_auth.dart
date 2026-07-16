@@ -5,13 +5,16 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../features/auth/domain/account_session.dart';
 import 'console_auth.dart';
-import 'console_endpoint.dart';
+import 'client_request_headers.dart';
 
 class ConsoleQrAuth {
   ConsoleQrAuth({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
-  static const String _authBase = 'https://smartdolphinvpn.com';
+  static const List<String> _authBases = [
+    'https://smartdolphinvpn.com',
+    'https://api.smartdolphinvpn.com',
+  ];
 
   static Future<Map<String, dynamic>> _payload({
     required String deviceId,
@@ -31,19 +34,31 @@ class ConsoleQrAuth {
     String path,
     Map<String, dynamic> body,
   ) async {
-    final uri = Uri.parse('$_authBase$path');
-    http.Response resp;
-    try {
-      resp = await _client
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 18));
-    } on Object {
+    http.Response? resp;
+    // The public site and API hostname terminate at the same authority. Use
+    // the alternate hostname only for transport failure, not HTTP responses.
+    for (final base in _authBases) {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          resp = await _client
+              .post(
+                Uri.parse('$base$path'),
+                headers: await ClientRequestHeaders.standard(json: true),
+                body: jsonEncode(body),
+              )
+              .timeout(const Duration(seconds: 12));
+          break;
+        } on Object catch (_) {
+          // Retry the same authority once, then the API hostname.
+        }
+      }
+      if (resp != null) break;
+    }
+    if (resp == null) {
       throw ConsoleAuthException(
-          'E6005', 'Cannot connect to server. Check your network');
+        'E6005',
+        'Cannot reach SmartDolphin server. Check your network and try again.',
+      );
     }
     if (resp.statusCode == 404) {
       throw ConsoleAuthException(

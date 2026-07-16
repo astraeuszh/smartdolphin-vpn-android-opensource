@@ -18,6 +18,7 @@ class SessionNotificationService {
 
   static const int _notificationId = 1337;
   static const int _killSwitchNotificationId = 1338;
+  static const int _accountNotificationBaseId = 20000;
   static const String actionDisconnect = 'action_disconnect';
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
@@ -30,11 +31,21 @@ class SessionNotificationService {
     enableLights: false,
     playSound: false,
   );
+  static const AndroidNotificationChannel _accountChannel =
+      AndroidNotificationChannel(
+    'account_messages',
+    'Account messages',
+    description: 'Account, subscription, restriction and support updates.',
+    importance: Importance.high,
+    showBadge: true,
+    enableVibration: true,
+    playSound: true,
+  );
 
   Future<void> initialize(
       {Future<void> Function(String action)? onAction}) async {
     if (_initialized) {
-      _onAction = onAction;
+      if (onAction != null) _onAction = onAction;
       return;
     }
     _onAction = onAction;
@@ -58,6 +69,7 @@ class SessionNotificationService {
     final androidImpl = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     await androidImpl?.createNotificationChannel(_channel);
+    await androidImpl?.createNotificationChannel(_accountChannel);
 
     _initialized = true;
   }
@@ -205,6 +217,33 @@ class SessionNotificationService {
           ticker: 'SmartDolphinVPN Kill Switch',
         ),
       ),
+    );
+  }
+
+  Future<void> showAccountMessage({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    if (!_initialized || title.trim().isEmpty || body.trim().isEmpty) return;
+    await _plugin.show(
+      _accountNotificationBaseId + id.remainder(10000),
+      title.trim(),
+      body.trim(),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _accountChannel.id,
+          _accountChannel.name,
+          channelDescription: _accountChannel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          autoCancel: true,
+          onlyAlertOnce: true,
+          category: AndroidNotificationCategory.message,
+          ticker: title.trim(),
+        ),
+      ),
+      payload: 'account_message:$id',
     );
   }
 

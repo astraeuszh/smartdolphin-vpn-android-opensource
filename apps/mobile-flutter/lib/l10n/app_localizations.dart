@@ -148,6 +148,12 @@ class AppLocalizations {
   String get settingsLogoutTitle => _value('settingsLogoutTitle');
   String get accountChangePassword => _value('accountChangePassword');
   String get accountChangeName => _value('accountChangeName');
+  String get accountAuditPolicy => _value('accountAuditPolicy');
+  String get accountAuditPolicySubtitle => _value('accountAuditPolicySubtitle');
+  String get accountAuditPolicyBasic => _value('accountAuditPolicyBasic');
+  String get accountAuditPolicySecurity => _value('accountAuditPolicySecurity');
+  String get accountAuditPolicyEnhanced => _value('accountAuditPolicyEnhanced');
+  String get accountAuditPolicySaved => _value('accountAuditPolicySaved');
   String get accountChangeEmail => _value('accountChangeEmail');
   String get accountFeedbackAdmin => _value('accountFeedbackAdmin');
   String get accountFeedbackTicket => _value('accountFeedbackTicket');
@@ -510,6 +516,10 @@ class AppLocalizations {
   String get settingsLogCountLimit => _value('settingsLogCountLimit');
   String get legalDocsTitle => _value('legalDocsTitle');
   String get legalUserAgreement => _value('legalUserAgreement');
+  String get legalServiceTerms => _value('legalServiceTerms');
+  String get legalCookiePolicy => _value('legalCookiePolicy');
+  String get legalCommunityRules => _value('legalCommunityRules');
+  String get legalViolationPolicy => _value('legalViolationPolicy');
   String get legalOpenSource => _value('legalOpenSource');
   String get legalNotice => _value('legalNotice');
   String get legalDisclaimer => _value('legalDisclaimer');
@@ -652,10 +662,10 @@ class AppLocalizations {
     final tag = localeTagFor(locale);
     const names = {
       'en': 'English',
-      'zh': '????',
-      'zh_Hant': '????',
-      'es': 'Espa?ol',
-      'ja': '???',
+      'zh': '简体中文',
+      'zh_Hant': '繁體中文',
+      'es': 'Español',
+      'ja': '日本語',
     };
     final name = names[tag] ?? tag;
     // Coverage percentage intentionally not shown to users (looked unfinished);
@@ -720,6 +730,8 @@ class AppLocalizations {
   String get privacyPolicyAgreementRequired =>
       _value('privacyPolicyAgreementRequired');
   String get privacyPolicyCheckboxReady => _value('privacyPolicyCheckboxReady');
+  String get privacyPolicyOpenDocs => _value('privacyPolicyOpenDocs');
+  String get privacyPolicyOpenFailed => _value('privacyPolicyOpenFailed');
   String get speedTestCardTitle => _value('speedTestCardTitle');
   String get speedTestCardStart => _value('speedTestCardStart');
   String get speedTestCardRetest => _value('speedTestCardRetest');
@@ -865,6 +877,37 @@ class AppLocalizations {
   String get onboardingBestServerAuto => _value('onboardingBestServerAuto');
   String get onboardingBrowseCommunityList =>
       _value('onboardingBrowseCommunityList');
+  String get commonRefresh => _value('commonRefresh');
+  String get commonSearchLocations => _value('commonSearchLocations');
+  String get feedbackReportTitle => _value('feedbackReportTitle');
+  String get feedbackReportBody => _value('feedbackReportBody');
+  String get feedbackManual => _value('feedbackManual');
+  String get feedbackAutomatic => _value('feedbackAutomatic');
+  String get feedbackAutomaticTitle => _value('feedbackAutomaticTitle');
+  String feedbackAutomaticBody(String traffic) =>
+      _value('feedbackAutomaticBody').replaceAll('{traffic}', traffic);
+  String get commonContinue => _value('continue');
+  String get chatTakePhoto => _value('chatTakePhoto');
+  String get chatRecordVideo => _value('chatRecordVideo');
+  String get chatCaptureMedia => _value('chatCaptureMedia');
+  String get chatChooseMedia => _value('chatChooseMedia');
+  String get chatMessageHint => _value('chatMessageHint');
+  String get chatVideoPreviewUnavailable =>
+      _value('chatVideoPreviewUnavailable');
+  String get updateCheckFailed => _value('updateCheckFailed');
+  String get updateUpToDate => _value('updateUpToDate');
+  String updateCurrentRelease(String version) =>
+      _value('updateCurrentRelease').replaceAll('{version}', version);
+  String get updateRequired => _value('updateRequired');
+  String get updateAvailable => _value('updateAvailable');
+  String updateVersionAvailable(String version) =>
+      _value('updateVersionAvailable').replaceAll('{version}', version);
+  String get updateNotNow => _value('updateNotNow');
+  String get updateDownloading => _value('updateDownloading');
+  String get updateInstallerOpen => _value('updateInstallerOpen');
+  String get updateDownloadFailed => _value('updateDownloadFailed');
+  String get updateNow => _value('updateNow');
+  String get updateDownload => _value('updateDownload');
   String get onboardingImportOvpn => _value('onboardingImportOvpn');
   String get onboardingSectionOptions => _value('onboardingSectionOptions');
   String get onboardingAutoReconnect => _value('onboardingAutoReconnect');
@@ -1101,7 +1144,7 @@ class AppLocalizations {
     required double upload,
     required int ping,
   }) {
-    return '鈫?${download.toStringAsFixed(1)} Mbps 路 鈫?${upload.toStringAsFixed(1)} Mbps 路 ${ping}ms';
+    return 'Down ${download.toStringAsFixed(1)} Mbps / Up ${upload.toStringAsFixed(1)} Mbps / $ping ms';
   }
 
   String connectedCountdownLabel(String countdown) {
@@ -1119,7 +1162,7 @@ class AppLocalizations {
   String usageSummaryText(double usedGb, double? limitGb) {
     final used = usedGb.toStringAsFixed(2);
     if (limitGb == null) {
-      return '$used GB 路 ${settingsUsageNoLimit}';
+      return '$used GB / $settingsUsageNoLimit';
     }
     final limit = limitGb.toStringAsFixed(2);
     return '$used GB / $limit GB';
@@ -1161,15 +1204,7 @@ class _AppLocalizationsDelegate
   @override
   bool isSupported(Locale locale) {
     final l = locale.languageCode;
-    if (l == 'en' ||
-        l == 'ja' ||
-        l == 'ko' ||
-        l == 'es' ||
-        l == 'de' ||
-        l == 'fr') {
-      return true;
-    }
-    if (l == 'pt') {
+    if (l == 'en' || l == 'ja' || l == 'es') {
       return true;
     }
     if (l == 'zh') {

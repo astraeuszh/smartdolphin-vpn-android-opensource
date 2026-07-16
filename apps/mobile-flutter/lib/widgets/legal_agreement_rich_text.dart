@@ -24,14 +24,25 @@ class LegalAgreementRichText extends ConsumerWidget {
 
   static const _docSlugs = <(String slug, _LegalDocName nameOf)>[
     ('user-agreement', _userAgreementName),
+    ('service-terms', _serviceTermsName),
+    ('privacy-policy', _privacyPolicyName),
+    ('cookie-policy', _cookiePolicyName),
+    ('community-rules', _communityRulesName),
+    ('violation-policy', _violationPolicyName),
     ('open-source-license', _openSourceName),
-    ('legal-notice', _legalNoticeName),
     ('disclaimer', _disclaimerName),
   ];
 
   static String _userAgreementName(AppLocalizations l) => l.legalUserAgreement;
+  static String _serviceTermsName(AppLocalizations l) => l.legalServiceTerms;
+  static String _privacyPolicyName(AppLocalizations l) =>
+      l.privacyPolicyDialogTitle;
+  static String _cookiePolicyName(AppLocalizations l) => l.legalCookiePolicy;
+  static String _communityRulesName(AppLocalizations l) =>
+      l.legalCommunityRules;
+  static String _violationPolicyName(AppLocalizations l) =>
+      l.legalViolationPolicy;
   static String _openSourceName(AppLocalizations l) => l.legalOpenSource;
-  static String _legalNoticeName(AppLocalizations l) => l.legalNotice;
   static String _disclaimerName(AppLocalizations l) => l.legalDisclaimer;
 
   @override
@@ -60,15 +71,14 @@ class LegalAgreementRichText extends ConsumerWidget {
       final (url, slug) = docs[i];
       final nameOf = _docSlugs.firstWhere((d) => d.$1 == slug).$2;
       var label = nameOf(l10n);
-      if (wrapInBookTitleMarks && l10n.locale.languageCode == 'zh') {
+      if (l10n.locale.languageCode == 'zh') {
         label = '《$label》';
       }
       docSpans.add(
         TextSpan(
           text: label,
           style: linkStyle,
-          recognizer: TapGestureRecognizer()
-            ..onTap = () => _open(context, url),
+          recognizer: TapGestureRecognizer()..onTap = () => _open(context, url),
         ),
       );
       if (i < docs.length - 1) {
@@ -83,7 +93,8 @@ class LegalAgreementRichText extends ConsumerWidget {
       children.addAll(docSpans);
     } else {
       final prefix = hintTemplate.substring(0, placeholderIndex);
-      final suffix = hintTemplate.substring(placeholderIndex + placeholder.length);
+      final suffix =
+          hintTemplate.substring(placeholderIndex + placeholder.length);
       if (prefix.isNotEmpty) children.add(TextSpan(text: prefix, style: base));
       children.addAll(docSpans);
       if (suffix.isNotEmpty) children.add(TextSpan(text: suffix, style: base));

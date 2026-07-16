@@ -1,13 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/vpn/vpn_provider.dart';
 import '../../session/domain/session_controller.dart';
 import '../../session/domain/session_status.dart';
 
-/// Live throughput (Mbps) when connected. Polls tunnel stats at a UI-friendly,
-/// battery-aware cadence instead of every frame/second.
+/// Live throughput (Mbps) when connected.
 class TunnelThroughputState {
   const TunnelThroughputState({
     this.downloadMbps,
@@ -18,9 +18,17 @@ class TunnelThroughputState {
   final double? uploadMbps;
 }
 
-class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
+class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState>
+    with WidgetsBindingObserver {
   TunnelThroughputNotifier(this._ref) : super(const TunnelThroughputState()) {
-    _sub = _ref.listen(sessionControllerProvider, _onSessionChanged);
+    WidgetsBinding.instance.addObserver(this);
+    _foreground = WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _sub = _ref.listen(
+      sessionControllerProvider,
+      _onSessionChanged,
+      fireImmediately: true,
+    );
   }
 
   final Ref _ref;
@@ -29,8 +37,9 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
   int _lastRxBytes = 0;
   int _lastTxBytes = 0;
   DateTime? _lastSampleTime;
+  bool _foreground = true;
 
-  static const _emaAlpha = 0.28;
+  static const _emaAlpha = 0.72;
   static const _minMbps = 0.05;
   static const _maxReasonableMbps = 1000.0;
 
@@ -48,8 +57,23 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
     _lastRxBytes = 0;
     _lastTxBytes = 0;
     _lastSampleTime = null;
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _poll());
-    _poll();
+    if (_foreground) {
+      _timer = Timer.periodic(const Duration(seconds: 10), (_) => _poll());
+      _poll();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) {
+      _stopPolling();
+      return;
+    }
+    if (_ref.read(sessionControllerProvider).status ==
+        SessionStatus.connected) {
+      _startPolling();
+    }
   }
 
   void _stopPolling() {
@@ -81,7 +105,7 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
 
       // libbox uplink/downlink are bytes/sec deltas when TrafficAvailable=true.
       // VpnStatus.toJson() always includes byte_*_rate keys (default "0"), so
-      // we must NOT treat key presence as "live rate available" — only use the
+      // we must NOT treat key presence as "live rate available" -only use the
       // rate path when the core is actually reporting non-zero throughput.
       final inRate = _parseBytes(stats['byte_in_rate']);
       final outRate = _parseBytes(stats['byte_out_rate']);
@@ -113,7 +137,7 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
           );
         }
       } else if (_lastSampleTime == null) {
-        // First sample after connect — seed counters so the next tick can delta.
+        // First sample after connect -seed counters so the next tick can delta.
         state = TunnelThroughputState(
           downloadMbps: state.downloadMbps ?? 0,
           uploadMbps: state.uploadMbps ?? 0,
@@ -143,6 +167,7 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState> {
   @override
   void dispose() {
     _stopPolling();
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.close();
     super.dispose();
   }

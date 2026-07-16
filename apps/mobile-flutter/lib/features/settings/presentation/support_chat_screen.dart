@@ -42,6 +42,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   Timer? _typingTimer;
   Timer? _messagePollTimer;
   bool _syncing = false;
+  int _pollCycle = 0;
   DateTime? _lastSupportAuthRecovery;
   final _api = SupportChatApi();
 
@@ -80,9 +81,20 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   void _startMessagePolling() {
     _messagePollTimer?.cancel();
     _messagePollTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) => unawaited(_syncRemote()),
+      const Duration(seconds: 10),
+      (_) {
+        if (_isPageActive) unawaited(_syncRemote());
+      },
     );
+  }
+
+  bool get _isPageActive {
+    if (!mounted) return false;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+      return false;
+    }
+    return ModalRoute.of(context)?.isCurrent ?? true;
   }
 
   void _typingChanged(String value) {
@@ -120,8 +132,16 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   }
 
   Future<void> _restore() async {
-    final repository = SupportChatRepository(await PrefsStore.create());
-    final conversations = repository.load();
+    final session = ref.read(authControllerProvider).session;
+    if (session == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    final repository = SupportChatRepository.forSession(
+      await PrefsStore.create(),
+      session,
+    );
+    final conversations = await repository.load();
     if (!mounted) return;
     setState(() {
       _repository = repository;
@@ -130,7 +150,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
           conversations.isEmpty ? null : conversations.first.id;
       _loading = false;
     });
-    await _syncRemote();
+    await _syncRemote(force: true);
     if (!mounted) return;
     _ensureActiveConversation();
     if (WidgetsBinding.instance.lifecycleState == null ||
@@ -145,7 +165,12 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     setState(() {
       _conversations.insert(
         0,
-        SupportConversation(id: '$now', createdAt: now, messages: const []),
+        SupportConversation(
+          id: '$now',
+          createdAt: now,
+          updatedAt: now,
+          messages: const [],
+        ),
       );
       _activeConversationId = '$now';
     });
@@ -164,6 +189,8 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     final updated = SupportConversation(
       id: current.id,
       createdAt: current.createdAt,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+      messageCount: current.messages.length + 1,
       messages: [...current.messages, message],
     );
     setState(() {
@@ -187,6 +214,8 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     final updated = SupportConversation(
       id: current.id,
       createdAt: current.createdAt,
+      updatedAt: current.updatedAt,
+      messageCount: messages.length,
       messages: messages,
     );
     setState(() {
@@ -197,19 +226,45 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     unawaited(_persist());
   }
 
-  Future<void> _syncRemote({bool allowAuthRecovery = true}) async {
+  Future<void> _syncRemote({
+    bool allowAuthRecovery = true,
+    bool force = false,
+  }) async {
+    if (!force && !_isPageActive) return;
     if (_syncing || _sending) return;
     final session = ref.read(authControllerProvider).session;
     if (session == null || session.sessionToken.isEmpty) return;
     _syncing = true;
     try {
       final remote = await _api.conversations(session);
+      final remoteIds = remote.map((item) => item.id).toSet();
+      // The server list is authoritative. Only failed local drafts are kept;
+      // conversations removed with an account/server-side deletion must not
+      // remain visible forever from SharedPreferences.
+      final unresolvedLocalDrafts = _conversations
+          .where((item) =>
+              !remoteIds.contains(item.id) &&
+              (item.messages.any((message) => message.failed) ||
+                  (item.id == _activeConversationId &&
+                      item.messages.isEmpty)))
+          .toList();
+      _conversations.removeWhere((item) => !remoteIds.contains(item.id));
       for (final conversation in remote) {
+        final localIndex =
+            _conversations.indexWhere((item) => item.id == conversation.id);
+        final cached = localIndex < 0 ? null : _conversations[localIndex];
+        final changed = cached == null ||
+            cached.updatedAt != conversation.updatedAt ||
+            cached.messageCount != conversation.messageCount;
+        // The list response includes updatedAt/messageCount. Fetch message
+        // bodies only for changed conversations (and periodically reconcile
+        // the active one), instead of N extra requests every ten seconds.
+        final reconcileActive = conversation.id == _activeConversationId &&
+            _pollCycle % 6 == 0;
+        if (!changed && !reconcileActive) continue;
         final remoteMessages = await _api.messages(session, conversation.id);
         final messages = <SupportMessage>[];
         for (final message in remoteMessages) {
-          final localIndex =
-              _conversations.indexWhere((item) => item.id == conversation.id);
           final local = localIndex < 0
               ? const <SupportMessage>[]
               : _conversations[localIndex].messages;
@@ -232,6 +287,8 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
         final hydrated = SupportConversation(
           id: conversation.id,
           createdAt: conversation.createdAt,
+          updatedAt: conversation.updatedAt,
+          messageCount: conversation.messageCount,
           messages: [...messages, ...unresolved],
         );
         if (index < 0) {
@@ -240,7 +297,13 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
           _conversations[index] = hydrated;
         }
       }
+      _conversations.addAll(unresolvedLocalDrafts);
+      _pollCycle++;
       _conversations.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (!_conversations
+          .any((item) => item.id == _activeConversationId)) {
+        _activeConversationId = _conversations.firstOrNull?.id;
+      }
       if (mounted) setState(() {});
       await _persist();
     } catch (error) {
@@ -252,9 +315,16 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
             .read(authControllerProvider.notifier)
             .setForegroundPresence(true);
         if (ref.read(authControllerProvider).session == null) {
+          if (mounted) {
+            setState(() {
+              _conversations.clear();
+              _activeConversationId = null;
+            });
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          }
           return;
         }
-        await _syncRemote(allowAuthRecovery: false);
+        await _syncRemote(allowAuthRecovery: false, force: true);
         return;
       }
     } finally {
@@ -308,9 +378,9 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       return message;
     }
     try {
-      final root = await getApplicationSupportDirectory();
-      final cache = Directory('${root.path}/support-media-cache');
-      await cache.create(recursive: true);
+      final repository = _repository;
+      if (repository == null) return message;
+      final cache = await repository.mediaCacheDirectory();
       final safeName =
           message.value.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
       final cached = File('${cache.path}/${message.attachmentId}-$safeName');
@@ -437,7 +507,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       // Allow the reconciliation request to run before showing a failure.
       // _syncRemote intentionally skips work while a send is active.
       if (mounted) setState(() => _sending = false);
-      await _syncRemote();
+      await _syncRemote(force: true);
       // A reverse proxy can close the response after the server has already
       // persisted the message. In that case reconciliation replaced the draft
       // with its authoritative remote copy; never overwrite it as failed.

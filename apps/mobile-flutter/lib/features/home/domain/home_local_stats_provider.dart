@@ -30,7 +30,7 @@ class HomeLocalStats {
 }
 
 const _ipRefreshInterval = Duration(seconds: 300);
-const _tickInterval = Duration(seconds: 4);
+const _tickInterval = Duration(seconds: 30);
 
 Future<int?> _measureLocalPing() => NetworkStatsChannel.pingMs('8.8.8.8');
 
@@ -92,11 +92,11 @@ final homeLocalStatsPeriodicProvider =
       secondsSinceIpRefresh = 0;
     }
 
-    unawaited(_measureLocalPing().then((value) {
-      if (value != null) {
-        latencyMs = value;
-      }
-    }));
+    if (secondsSinceIpRefresh % 60 == 0) {
+      unawaited(_measureLocalPing().then((value) {
+        if (value != null) latencyMs = value;
+      }));
+    }
 
     final totals = await NetworkStatsChannel.getTotals();
     final now = DateTime.now();
@@ -168,7 +168,8 @@ final homeSystemLatencyProvider =
     } else {
       yield await NetworkStatsChannel.pingMs('8.8.8.8');
     }
-    // 5s: fewer probes + fewer widget rebuilds = smoother UI and lower power.
-    await Future<void>.delayed(const Duration(seconds: 5));
+    // Latency is informational. Thirty seconds avoids keeping Wi-Fi/cellular
+    // active just to animate a number on the home screen.
+    await Future<void>.delayed(const Duration(seconds: 30));
   }
 });

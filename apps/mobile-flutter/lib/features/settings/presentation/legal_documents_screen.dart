@@ -12,8 +12,12 @@ List<(String, String)> _legalDocs(AppLocalizations l10n, String? localeTag) {
             d.$1,
             switch (d.$2) {
               'user-agreement' => l10n.legalUserAgreement,
+              'service-terms' => l10n.legalServiceTerms,
+              'privacy-policy' => l10n.privacyPolicyDialogTitle,
+              'cookie-policy' => l10n.legalCookiePolicy,
+              'community-rules' => l10n.legalCommunityRules,
+              'violation-policy' => l10n.legalViolationPolicy,
               'open-source-license' => l10n.legalOpenSource,
-              'legal-notice' => l10n.legalNotice,
               'disclaimer' => l10n.legalDisclaimer,
               _ => d.$2,
             },
@@ -28,7 +32,7 @@ Future<void> _openLegalUrl(String url) async {
   }
 }
 
-/// Legal documents — opens the hosted pages on doc.smartdolphin.top
+/// Legal documents — opens the hosted pages on docs.smartdolphinvpn.com.
 class LegalDocumentsScreen extends ConsumerWidget {
   const LegalDocumentsScreen({super.key});
 
@@ -48,7 +52,8 @@ class LegalDocumentsScreen extends ConsumerWidget {
         itemBuilder: (context, index) {
           final (url, title) = docs[index];
           return ListTile(
-            leading: Icon(Icons.open_in_browser, color: theme.colorScheme.primary),
+            leading:
+                Icon(Icons.open_in_browser, color: theme.colorScheme.primary),
             title: Text(title),
             subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
             trailing: const Icon(Icons.chevron_right),

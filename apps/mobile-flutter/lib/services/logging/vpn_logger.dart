@@ -16,6 +16,7 @@ class VpnLogger {
   final LogConfig Function() _getLogConfig;
   VpnCoreLayout? _layout;
   final Map<String, DateTime> _dedup = {};
+  DateTime? _lastCapCheck;
   static const _dedupWindow = Duration(seconds: 5);
   final List<String> _memoryCache = [];
   static const _memoryCacheMaxLines = 4096;
@@ -74,11 +75,12 @@ class VpnLogger {
     }
   }
 
-  Future<void> _append(String category, String file, String level, String component, String message) async {
+  Future<void> _append(String category, String file, String level,
+      String component, String message) async {
     final line = _formatLine(level, component, message);
     final config = _getLogConfig();
-    if (!config.enabled && category.contains('logs/user')) {
-      _pushCache(line);
+    if (!config.enabled &&
+        (category == 'logs/user' || category == 'logs/debug')) {
       return;
     }
     final lay = await layout();
@@ -97,6 +99,12 @@ class VpnLogger {
   }
 
   Future<void> _enforceUserCap(VpnCoreLayout lay) async {
+    final now = DateTime.now();
+    if (_lastCapCheck != null &&
+        now.difference(_lastCapCheck!) < const Duration(minutes: 1)) {
+      return;
+    }
+    _lastCapCheck = now;
     final config = _getLogConfig();
     final maxBytes = config.sizeLimitMb * 1024 * 1024;
     final maxFiles = config.countLimit;
@@ -123,39 +131,45 @@ class VpnLogger {
 
   void debug(String message, {String component = 'app'}) {
     debugPrint('[VpnLogger] $message');
+    if (!_getLogConfig().shouldLogDebug) return;
     unawaited(_append('logs/debug', 'debug.log', 'DEBUG', component, message));
   }
 
   void info(String message, {String component = 'app'}) {
     debugPrint('[VpnLogger] $message');
-    unawaited(_append('logs/runtime', 'runtime.log', 'INFO', component, message));
+    unawaited(
+        _append('logs/runtime', 'runtime.log', 'INFO', component, message));
   }
 
   void warn(String message, {String component = 'app'}) {
     debugPrint('[VpnLogger] $message');
-    unawaited(_append('logs/runtime', 'runtime.log', 'WARN', component, message));
+    unawaited(
+        _append('logs/runtime', 'runtime.log', 'WARN', component, message));
   }
 
   void error(String message, {String component = 'app'}) {
     debugPrint('[VpnLogger] $message');
-    unawaited(_append('logs/runtime', 'runtime.log', 'ERROR', component, message));
+    unawaited(
+        _append('logs/runtime', 'runtime.log', 'ERROR', component, message));
     unawaited(_writeCrashMeta(component, message));
   }
 
   void system(String message, {String component = 'service'}) {
-    unawaited(_append('logs/system', 'service.log', 'INFO', component, message));
+    unawaited(
+        _append('logs/system', 'service.log', 'INFO', component, message));
   }
 
   void userAction(String action, String status, String message) {
-    final key = 'action:$action:$status';
-    if (_skipDedup(key)) return;
-    unawaited(_append('logs/user', 'action.log', 'INFO', action, '$status | $message'));
+    if (!_getLogConfig().enabled) return;
+    unawaited(_append(
+        'logs/user', 'action.log', 'INFO', action, '$status | $message'));
   }
 
   void network(String component, String message) {
     final key = 'net:$component:$message';
     if (_skipDedup(key)) return;
-    unawaited(_append('logs/network', 'connect.log', 'INFO', component, message));
+    unawaited(
+        _append('logs/network', 'connect.log', 'INFO', component, message));
   }
 
   void auth(String component, String message) {
@@ -168,7 +182,7 @@ class VpnLogger {
     final lay = await layout();
     final f = File('${lay.crash}/crash_meta.json');
     await f.writeAsString(
-      '{"time":"${DateTime.now().toIso8601String()}","component":"$component","message":${ _jsonQuote(message) }}\n',
+      '{"time":"${DateTime.now().toIso8601String()}","component":"$component","message":${_jsonQuote(message)}}\n',
     );
   }
 
@@ -224,7 +238,8 @@ class VpnLogger {
         final lines = await f.readAsLines();
         for (final ln in lines) {
           if (ln.trim().isEmpty) continue;
-          if (!_withinWindow(ln, cutoff, isHeader: ln.startsWith('==='))) continue;
+          if (!_withinWindow(ln, cutoff, isHeader: ln.startsWith('===')))
+            continue;
           buf.writeln(ln);
           lineCount++;
         }

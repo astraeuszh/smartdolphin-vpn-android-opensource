@@ -8,6 +8,7 @@ class TrafficPolicy {
     this.monthlyQuotaGb = 0,
     this.monthlyUsedGb = 0,
     this.overQuota = false,
+    this.speedLimitMbps = 0,
     this.risk = const AccountRisk(),
   });
 
@@ -17,15 +18,22 @@ class TrafficPolicy {
   final double monthlyQuotaGb;
   final double monthlyUsedGb;
   final bool overQuota;
+  final double speedLimitMbps;
   final AccountRisk risk;
 
   bool get hasQuotaLimit => monthlyQuotaGb > 0;
 
-  /// Admin / violation speed limit — not the same as monthly quota exhaustion.
-  bool get isViolationSpeedLimit => throttled && !overQuota;
+  /// Admin speed restriction is independent from monthly quota exhaustion.
+  /// Both restrictions can be active and visible at the same time.
+  bool get isViolationSpeedLimit => throttled && speedLimitMbps > 0;
 
   /// Monthly quota exhausted (usage cap, not a community-rule violation).
   bool get isQuotaExceeded => overQuota;
+
+  bool get isAccountLocked => risk.locked || risk.underPenalty;
+
+  bool get hasVisibleRestriction =>
+      hasQuotaLimit || throttled || isAccountLocked || risk.totalStrikes > 0;
 
   int? get serverMaxLimitBytes =>
       hasQuotaLimit ? (monthlyQuotaGb * 1024 * 1024 * 1024).round() : null;
@@ -36,6 +44,7 @@ class TrafficPolicy {
   static TrafficPolicy fromJson(Map<String, dynamic> data) {
     final quotaGb = _asDouble(data['monthly_quota_gb']);
     final usedGb = _asDouble(data['monthly_used_gb']);
+    final speedLimitMbps = _asDouble(data['speed_limit_mbps']);
     final throttled = data['throttle'] == true;
     final overQuota = data['over_quota'] == true;
     // 仅在服务器明确标记 has_traffic_policy 为 true 时认为存在策略；
@@ -48,6 +57,7 @@ class TrafficPolicy {
       monthlyQuotaGb: hasPolicy ? quotaGb : 0,
       monthlyUsedGb: usedGb,
       overQuota: overQuota,
+      speedLimitMbps: speedLimitMbps,
       risk: AccountRisk.fromJson(data),
     );
   }
@@ -61,6 +71,8 @@ class TrafficPolicy {
     final hasTraffic = data.containsKey('throttle') ||
         data.containsKey('has_traffic_policy') ||
         data.containsKey('monthly_quota_gb') ||
+        data.containsKey('monthly_used_gb') ||
+        data.containsKey('speed_limit_mbps') ||
         data.containsKey('over_quota');
     return TrafficPolicy(
       hasPolicy: hasTraffic ? parsed.hasPolicy : hasPolicy,
@@ -71,6 +83,9 @@ class TrafficPolicy {
       monthlyQuotaGb: hasTraffic ? parsed.monthlyQuotaGb : monthlyQuotaGb,
       monthlyUsedGb: hasTraffic ? parsed.monthlyUsedGb : monthlyUsedGb,
       overQuota: hasTraffic ? parsed.overQuota : overQuota,
+      speedLimitMbps: data.containsKey('speed_limit_mbps')
+          ? parsed.speedLimitMbps
+          : speedLimitMbps,
       risk: hasRisk ? parsed.risk : risk,
     );
   }
@@ -82,9 +97,13 @@ class TrafficPolicy {
         'monthly_quota_gb': monthlyQuotaGb,
         'monthly_used_gb': monthlyUsedGb,
         'over_quota': overQuota,
+        'speed_limit_mbps': speedLimitMbps,
         'violation_count': risk.violationCount,
         'traffic_limit_count': risk.trafficLimitCount,
         'risk_penalty_until': risk.penaltyUntil,
+        'light_violation_count': risk.lightCount,
+        'medium_violation_count': risk.mediumCount,
+        'severe_violation_count': risk.severeCount,
       };
 
   static double _asDouble(dynamic v) {

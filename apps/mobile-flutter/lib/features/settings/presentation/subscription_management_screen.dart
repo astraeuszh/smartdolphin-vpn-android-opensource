@@ -41,7 +41,7 @@ class SubscriptionManagementScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           _InfoTile(
             label: l10n.accountSubscriptionUid,
-            value: '${session.uid}',
+            value: session.publicUid.isEmpty ? '${session.uid}' : session.publicUid,
           ),
           _InfoTile(
             label: l10n.accountSubscriptionCreated,

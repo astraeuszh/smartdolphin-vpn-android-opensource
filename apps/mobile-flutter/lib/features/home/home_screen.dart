@@ -76,6 +76,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   /// 游戏模式全屏：底栏收起，入口为小球。
   bool _gameModeExpanded = false;
+  bool _connectTapInFlight = false;
   bool _didSchedulePostFrameCallback = false;
   DateTime? _lastConnectTap;
   DateTime? _lastSwitchTap;
@@ -86,9 +87,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _policyRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _policyRefreshTimer = Timer.periodic(const Duration(minutes: 2), (_) {
       if (!mounted) return;
-      unawaited(ref.read(authControllerProvider.notifier).refreshSession());
+      unawaited(ref
+          .read(authControllerProvider.notifier)
+          .refreshSession());
       unawaited(_maybeShowAnnouncement());
     });
   }
@@ -106,9 +109,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _policyRefreshTimer = null;
     }
     if (state == AppLifecycleState.resumed) {
-      _policyRefreshTimer ??= Timer.periodic(const Duration(seconds: 30), (_) {
+      _policyRefreshTimer ??= Timer.periodic(const Duration(minutes: 2), (_) {
         if (!mounted) return;
-        unawaited(ref.read(authControllerProvider.notifier).refreshSession());
+        unawaited(ref
+            .read(authControllerProvider.notifier)
+            .refreshSession());
         unawaited(_maybeShowAnnouncement());
       });
       // 长时间后台后 Flutter semantics 树可能卡住；预热一帧并延迟刷新账户状态。
@@ -718,7 +723,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final bottomNavReserve = 88.0 + MediaQuery.paddingOf(context).bottom;
     final buttonState = isConnected
         ? ConnectButtonVisualState.active
-        : isAttemptCancelable
+        : isAttemptCancelable || _connectTapInFlight
             ? ConnectButtonVisualState.connecting
             : ConnectButtonVisualState.idle;
 
@@ -874,9 +879,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         KeyedSubtree(
                           key: _connectKey,
                           child: ConnectControl(
-                            enabled: !isBusy || isAttemptCancelable,
+                            enabled: !_connectTapInFlight &&
+                                (!isBusy || isAttemptCancelable),
                             isActive: isConnected,
-                            isLoading: isBusy,
+                            isLoading: isBusy || _connectTapInFlight,
                             visualState: buttonState,
                             label: isConnected
                                 ? l10n.disconnect
@@ -886,44 +892,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             statusText:
                                 isAttemptCancelable ? l10n.tapToCancel : null,
                             onTap: () async {
+                              if (_connectTapInFlight) return;
+                              _connectTapInFlight = true;
+                              if (mounted) setState(() {});
                               await ref.read(hapticsServiceProvider).impact();
-                              if (isConnected) {
-                                unawaited(_safeDisconnect(ref));
-                              } else if (isAttemptCancelable) {
-                                unawaited(_safeDisconnect(ref));
-                              } else {
-                                final server = selectedServer;
-                                if (server == null) {
-                                  showTopSnackBar(
-                                      context, l10n.pleaseSelectServer);
-                                  return;
-                                }
-                                final ok = await ref
-                                    .read(authControllerProvider.notifier)
-                                    .ensureVpnAccess();
-                                if (!ok) {
-                                  final currentAuth =
-                                      ref.read(authControllerProvider);
-                                  if (currentAuth.session != null &&
-                                      currentAuth.session?.banned != true) {
-                                    await ref
-                                        .read(
-                                            sessionControllerProvider.notifier)
-                                        .connect(
-                                            context: context, server: server);
+                              try {
+                                if (isConnected || isAttemptCancelable) {
+                                  await _safeDisconnect(ref);
+                                } else {
+                                  final server = selectedServer;
+                                  if (server == null) {
+                                    showTopSnackBar(
+                                        context, l10n.pleaseSelectServer);
                                     return;
                                   }
-                                  final msg = currentAuth.message ??
-                                      l10n.homeLoginVpnRequired;
-                                  if (context.mounted) {
-                                    showTopSnackBar(context, msg,
-                                        isError: true);
+                                  final ok = await ref
+                                      .read(authControllerProvider.notifier)
+                                      .ensureVpnAccess();
+                                  if (!ok) {
+                                    final currentAuth =
+                                        ref.read(authControllerProvider);
+                                    if (currentAuth.session != null &&
+                                        currentAuth.session?.banned != true) {
+                                      await ref
+                                          .read(sessionControllerProvider
+                                              .notifier)
+                                          .connect(
+                                            context: context,
+                                            server: server,
+                                          );
+                                      return;
+                                    }
+                                    final msg = currentAuth.message ??
+                                        l10n.homeLoginVpnRequired;
+                                    if (context.mounted) {
+                                      showTopSnackBar(context, msg,
+                                          isError: true);
+                                    }
+                                    return;
                                   }
-                                  return;
+                                  await ref
+                                      .read(sessionControllerProvider.notifier)
+                                      .connect(
+                                          context: context, server: server);
                                 }
-                                await ref
-                                    .read(sessionControllerProvider.notifier)
-                                    .connect(context: context, server: server);
+                              } finally {
+                                _connectTapInFlight = false;
+                                if (mounted) setState(() {});
                               }
                             },
                           ),

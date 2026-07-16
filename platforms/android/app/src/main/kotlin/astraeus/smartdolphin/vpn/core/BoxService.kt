@@ -185,8 +185,10 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
         try {
             val opts = CommandClientOptions()
             opts.addCommand(Libbox.CommandStatus)
-            opts.addCommand(Libbox.CommandLog)
-            opts.statusInterval = 1000L
+            // Traffic counters are presentation data, not a tunnel heartbeat.
+            // A one-second cross-language callback keeps the app process and radio
+            // active in background. Ten seconds is enough for quota/UI updates.
+            opts.statusInterval = 10_000L
             val client = Libbox.newCommandClient(StatusHandler(), opts)
             client.connect()
             commandClient = client
@@ -208,8 +210,18 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
             if (messageList == null) return
             while (messageList.hasNext()) {
                 val entry: LogEntry = messageList.next() ?: continue
-                Log.i("DolphinCore", entry.message)
-                CoreLogFile.append(entry.message)
+                val message = entry.message
+                // Runtime access logs can arrive many times per second. Writing every
+                // line to Logcat and storage keeps the CPU and flash awake in background.
+                // Preserve warnings/errors while lifecycle events are logged separately.
+                val important = message.contains("error", ignoreCase = true) ||
+                    message.contains("warning", ignoreCase = true) ||
+                    message.contains("fatal", ignoreCase = true) ||
+                    message.contains("panic", ignoreCase = true)
+                if (important) {
+                    Log.w("DolphinCore", message)
+                    CoreLogFile.append(message)
+                }
             }
         }
         override fun writeStatus(message: StatusMessage?) {

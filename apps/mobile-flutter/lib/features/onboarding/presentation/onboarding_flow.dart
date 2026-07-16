@@ -44,7 +44,8 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   int _currentPage = 0;
   bool _pendingConnect = false;
   bool _loggedStep3 = false;
-  late final ProviderSubscription<ServerCatalogState> _serverCatalogSubscription;
+  late final ProviderSubscription<ServerCatalogState>
+      _serverCatalogSubscription;
   late final ProviderSubscription<SessionState> _sessionSubscription;
 
   @override
@@ -52,7 +53,9 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     super.initState();
     _pageController = PageController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(ref.read(analyticsServiceProvider).logEvent('onboarding_viewed_step_1'));
+      unawaited(ref
+          .read(analyticsServiceProvider)
+          .logEvent('onboarding_viewed_step_1'));
     });
     _serverCatalogSubscription = ref.listenManual<ServerCatalogState>(
       serverCatalogProvider,
@@ -80,19 +83,26 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     if (!_pendingConnect) {
       return;
     }
-    if (previous?.status != SessionStatus.connected && next.status == SessionStatus.connected) {
+    if (previous?.status != SessionStatus.connected &&
+        next.status == SessionStatus.connected) {
       _pendingConnect = false;
       ref.read(onboardingControllerProvider.notifier).setConnecting(false);
       unawaited(ref.read(analyticsServiceProvider).logEvent('connect_success'));
       unawaited(
-        ref.read(preferencesControllerProvider.notifier).setOnboardingCompleted(true),
+        ref
+            .read(preferencesControllerProvider.notifier)
+            .setOnboardingCompleted(true),
       );
       unawaited(_navigateToHome());
-    } else if (previous?.status != SessionStatus.error && next.status == SessionStatus.error) {
+    } else if (previous?.status != SessionStatus.error &&
+        next.status == SessionStatus.error) {
       _pendingConnect = false;
       ref.read(onboardingControllerProvider.notifier).setConnecting(false);
-      final message = next.errorMessage ?? 'Unable to establish VPN connection.';
-      ref.read(onboardingControllerProvider.notifier).setConnectionError(message);
+      final message =
+          next.errorMessage ?? 'Unable to establish VPN connection.';
+      ref
+          .read(onboardingControllerProvider.notifier)
+          .setConnectionError(message);
       unawaited(ref.read(analyticsServiceProvider).logEvent(
         'connect_failure',
         {'message': message},
@@ -100,11 +110,14 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       unawaited(_showConnectionErrorSheet(message));
     } else if (next.status == SessionStatus.disconnected &&
         next.errorMessage != null &&
-        (previous?.status == SessionStatus.preparing || previous?.status == SessionStatus.connecting)) {
+        (previous?.status == SessionStatus.preparing ||
+            previous?.status == SessionStatus.connecting)) {
       _pendingConnect = false;
       ref.read(onboardingControllerProvider.notifier).setConnecting(false);
       final message = next.errorMessage!;
-      ref.read(onboardingControllerProvider.notifier).setConnectionError(message);
+      ref
+          .read(onboardingControllerProvider.notifier)
+          .setConnectionError(message);
       unawaited(ref.read(analyticsServiceProvider).logEvent(
         'connect_failure',
         {'message': message, 'stage': 'disconnected'},
@@ -124,7 +137,9 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     );
     if (index == 2 && !_loggedStep3) {
       _loggedStep3 = true;
-      unawaited(ref.read(analyticsServiceProvider).logEvent('onboarding_step_3_viewed'));
+      unawaited(ref
+          .read(analyticsServiceProvider)
+          .logEvent('onboarding_step_3_viewed'));
     }
   }
 
@@ -160,7 +175,9 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                   _WelcomePage(
                     onGetStarted: () {
                       unawaited(
-                        ref.read(analyticsServiceProvider).logEvent('onboarding_cta_step_1'),
+                        ref
+                            .read(analyticsServiceProvider)
+                            .logEvent('onboarding_cta_step_1'),
                       );
                       _goToPage(1);
                     },
@@ -175,23 +192,26 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                           .toggleOptIn(value);
                     },
                     onRunTest: () {
-                      ref.read(onboardingSpeedTestControllerProvider.notifier).startTest();
+                      ref
+                          .read(onboardingSpeedTestControllerProvider.notifier)
+                          .startTest();
                     },
                     onCancelTest: () {
-                      ref.read(onboardingSpeedTestControllerProvider.notifier).cancelTest();
+                      ref
+                          .read(onboardingSpeedTestControllerProvider.notifier)
+                          .cancelTest();
                     },
                     onContinue: () async {
                       if (!speedTestState.optIn) {
-                        await ref
-                            .read(analyticsServiceProvider)
-                            .logEvent('speedtest_skipped', {'method': 'toggle_off_continue'});
+                        await ref.read(analyticsServiceProvider).logEvent(
+                            'speedtest_skipped',
+                            {'method': 'toggle_off_continue'});
                       }
                       _goToPage(2);
                     },
                     onSkip: () async {
-                      await ref
-                          .read(analyticsServiceProvider)
-                          .logEvent('speedtest_skipped', {'method': 'skip_button'});
+                      await ref.read(analyticsServiceProvider).logEvent(
+                          'speedtest_skipped', {'method': 'skip_button'});
                       _goToPage(2);
                     },
                     onLearnMore: _showSpeedTestLearnMoreSheet,
@@ -205,7 +225,9 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                     state: onboardingState,
                     preferences: preferences,
                     onSelectAuto: () async {
-                      await ref.read(onboardingControllerProvider.notifier).useAutoServer();
+                      await ref
+                          .read(onboardingControllerProvider.notifier)
+                          .useAutoServer();
                     },
                     onSelectManual: () async {
                       final server = await _showServerPicker(context);
@@ -224,7 +246,9 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                       }
                     },
                     onClearImport: () {
-                      ref.read(onboardingControllerProvider.notifier).clearImportedConfig();
+                      ref
+                          .read(onboardingControllerProvider.notifier)
+                          .clearImportedConfig();
                     },
                     onToggleAutoReconnect: (value) {
                       unawaited(ref
@@ -356,7 +380,8 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       controller.setNotificationsPrompted(true);
       controller.setNotificationsGranted(false);
       controller.setShowNotificationDenied(true);
-      _showSnackBar(context.l10n.onboardingUnableRequestNotifications('${error.message}'));
+      _showSnackBar(context.l10n
+          .onboardingUnableRequestNotifications('${error.message}'));
       return false;
     }
   }
@@ -377,7 +402,8 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
             children: [
               Text(
                 l10n.onboardingHowItWorksTitle,
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               _DiagramStep(
@@ -418,7 +444,8 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
             children: [
               Text(
                 l10n.onboardingAboutSpeedTestTitle,
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               _BulletLine(l10n.onboardingAboutSpeedTestBullet1),
@@ -446,7 +473,8 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
             children: [
               Text(
                 l10n.onboardingRisksTitle,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               _BulletLine(l10n.onboardingRisksBullet1),
@@ -475,7 +503,8 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
             children: [
               Text(
                 l10n.onboardingConnectionFailed,
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
@@ -580,7 +609,8 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   }
 
   ImportedOvpnConfig? _parseOvpn(String content, String filename) {
-    final lines = LineSplitter.split(content).map((line) => line.trim()).toList();
+    final lines =
+        LineSplitter.split(content).map((line) => line.trim()).toList();
     final remoteLine = lines.firstWhere(
       (line) => line.startsWith('remote '),
       orElse: () => '',
@@ -600,7 +630,9 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       (line) => line.startsWith('cipher '),
       orElse: () => '',
     );
-    final cipher = cipherLine.isNotEmpty ? cipherLine.split(RegExp(r'\s+')).skip(1).join(' ') : null;
+    final cipher = cipherLine.isNotEmpty
+        ? cipherLine.split(RegExp(r'\s+')).skip(1).join(' ')
+        : null;
     final name = filename.replaceAll('.ovpn', '').trim().isEmpty
         ? context.l10n.onboardingImportedServer
         : filename.replaceAll('.ovpn', '').trim();
@@ -611,7 +643,6 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       cipher: cipher,
     );
   }
-
 
   Future<void> _openLink(Uri uri) async {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
@@ -624,17 +655,18 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       SnackBar(content: Text(message)),
     );
   }
-
 }
 
 class _OnboardingServerPickerSheet extends ConsumerStatefulWidget {
   const _OnboardingServerPickerSheet();
 
   @override
-  ConsumerState<_OnboardingServerPickerSheet> createState() => _OnboardingServerPickerSheetState();
+  ConsumerState<_OnboardingServerPickerSheet> createState() =>
+      _OnboardingServerPickerSheetState();
 }
 
-class _OnboardingServerPickerSheetState extends ConsumerState<_OnboardingServerPickerSheet> {
+class _OnboardingServerPickerSheetState
+    extends ConsumerState<_OnboardingServerPickerSheet> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
@@ -654,7 +686,9 @@ class _OnboardingServerPickerSheetState extends ConsumerState<_OnboardingServerP
         c.server?.name,
         c.server?.hostName,
       ];
-      return fields.whereType<String>().any((v) => v.toLowerCase().contains(needle));
+      return fields
+          .whereType<String>()
+          .any((v) => v.toLowerCase().contains(needle));
     }
     final s = cardOrServer as Server;
     final fields = <String?>[
@@ -665,7 +699,9 @@ class _OnboardingServerPickerSheetState extends ConsumerState<_OnboardingServerP
       s.regionName,
       s.hostName,
     ];
-    return fields.whereType<String>().any((v) => v.toLowerCase().contains(needle));
+    return fields
+        .whereType<String>()
+        .any((v) => v.toLowerCase().contains(needle));
   }
 
   @override
@@ -673,7 +709,9 @@ class _OnboardingServerPickerSheetState extends ConsumerState<_OnboardingServerP
     final theme = Theme.of(context);
     final catalog = ref.watch(serverCatalogProvider);
     final onboardingState = ref.watch(onboardingControllerProvider);
-    final cards = catalog.sortedCountryCards.where((c) => c.server != null && _matches(c)).toList(growable: false);
+    final cards = catalog.sortedCountryCards
+        .where((c) => c.server != null && _matches(c))
+        .toList(growable: false);
 
     return Column(
       children: [
@@ -687,7 +725,8 @@ class _OnboardingServerPickerSheetState extends ConsumerState<_OnboardingServerP
                   children: [
                     Text(
                       'Browse community list',
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -695,16 +734,18 @@ class _OnboardingServerPickerSheetState extends ConsumerState<_OnboardingServerP
                           ? 'Fetching volunteer servers…'
                           : '${cards.length} of ${catalog.countryCards.length} locations shown',
                       style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.65),
-                          ),
+                        color: theme.colorScheme.onSurface.withOpacity(0.65),
+                      ),
                     ),
                   ],
                 ),
               ),
               IconButton(
-                tooltip: 'Refresh list',
+                tooltip: context.l10n.commonRefresh,
                 onPressed: () async {
-                  await ref.read(serverCatalogProvider.notifier).refreshServers();
+                  await ref
+                      .read(serverCatalogProvider.notifier)
+                      .refreshServers();
                 },
                 icon: const Icon(Icons.refresh),
               ),
@@ -722,7 +763,7 @@ class _OnboardingServerPickerSheetState extends ConsumerState<_OnboardingServerP
             },
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
-              labelText: 'Search locations',
+              labelText: context.l10n.commonSearchLocations,
               suffixIcon: _query.isNotEmpty
                   ? IconButton(
                       onPressed: () {
@@ -769,7 +810,9 @@ class _OnboardingServerPickerSheetState extends ConsumerState<_OnboardingServerP
               }
               return RefreshIndicator(
                 onRefresh: () async {
-                  await ref.read(serverCatalogProvider.notifier).refreshServers();
+                  await ref
+                      .read(serverCatalogProvider.notifier)
+                      .refreshServers();
                 },
                 child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -829,7 +872,8 @@ class _WelcomePage extends StatelessWidget {
               const SizedBox(height: 32),
               Text(
                 l10n.onboardingIntroTitle,
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               _BulletLine(l10n.onboardingIntroBullet1),
@@ -901,7 +945,8 @@ class _SpeedTestPage extends StatelessWidget {
           const SizedBox(height: 24),
           Text(
             l10n.onboardingSpeedTestTitle,
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
@@ -939,7 +984,9 @@ class _SpeedTestPage extends StatelessWidget {
               child: MaterialBanner(
                 content: Text(l10n.onboardingSpeedTestUnavailable),
                 actions: [
-                  TextButton(onPressed: onDismissBanner, child: Text(l10n.onboardingDismiss)),
+                  TextButton(
+                      onPressed: onDismissBanner,
+                      child: Text(l10n.onboardingDismiss)),
                 ],
               ),
             ),
@@ -956,7 +1003,9 @@ class _SpeedTestPage extends StatelessWidget {
           else
             FilledButton(
               onPressed: state.optIn
-                  ? (state.status == OnboardingSpeedTestStatus.completed ? onContinue : onRunTest)
+                  ? (state.status == OnboardingSpeedTestStatus.completed
+                      ? onContinue
+                      : onRunTest)
                   : onContinue,
               child: Text(state.optIn
                   ? (state.status == OnboardingSpeedTestStatus.completed
@@ -1029,7 +1078,8 @@ class _ConnectPage extends StatelessWidget {
           const SizedBox(height: 24),
           Text(
             l10n.onboardingConnectTitle,
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           if (baseline != null)
@@ -1069,10 +1119,13 @@ class _ConnectPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          if (state.serverMode != OnboardingServerMode.imported && state.selectedServer != null)
+          if (state.serverMode != OnboardingServerMode.imported &&
+              state.selectedServer != null)
             _ServerSummaryCard(server: state.selectedServer!),
-          if (state.serverMode == OnboardingServerMode.imported && state.importedConfig != null)
-            _ImportedConfigCard(config: state.importedConfig!, onClear: onClearImport),
+          if (state.serverMode == OnboardingServerMode.imported &&
+              state.importedConfig != null)
+            _ImportedConfigCard(
+                config: state.importedConfig!, onClear: onClearImport),
           const SizedBox(height: 24),
           _SectionHeader(title: l10n.onboardingSectionOptions),
           const SizedBox(height: 8),
@@ -1099,7 +1152,9 @@ class _ConnectPage extends StatelessWidget {
           ),
           ListTile(
             leading: Icon(
-              state.notificationsGranted ? Icons.notifications_active : Icons.notifications_none,
+              state.notificationsGranted
+                  ? Icons.notifications_active
+                  : Icons.notifications_none,
             ),
             title: Text(l10n.onboardingNotificationsTitle),
             subtitle: Text(state.notificationsPrompted
@@ -1119,7 +1174,8 @@ class _ConnectPage extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 l10n.onboardingNotificationsDisabledForNow,
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.error),
               ),
             ),
           const SizedBox(height: 24),
@@ -1193,7 +1249,9 @@ class _SpeedProgress extends StatelessWidget {
           return l10n.onboardingSpeedTestUnavailableShort;
         case OnboardingSpeedTestStatus.idle:
         default:
-          return state.optIn ? l10n.onboardingSpeedTestReady : l10n.onboardingSpeedTestSkipped;
+          return state.optIn
+              ? l10n.onboardingSpeedTestReady
+              : l10n.onboardingSpeedTestSkipped;
       }
     }();
 
@@ -1213,13 +1271,14 @@ class _SpeedProgress extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             if (state.isRunning) ...[
-              LinearProgressIndicator(value: state.progress > 0 ? state.progress : null),
+              LinearProgressIndicator(
+                  value: state.progress > 0 ? state.progress : null),
               const SizedBox(height: 8),
               Text(
                 l10n.onboardingSpeedTestCollecting,
                 style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                    ),
+                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -1266,7 +1325,8 @@ class _SpeedProgress extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   state.errorMessage!,
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.error),
                 ),
               ),
           ],
@@ -1277,7 +1337,8 @@ class _SpeedProgress extends StatelessWidget {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.label, required this.value, required this.icon});
+  const _MetricTile(
+      {required this.label, required this.value, required this.icon});
 
   final String label;
   final String value;
@@ -1294,8 +1355,12 @@ class _MetricTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7))),
-              Text(value, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
+              Text(label,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.7))),
+              Text(value,
+                  style: theme.textTheme.bodyLarge
+                      ?.copyWith(fontWeight: FontWeight.bold)),
             ],
           ),
         ),
@@ -1336,7 +1401,8 @@ class _ServerSummaryCard extends StatelessWidget {
           children: [
             Text(
               localizedServerDisplayName(server, l10n),
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             Text(
               localizedServerLocation(server, l10n),
@@ -1380,7 +1446,8 @@ class _ImportedConfigCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     config.name,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
@@ -1427,7 +1494,8 @@ class _BulletLine extends StatelessWidget {
 }
 
 class _DiagramStep extends StatelessWidget {
-  const _DiagramStep({required this.icon, required this.title, required this.description});
+  const _DiagramStep(
+      {required this.icon, required this.title, required this.description});
 
   final IconData icon;
   final String title;
@@ -1447,7 +1515,9 @@ class _DiagramStep extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Text(title,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Text(description, style: theme.textTheme.bodyMedium),
               ],

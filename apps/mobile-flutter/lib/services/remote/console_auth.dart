@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../features/auth/domain/account_session.dart';
 import 'console_endpoint.dart';
+import 'client_request_headers.dart';
 
 class ConsoleAuthException implements Exception {
   ConsoleAuthException(this.code, this.message);
@@ -44,7 +45,7 @@ class ConsoleAuth {
     final resp = await _client
         .post(
           uri,
-          headers: {'Content-Type': 'application/json'},
+          headers: await ClientRequestHeaders.standard(json: true),
           body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 18));
@@ -54,7 +55,7 @@ class ConsoleAuth {
     } catch (_) {
       throw ConsoleAuthException('E6007', 'Invalid server response');
     }
-    _throwForHttpStatus(resp.statusCode);
+    _throwForHttpStatus(resp.statusCode, data);
     return data;
   }
 
@@ -63,22 +64,36 @@ class ConsoleAuth {
     String token,
   ) async {
     final uri = Uri.parse('${ConsoleEndpoint.base}$path');
-    final resp = await _client.get(
-      uri,
-      headers: {'Authorization': 'Bearer $token'},
-    ).timeout(const Duration(seconds: 18));
+    final resp = await _client
+        .get(
+          uri,
+          headers: await ClientRequestHeaders.standard(bearerToken: token),
+        )
+        .timeout(const Duration(seconds: 18));
     Map<String, dynamic> data;
     try {
       data = jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (_) {
       throw ConsoleAuthException('E6007', 'Invalid server response');
     }
-    _throwForHttpStatus(resp.statusCode);
+    _throwForHttpStatus(resp.statusCode, data);
     return data;
   }
 
-  void _throwForHttpStatus(int statusCode) {
+  void _throwForHttpStatus(int statusCode, [Map<String, dynamic>? body]) {
     if (statusCode == 401 || statusCode == 403) {
+      final error = body?['error']?.toString() ?? '';
+      if (error == 'account_deleted') {
+        throw ConsoleAuthException(
+            'account_deleted', 'This account has been deleted.');
+      }
+      if (error == 'account_expired') {
+        throw ConsoleAuthException(
+            'account_expired', 'Subscription has expired.');
+      }
+      if (error == 'account_suspended_notice') {
+        throw ConsoleAuthException('banned', 'Account access is restricted.');
+      }
       throw ConsoleAuthException(
           'unauthorized', 'Authentication expired. Please sign in again.');
     }
@@ -208,6 +223,26 @@ class ConsoleAuth {
     }
     _throwIfFailed(data);
     return session.copyWithRemote(data);
+  }
+
+  Future<void> setPresence(AccountSession session, bool online) async {
+    final response = await _client
+        .post(
+          Uri.parse('${ConsoleEndpoint.base}/api/auth/presence'),
+          headers: await ClientRequestHeaders.standard(
+            bearerToken: session.sessionToken,
+            json: true,
+          ),
+          body: jsonEncode({'online': online}),
+        )
+        .timeout(const Duration(seconds: 8));
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw ConsoleAuthException(
+          'unauthorized', 'Authentication expired. Please sign in again.');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ConsoleAuthException('presence_failed', 'Presence update failed.');
+    }
   }
 
   Future<String> renameUser({

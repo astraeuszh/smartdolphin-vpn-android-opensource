@@ -13,7 +13,14 @@ import '../../usage/data_usage_controller.dart';
 import '../domain/ip_info_provider.dart';
 import '../domain/traffic_history_provider.dart';
 import '../domain/memory_provider.dart';
-import '../domain/website_latency_provider.dart' show websiteLatencyProvider, websiteTargets, LatencyResult, LatencySuccess, LatencyTimeout, LatencyError;
+import '../domain/website_latency_provider.dart'
+    show
+        websiteLatencyProvider,
+        websiteTargets,
+        LatencyResult,
+        LatencySuccess,
+        LatencyTimeout,
+        LatencyError;
 import '../../settings/presentation/settings_picker_sheet.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -54,7 +61,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-
   Widget _buildWebsiteTestCard(BuildContext context, AppLocalizations l10n) {
     final theme = Theme.of(context);
     final latencyState = ref.watch(websiteLatencyProvider);
@@ -74,7 +80,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Expanded(
                 child: Text(
                   l10n.dashboardWebsiteTest,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
               SpinRefreshButton(
@@ -132,7 +139,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Expanded(
                 child: Text(
                   l10n.dashboardIpInfo,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
               SpinRefreshButton(
@@ -161,30 +169,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               if (info.countryCode != null)
                                 Row(
                                   children: [
-                                    Text(_flagEmoji(info.countryCode ?? 'US'), style: const TextStyle(fontSize: 18)),
+                                    Text(_flagEmoji(info.countryCode ?? 'US'),
+                                        style: const TextStyle(fontSize: 18)),
                                     const SizedBox(width: 6),
-                                    Text(info.countryNameEnglish, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+                                    Text(info.countryNameEnglish,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w500)),
                                   ],
                                 ),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text('${l10n.dashboardIpLabel}: ', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.65))),
-                                  Text(_ipHidden ? '••••••••' : (info.ip ?? '--'), style: theme.textTheme.bodySmall),
+                                  Text('${l10n.dashboardIpLabel}: ',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                              color: theme.colorScheme.onSurface
+                                                  .withOpacity(0.65))),
+                                  Text(
+                                      _ipHidden
+                                          ? '••••••••'
+                                          : (info.ip ?? '--'),
+                                      style: theme.textTheme.bodySmall),
                                   IconButton(
                                     padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                    icon: Icon(_ipHidden ? Icons.visibility_off : Icons.visibility, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.6)),
-                                    onPressed: () => setState(() => _ipHidden = !_ipHidden),
+                                    constraints: const BoxConstraints(
+                                        minWidth: 32, minHeight: 32),
+                                    icon: Icon(
+                                        _ipHidden
+                                            ? Icons.visibility_off
+                                            : Icons.visibility,
+                                        size: 18,
+                                        color: theme.colorScheme.onSurface
+                                            .withOpacity(0.6)),
+                                    onPressed: () =>
+                                        setState(() => _ipHidden = !_ipHidden),
                                   ),
                                 ],
                               ),
                               if (info.asn != null) ...[
                                 const SizedBox(height: 6),
-                                Text('${l10n.dashboardAsn}: ${info.asn}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.8))),
+                                Text('${l10n.dashboardAsn}: ${info.asn}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurface
+                                            .withOpacity(0.8))),
                               ],
                               const SizedBox(height: 12),
-                              Text(l10n.dashboardAutoRefresh, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                              Text(l10n.dashboardAutoRefresh,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withOpacity(0.5))),
                             ],
                           ),
                         ),
@@ -192,10 +226,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _IpInfoRow(label: l10n.dashboardIsp, value: info.isp ?? '--'),
-                              _IpInfoRow(label: l10n.dashboardOrg, value: info.org ?? '--'),
-                              _IpInfoRow(label: l10n.networkLocation, value: info.displayLocationEnglish),
-                              _IpInfoRow(label: l10n.networkTimezone, value: info.timezone ?? '--'),
+                              _IpInfoRow(
+                                  label: l10n.dashboardIsp,
+                                  value: info.isp ?? '--'),
+                              _IpInfoRow(
+                                  label: l10n.dashboardOrg,
+                                  value: info.org ?? '--'),
+                              _IpInfoRow(
+                                  label: l10n.networkLocation,
+                                  value: info.displayLocationEnglish),
+                              _IpInfoRow(
+                                  label: l10n.networkTimezone,
+                                  value: info.timezone ?? '--'),
                             ],
                           ),
                         ),
@@ -205,8 +247,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: Text(
-                        info.countryCode != null ? '${info.countryCode}, ${info.coordinates}' : info.coordinates,
-                        style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                        info.countryCode != null
+                            ? '${info.countryCode}, ${info.coordinates}'
+                            : info.coordinates,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color:
+                                theme.colorScheme.onSurface.withOpacity(0.5)),
                       ),
                     ),
                   ],
@@ -219,16 +265,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               };
               return Text(
                 errMsg,
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.error),
               );
             },
             loading: () => const Center(
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
               ),
             ),
-            error: (e, _) => Text('${l10n.dashboardFetchFailed}: $e', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error)),
+            error: (e, _) => Text('${l10n.dashboardFetchFailed}: $e',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.error)),
           ),
         ],
       ),
@@ -271,7 +323,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               const SizedBox(width: 10),
               Text(
                 l10n.dashboardTrafficTrend,
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -321,7 +374,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     color: uploadColor,
                   ),
                 ),
-                Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.45)),
+                Container(
+                    width: 1,
+                    height: 32,
+                    color: Colors.white.withValues(alpha: 0.45)),
                 Expanded(
                   child: _CompactStat(
                     icon: Icons.arrow_downward_rounded,
@@ -330,12 +386,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     color: downloadColor,
                   ),
                 ),
-                Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.45)),
+                Container(
+                    width: 1,
+                    height: 32,
+                    color: Colors.white.withValues(alpha: 0.45)),
                 Expanded(
                   child: _CompactStat(
                     icon: Icons.memory_rounded,
                     label: l10n.dashboardLabelMemory,
-                    value: _formatMemory(ref.watch(appMemoryProvider).valueOrNull),
+                    value:
+                        _formatMemory(ref.watch(appMemoryProvider).valueOrNull),
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
@@ -366,20 +426,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.data_usage, color: theme.colorScheme.primary, size: 22),
+              Icon(Icons.data_usage,
+                  color: theme.colorScheme.primary, size: 22),
               const SizedBox(width: 8),
               Text(
                 l10n.dashboardUsageStats,
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: 12),
           _buildPeriodPicker(context),
           const SizedBox(height: 16),
-          _UsageTextRow(label: periodUsedLabel, value: '${usedGb.toStringAsFixed(2)} GB'),
-          _UsageTextRow(label: l10n.dashboardUsedYear, value: '${usedGb.toStringAsFixed(2)} GB'),
-          _UsageTextRow(label: l10n.dashboardUsedAll, value: '${usedGb.toStringAsFixed(2)} GB'),
+          _UsageTextRow(
+              label: periodUsedLabel, value: '${usedGb.toStringAsFixed(2)} GB'),
+          _UsageTextRow(
+              label: l10n.dashboardUsedYear,
+              value: '${usedGb.toStringAsFixed(2)} GB'),
+          _UsageTextRow(
+              label: l10n.dashboardUsedAll,
+              value: '${usedGb.toStringAsFixed(2)} GB'),
         ],
       ),
     );
@@ -424,8 +491,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
         child: Row(
           children: [
-            Expanded(child: Text(displayLabel, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface))),
-            Icon(Icons.keyboard_arrow_down_rounded, color: theme.colorScheme.onSurface.withOpacity(0.6), size: 24),
+            Expanded(
+                child: Text(displayLabel,
+                    style: theme.textTheme.bodyLarge
+                        ?.copyWith(color: theme.colorScheme.onSurface))),
+            Icon(Icons.keyboard_arrow_down_rounded,
+                color: theme.colorScheme.onSurface.withOpacity(0.6), size: 24),
           ],
         ),
       ),
@@ -565,17 +636,24 @@ class _WebsiteTestCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(_iconFor(id), size: 28, color: theme.colorScheme.onSurface.withValues(alpha: 0.8)),
+          Icon(_iconFor(id),
+              size: 28,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.8)),
           const SizedBox(height: 8),
-          Text(name, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+          Text(name,
+              style: theme.textTheme.labelMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Container(height: 1, color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          Container(
+              height: 1,
+              color: theme.colorScheme.outline.withValues(alpha: 0.2)),
           const SizedBox(height: 8),
           if (testing)
             SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.primary),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: theme.colorScheme.primary),
             )
           else if (result != null)
             Text(
@@ -588,7 +666,10 @@ class _WebsiteTestCard extends StatelessWidget {
           else
             GestureDetector(
               onTap: onTest,
-              child: Text(l10n.dashboardTest, style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
+              child: Text(l10n.dashboardTest,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600)),
             ),
         ],
       ),
@@ -614,12 +695,18 @@ class _WebsiteTestCard extends StatelessWidget {
 
   IconData _iconFor(String id) {
     switch (id) {
-      case 'apple': return Icons.apple;
-      case 'github': return Icons.code;
-      case 'google': return Icons.g_mobiledata;
-      case 'youtube': return Icons.play_circle_filled;
-      case 'amazon': return Icons.shopping_bag;
-      default: return Icons.language;
+      case 'apple':
+        return Icons.apple;
+      case 'github':
+        return Icons.code;
+      case 'google':
+        return Icons.g_mobiledata;
+      case 'youtube':
+        return Icons.play_circle_filled;
+      case 'amazon':
+        return Icons.shopping_bag;
+      default:
+        return Icons.language;
     }
   }
 }
@@ -640,9 +727,15 @@ class _IpInfoRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 48,
-            child: Text('$label:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.65))),
+            child: Text('$label:',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.65))),
           ),
-          Expanded(child: Text(value, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+          Expanded(
+              child: Text(value,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w500),
+                  overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
@@ -704,20 +797,28 @@ class _TrafficSparkline extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final maxVal = [
+    final rawMax = [
       ...uploadSamples,
       ...downloadSamples,
-      0.01,
     ].reduce((a, b) => a > b ? a : b);
+    // Round to a stable scale so a single sample cannot flatten every other
+    // point, while keeping a quiet tunnel visibly near the baseline.
+    final maxVal = rawMax <= 1
+        ? 1.0
+        : rawMax <= 10
+            ? 10.0
+            : rawMax <= 100
+                ? 100.0
+                : (rawMax / 100).ceil() * 100.0;
 
     final uploadSpots = uploadSamples.asMap().entries.map((e) {
       final normalized = maxVal > 0 ? (e.value / maxVal) : 0.0;
-      final chartY = 4 + normalized * (height - 8);
+      final chartY = height - 4 - normalized * (height - 8);
       return FlSpot(e.key.toDouble(), chartY);
     }).toList();
     final downloadSpots = downloadSamples.asMap().entries.map((e) {
       final normalized = maxVal > 0 ? (e.value / maxVal) : 0.0;
-      final chartY = 4 + normalized * (height - 8);
+      final chartY = height - 4 - normalized * (height - 8);
       return FlSpot(e.key.toDouble(), chartY);
     }).toList();
 
@@ -734,7 +835,7 @@ class _TrafficSparkline extends StatelessWidget {
           if (uploadSpots.length >= 2)
             LineChartBarData(
               spots: uploadSpots,
-              isCurved: true,
+              isCurved: false,
               color: uploadColor,
               barWidth: 2,
               isStrokeCapRound: true,
@@ -744,7 +845,7 @@ class _TrafficSparkline extends StatelessWidget {
           if (downloadSpots.length >= 2)
             LineChartBarData(
               spots: downloadSpots,
-              isCurved: true,
+              isCurved: false,
               color: downloadColor,
               barWidth: 2,
               isStrokeCapRound: true,
@@ -753,7 +854,7 @@ class _TrafficSparkline extends StatelessWidget {
             ),
         ],
       ),
-      duration: const Duration(milliseconds: 150),
+      duration: const Duration(milliseconds: 220),
     );
   }
 }

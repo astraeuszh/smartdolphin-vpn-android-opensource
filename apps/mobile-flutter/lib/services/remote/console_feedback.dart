@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../features/auth/domain/account_session.dart';
 import 'console_endpoint.dart';
+import 'client_request_headers.dart';
 
 /// 用户主动反馈（设置 → 向管理员反馈 / 工单）。
 const kFeedbackManualErrorCode = 'E0000';
@@ -37,6 +38,7 @@ class ConsoleFeedback {
       images: images,
     );
     final body = {
+      '_session_token': session.sessionToken,
       'uid': session.uid.toString(),
       'error_code': errorCode,
       'message': message,
@@ -86,6 +88,7 @@ class ConsoleFeedback {
       images: images,
     );
     await _send({
+      '_session_token': session.sessionToken,
       'uid': session.uid.toString(),
       'error_code': kFeedbackManualErrorCode,
       'message': _truncateChars(message.toString(), 8000),
@@ -139,7 +142,10 @@ class ConsoleFeedback {
     final resp = await _client
         .post(
           uri,
-          headers: {'Content-Type': 'application/json'},
+          headers: await ClientRequestHeaders.standard(
+            bearerToken: session.sessionToken,
+            json: true,
+          ),
           body: jsonEncode({
             'uid': session.uid.toString(),
             'filename': filename,
@@ -181,11 +187,20 @@ class ConsoleFeedback {
 
   Future<void> _postFeedback(Map<String, dynamic> body) async {
     final uri = Uri.parse('${ConsoleEndpoint.base}/api/client/feedback');
+    final sessionToken = '${body['_session_token'] ?? ''}';
+    if (sessionToken.isEmpty) {
+      throw _FeedbackRejected('Authentication expired. Please sign in again.');
+    }
+    final payload = Map<String, dynamic>.from(body)
+      ..remove('_session_token');
     final resp = await _client
         .post(
           uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(body),
+          headers: await ClientRequestHeaders.standard(
+            bearerToken: sessionToken,
+            json: true,
+          ),
+          body: jsonEncode(payload),
         )
         .timeout(const Duration(seconds: 30));
     Map<String, dynamic> data;

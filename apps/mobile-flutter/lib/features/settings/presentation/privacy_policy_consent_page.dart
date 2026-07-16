@@ -1,57 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/legal_urls.dart';
 import '../../../l10n/app_localizations.dart';
-import 'privacy_policy_content.dart';
 
 class PrivacyPolicyConsentPage extends StatefulWidget {
   const PrivacyPolicyConsentPage({super.key});
 
   @override
-  State<PrivacyPolicyConsentPage> createState() => _PrivacyPolicyConsentPageState();
+  State<PrivacyPolicyConsentPage> createState() =>
+      _PrivacyPolicyConsentPageState();
 }
 
 class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
-  final ScrollController _controller = ScrollController();
-  bool _hasReachedEnd = false;
   bool _isChecked = false;
   String? _helperMessage;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(_handleScroll);
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_handleScroll);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _handleScroll() {
-    if (!_controller.hasClients) {
-      return;
-    }
-    final position = _controller.position;
-    const threshold = 24.0;
-    final atBottom = position.maxScrollExtent <= 0 ||
-        position.pixels >= position.maxScrollExtent - threshold;
-    if (atBottom && !_hasReachedEnd) {
-      setState(() {
-        _hasReachedEnd = true;
-        _helperMessage = context.l10n.privacyPolicyCheckboxReady;
-      });
-    }
-  }
-
   void _handleCheckboxChanged(bool? value) {
-    if (!_hasReachedEnd) {
-      setState(() {
-        _helperMessage = context.l10n.privacyPolicyScrollWarning;
-      });
-      return;
-    }
     setState(() {
       _isChecked = value ?? false;
       _helperMessage = null;
@@ -60,12 +25,6 @@ class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
 
   void _handleContinue() {
     final l10n = context.l10n;
-    if (!_hasReachedEnd) {
-      setState(() {
-        _helperMessage = l10n.privacyPolicyScrollWarning;
-      });
-      return;
-    }
     if (!_isChecked) {
       setState(() {
         _helperMessage = l10n.privacyPolicyAgreementRequired;
@@ -75,18 +34,22 @@ class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
     Navigator.of(context).pop(true);
   }
 
-  void _handleHintPressed() {
-    setState(() {
-      _helperMessage = context.l10n.privacyPolicyScrollHint;
-    });
+  Future<void> _openPrivacyPolicy() async {
+    final uri = Uri.parse(LegalUrls.privacyPolicyFor(
+      Localizations.localeOf(context).toLanguageTag(),
+    ));
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      setState(() => _helperMessage = context.l10n.privacyPolicyOpenFailed);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false,
@@ -106,15 +69,11 @@ class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
                     child: Column(
                       children: [
                         Expanded(
-                          child: Scrollbar(
-                            controller: _controller,
-                            thumbVisibility: true,
-                            child: ListView(
-                              controller: _controller,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              children: const [
-                                PrivacyPolicyContent(),
-                              ],
+                          child: Center(
+                            child: FilledButton.icon(
+                              onPressed: _openPrivacyPolicy,
+                              icon: const Icon(Icons.open_in_browser_outlined),
+                              label: Text(l10n.privacyPolicyOpenDocs),
                             ),
                           ),
                         ),
@@ -132,7 +91,8 @@ class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
                           child: Text(
                             l10n.privacyPolicyAvailableInSettings,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.7),
+                              color:
+                                  theme.colorScheme.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
                         ),
@@ -141,7 +101,8 @@ class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
                           Container(
                             width: double.infinity,
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.secondaryContainer.withOpacity(0.4),
+                              color: theme.colorScheme.secondaryContainer
+                                   .withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             padding: const EdgeInsets.all(12),
@@ -158,10 +119,7 @@ class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            TextButton(
-                              onPressed: _handleHintPressed,
-                              child: Text(l10n.privacyPolicyScrollHintAction),
-                            ),
+                            const SizedBox.shrink(),
                             FilledButton(
                               onPressed: _handleContinue,
                               child: Text(l10n.privacyPolicyAgreeButton),

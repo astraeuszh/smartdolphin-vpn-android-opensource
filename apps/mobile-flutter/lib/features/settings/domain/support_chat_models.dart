@@ -62,11 +62,15 @@ class SupportConversation {
     required this.id,
     required this.createdAt,
     required this.messages,
+    this.updatedAt = 0,
+    this.messageCount = 0,
   });
 
   final String id;
   final int createdAt;
   final List<SupportMessage> messages;
+  final int updatedAt;
+  final int messageCount;
 
   String get title {
     final texts =
@@ -80,6 +84,8 @@ class SupportConversation {
   Map<String, dynamic> toJson() => {
         'id': id,
         'createdAt': createdAt,
+        'updatedAt': updatedAt,
+        'messageCount': messageCount,
         'messages': messages.map((message) => message.toJson()).toList(),
       };
 
@@ -88,6 +94,9 @@ class SupportConversation {
     return SupportConversation(
       id: json['id'] as String? ?? '${DateTime.now().microsecondsSinceEpoch}',
       createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+      updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
+      messageCount: (json['messageCount'] as num?)?.toInt() ??
+          rawMessages.length,
       messages: rawMessages
           .whereType<Map>()
           .map((entry) =>
@@ -100,6 +109,8 @@ class SupportConversation {
       SupportConversation(
         id: json['id'] as String? ?? '',
         createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+        updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
+        messageCount: (json['messageCount'] as num?)?.toInt() ?? 0,
         messages: const [],
       );
 }

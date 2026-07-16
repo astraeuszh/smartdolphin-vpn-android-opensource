@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -19,8 +19,8 @@ import '../../../services/notifications/session_notification_service.dart';
 import '../../../services/storage/prefs.dart';
 import '../../../services/time/session_clock.dart';
 import '../../../services/time/session_clock_provider.dart';
-import '../../../services/device/battery_exemption_service.dart';
 import '../../../services/remote/console_traffic.dart';
+import '../../../services/remote/console_audit.dart';
 import '../../../services/logging/error_reporter.dart';
 import '../../../services/logging/vpn_logger.dart';
 import '../../../services/vpn/clash_api_client.dart';
@@ -115,6 +115,7 @@ class SessionController extends StateNotifier<SessionState> {
   bool _accountTrafficReconnectBusy = false;
   int _tunnelHealthFailures = 0;
   bool _tunnelHealthReconnectBusy = false;
+  bool _reconnectInProgress = false;
 
   static int _parseBytes(dynamic value) {
     if (value == null) return 0;
@@ -142,6 +143,8 @@ class SessionController extends StateNotifier<SessionState> {
       errorCode: code,
     );
     if (wasConnected || wasConnecting || _pendingConnection != null) {
+      unawaited(_reportAudit(
+          'vpn_error', {'error_code': code, 'reason': details ?? ''}));
       unawaited(
         _ref.read(errorReporterProvider).reportVpnError(
               errorCode: code,
@@ -234,6 +237,7 @@ class SessionController extends StateNotifier<SessionState> {
     await _ref.read(preferencesControllerProvider.notifier).ready;
     await _ref.read(settingsControllerProvider.notifier).profileMigrationReady;
     await _restoreSession();
+    unawaited(_reportAudit('app_open'));
     await _reconnectAfterProfileMigrationIfNeeded();
   }
 
@@ -376,6 +380,7 @@ class SessionController extends StateNotifier<SessionState> {
     );
     _activeMeta = meta;
     _currentServer = server;
+    unawaited(_reportAudit('vpn_connect', _auditNodeMetadata(server)));
     state = state.copyWith(
       status: SessionStatus.connected,
       start: start,
@@ -398,7 +403,6 @@ class SessionController extends StateNotifier<SessionState> {
     _tunnelHealthReconnectBusy = false;
     if (isAndroidNative) {
       unawaited(setHasActiveSession(true));
-      unawaited(maybeRequestBatteryExemptionOnce(_ref));
     }
     final adv = _ref.read(settingsControllerProvider).advanced;
     unawaited(ProxyShareService.sync(
@@ -470,22 +474,31 @@ class SessionController extends StateNotifier<SessionState> {
   ];
 
   Future<void> _tryAutoReconnect(Server server) async {
-    for (var i = 0; i < _reconnectDelays.length; i++) {
-      await Future<void>.delayed(_reconnectDelays[i]);
-      if (state.status == SessionStatus.connected ||
-          _manualDisconnectInProgress) {
-        return;
-      }
-      _log('Auto-reconnect attempt ${i + 1}/${_reconnectDelays.length}');
-      await connect(server: server);
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (state.status == SessionStatus.connected) {
-        _log('Auto-reconnect succeeded');
-        return;
-      }
+    if (_reconnectInProgress) {
+      _log('Auto-reconnect skipped: another reconnect is active');
+      return;
     }
-    _log('Auto-reconnect failed after ${_reconnectDelays.length} attempts');
-    await _forceDisconnect(clearPrefs: true);
+    _reconnectInProgress = true;
+    try {
+      for (var i = 0; i < _reconnectDelays.length; i++) {
+        await Future<void>.delayed(_reconnectDelays[i]);
+        if (state.status == SessionStatus.connected ||
+            _manualDisconnectInProgress) {
+          return;
+        }
+        _log('Auto-reconnect attempt ${i + 1}/${_reconnectDelays.length}');
+        await connect(server: server);
+        await Future<void>.delayed(const Duration(seconds: 1));
+        if (state.status == SessionStatus.connected) {
+          _log('Auto-reconnect succeeded');
+          return;
+        }
+      }
+      _log('Auto-reconnect failed after ${_reconnectDelays.length} attempts');
+      await _forceDisconnect(clearPrefs: true);
+    } finally {
+      _reconnectInProgress = false;
+    }
   }
 
   void _onSpeedUpdate(SpeedTestState? previous, SpeedTestState next) {
@@ -556,6 +569,20 @@ class SessionController extends StateNotifier<SessionState> {
     bool fromSmartStableReconnect = false,
   }) async {
     _log('connect() requested for ${server.name} (${server.countryCode})');
+    // The server-side account check includes the Android 4.0.4 minimum build
+    // gate. Run it before constructing a new protocol handshake so a client
+    // that cannot meet the active service policy never starts a fresh tunnel.
+    final authorized = await _ref
+        .read(authControllerProvider.notifier)
+        .ensureVpnAccess();
+    if (!authorized) {
+      _setError(
+        ecCoreStartFailed,
+        details: 'service authorization or minimum version rejected',
+        displayMessage: 'A current SmartDolphin VPN version and active account are required.',
+      );
+      return;
+    }
     final trafficPolicy =
         _ref.read(authControllerProvider).session?.trafficPolicy;
     if (trafficPolicy?.overQuota == true) {
@@ -770,6 +797,20 @@ class SessionController extends StateNotifier<SessionState> {
     try {
       final wasConnected = state.status == SessionStatus.connected;
       final previousState = state;
+      if (wasConnected) {
+        final server = _resolveHistoryServer(fromState: previousState);
+        unawaited(_reportAudit('vpn_disconnect', {
+          ..._auditNodeMetadata(server),
+          'reason': userInitiated ? 'user' : 'system',
+          'session_seconds': previousState.start == null
+              ? 0
+              : DateTime.now()
+                  .toUtc()
+                  .difference(previousState.start!)
+                  .inSeconds
+                  .clamp(0, 86400),
+        }));
+      }
 
       // Reset UI state FIRST so user sees disconnect immediately (avoids crash blocking UI)
       _activeMeta = null;
@@ -926,12 +967,10 @@ class SessionController extends StateNotifier<SessionState> {
     _lastTickRx = null;
     _lastTickTx = null;
     _tickCounter = 0;
-    _ticker = Timer.periodic(const Duration(seconds: 2), (_) async {
+    // Session expiry and quota accounting do not need UI-frame cadence. A
+    // 30-second batch avoids repeatedly waking Flutter + libbox in background.
+    _ticker = Timer.periodic(const Duration(seconds: 30), (_) async {
       _tickCounter += 1;
-      final settings = _ref.read(settingsControllerProvider);
-      if (settings.batterySaverEnabled && _tickCounter % 2 != 0) {
-        return;
-      }
       if (state.status != SessionStatus.connected ||
           state.startElapsedMs == null ||
           state.duration == null) {
@@ -969,10 +1008,10 @@ class SessionController extends StateNotifier<SessionState> {
         _lastTickRx = rx;
         _lastTickTx = tx;
       } catch (_) {}
-      if (_tickCounter % 60 == 0) {
+      if (_tickCounter % 4 == 0) {
         unawaited(_ref.read(authControllerProvider.notifier).refreshSession());
       }
-      if (_tickCounter % 150 == 0 && _bytesSinceTrafficReport > 0) {
+      if (_tickCounter % 10 == 0 && _bytesSinceTrafficReport > 0) {
         final session = _ref.read(authControllerProvider).session;
         if (session != null) {
           final reportBytes = _bytesSinceTrafficReport;
@@ -985,6 +1024,17 @@ class SessionController extends StateNotifier<SessionState> {
               await _applyAccountTrafficPolicyFromServer();
             } catch (_) {}
           }());
+        }
+      }
+      if (_tickCounter % 10 == 0) {
+        final server = _currentServer;
+        if (server != null) {
+          final stats = await _vpnPort.getTunnelStats();
+          unawaited(_reportAudit('traffic_snapshot', {
+            ..._auditNodeMetadata(server),
+            'rx_bytes': _parseBytes(stats['byte_in'] ?? stats['rxBytes']),
+            'tx_bytes': _parseBytes(stats['byte_out'] ?? stats['txBytes']),
+          }));
         }
       }
       final usage = _ref.read(dataUsageControllerProvider);
@@ -1003,7 +1053,7 @@ class SessionController extends StateNotifier<SessionState> {
         return;
       }
       final server = _currentServer;
-      if (server != null && (_tickCounter == 1 || _tickCounter % 8 == 0)) {
+      if (server != null && (_tickCounter == 1 || _tickCounter % 2 == 0)) {
         await _notificationService.updateSession(
           server: server,
           remaining: remaining,
@@ -1011,10 +1061,31 @@ class SessionController extends StateNotifier<SessionState> {
         );
       }
       // Every ~5 minutes, check whether the local core API is still alive.
-      if (_tickCounter % 150 == 0) {
+      if (_tickCounter % 10 == 0) {
         unawaited(_evaluateTunnelHealth());
       }
     });
+  }
+
+  Future<void> _reportAudit(String event,
+      [Map<String, dynamic> metadata = const {}]) async {
+    final session = _ref.read(authControllerProvider).session;
+    if (session == null) return;
+    try {
+      await ConsoleAudit().report(session, event: event, metadata: metadata);
+    } catch (_) {}
+  }
+
+  Map<String, dynamic> _auditNodeMetadata(Server? server) {
+    final protocol = _ref.read(preferencesControllerProvider).coreProtocol;
+    return {
+      'node_id': server?.id ?? '',
+      'node_name': server?.name ?? '',
+      'node_country': server?.countryCode ?? '',
+      'protocol': protocol,
+      'transport':
+          protocol == 'hysteria2' || protocol == 'wireguard' ? 'udp' : 'tcp',
+    };
   }
 
   void _stopTicker() {
@@ -1069,8 +1140,9 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   Future<void> _hardReconnectForDeadTunnel(Server server) async {
-    if (_tunnelHealthReconnectBusy) return;
+    if (_tunnelHealthReconnectBusy || _reconnectInProgress) return;
     _tunnelHealthReconnectBusy = true;
+    _reconnectInProgress = true;
     _tunnelHealthFailures = 0;
     try {
       _log('Dead tunnel detected; hard reconnect to ${server.name}');
@@ -1080,6 +1152,7 @@ class SessionController extends StateNotifier<SessionState> {
       await connect(server: server, fromSmartStableReconnect: true);
     } finally {
       _tunnelHealthReconnectBusy = false;
+      _reconnectInProgress = false;
     }
   }
 
@@ -1136,7 +1209,8 @@ class SessionController extends StateNotifier<SessionState> {
     if (state.status != SessionStatus.connected) return;
     if (_manualDisconnectInProgress ||
         _pendingConnection != null ||
-        _accountTrafficReconnectBusy) {
+        _accountTrafficReconnectBusy ||
+        _reconnectInProgress) {
       _log(
           'reconnectToApplyAccountTrafficPolicy skipped: operation in progress');
       return;
@@ -1147,6 +1221,7 @@ class SessionController extends StateNotifier<SessionState> {
       return;
     }
     _accountTrafficReconnectBusy = true;
+    _reconnectInProgress = true;
     try {
       _log('reconnectToApplyAccountTrafficPolicy: ${server.name}');
       await disconnect(userInitiated: false);
@@ -1158,6 +1233,7 @@ class SessionController extends StateNotifier<SessionState> {
       );
     } finally {
       _accountTrafficReconnectBusy = false;
+      _reconnectInProgress = false;
     }
   }
 
@@ -1180,7 +1256,9 @@ class SessionController extends StateNotifier<SessionState> {
   /// Reconnect so the tunnel shaper matches the current game-mode settings.
   Future<void> reconnectToApplyGameModeTunnel(BuildContext context) async {
     if (state.status != SessionStatus.connected) return;
-    if (_manualDisconnectInProgress || _pendingConnection != null) {
+    if (_manualDisconnectInProgress ||
+        _pendingConnection != null ||
+        _reconnectInProgress) {
       _log('reconnectToApplyGameModeTunnel skipped: operation in progress');
       return;
     }
@@ -1190,20 +1268,27 @@ class SessionController extends StateNotifier<SessionState> {
       return;
     }
     _log('reconnectToApplyGameModeTunnel: ${server.name}');
-    await disconnect(userInitiated: false);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (_manualDisconnectInProgress) return;
-    await connect(
-      context: context,
-      server: server,
-      fromSmartStableReconnect: true,
-    );
+    _reconnectInProgress = true;
+    try {
+      await disconnect(userInitiated: false);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (_manualDisconnectInProgress) return;
+      await connect(
+        context: context,
+        server: server,
+        fromSmartStableReconnect: true,
+      );
+    } finally {
+      _reconnectInProgress = false;
+    }
   }
 
   /// Reconnect with the current server so SmartStable tuning takes effect.
   Future<void> reconnectForSmartStable(BuildContext context) async {
     if (state.status != SessionStatus.connected) return;
-    if (_manualDisconnectInProgress || _pendingConnection != null) {
+    if (_manualDisconnectInProgress ||
+        _pendingConnection != null ||
+        _reconnectInProgress) {
       _log('reconnectForSmartStable skipped: operation in progress');
       return;
     }
@@ -1214,14 +1299,19 @@ class SessionController extends StateNotifier<SessionState> {
     }
     _log('reconnectForSmartStable: ${server.name}');
     _ref.read(smartStableProvider.notifier).armReconnectCooldown();
-    await disconnect(userInitiated: false);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (_manualDisconnectInProgress) return;
-    await connect(
-      context: context,
-      server: server,
-      fromSmartStableReconnect: true,
-    );
+    _reconnectInProgress = true;
+    try {
+      await disconnect(userInitiated: false);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (_manualDisconnectInProgress) return;
+      await connect(
+        context: context,
+        server: server,
+        fromSmartStableReconnect: true,
+      );
+    } finally {
+      _reconnectInProgress = false;
+    }
   }
 
   /// Switch server by disconnecting the current tunnel and connecting again.
