@@ -572,14 +572,14 @@ class SessionController extends StateNotifier<SessionState> {
     // The server-side account check includes the Android 4.0.4 minimum build
     // gate. Run it before constructing a new protocol handshake so a client
     // that cannot meet the active service policy never starts a fresh tunnel.
-    final authorized = await _ref
-        .read(authControllerProvider.notifier)
-        .ensureVpnAccess();
+    final authorized =
+        await _ref.read(authControllerProvider.notifier).ensureVpnAccess();
     if (!authorized) {
       _setError(
         ecCoreStartFailed,
         details: 'service authorization or minimum version rejected',
-        displayMessage: 'A current SmartDolphin VPN version and active account are required.',
+        displayMessage:
+            'A current SmartDolphin VPN version and active account are required.',
       );
       return;
     }
@@ -918,6 +918,14 @@ class SessionController extends StateNotifier<SessionState> {
     _cancelConnectionTimeout();
     _stopConnectivityWatch();
     _stopTicker();
+    _bytesSinceTrafficReport = 0;
+    if (isAndroidNative) {
+      try {
+        await setHasActiveSession(false);
+      } catch (_) {
+        // The VPN teardown remains authoritative if the helper channel fails.
+      }
+    }
     await _vpnPort
         .disconnect()
         .timeout(const Duration(seconds: 6), onTimeout: () {});
@@ -966,6 +974,7 @@ class SessionController extends StateNotifier<SessionState> {
     _ticker?.cancel();
     _lastTickRx = null;
     _lastTickTx = null;
+    _bytesSinceTrafficReport = 0;
     _tickCounter = 0;
     // Session expiry and quota accounting do not need UI-frame cadence. A
     // 30-second batch avoids repeatedly waking Flutter + libbox in background.

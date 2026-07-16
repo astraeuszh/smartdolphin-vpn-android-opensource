@@ -75,7 +75,9 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> _clearDeletedAccount([AccountSession? account]) async {
     final current = account ?? state.session ?? await _repo.loadSession();
-    unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+    unawaited(_ref
+        .read(sessionControllerProvider.notifier)
+        .disconnect(userInitiated: false));
     if (current != null) {
       try {
         await SupportChatRepository.clearAccount(current);
@@ -139,7 +141,9 @@ class AuthController extends StateNotifier<AuthState> {
     if (session.banned ||
         session.locked ||
         session.trafficPolicy.isAccountLocked) {
-      unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+      unawaited(_ref
+          .read(sessionControllerProvider.notifier)
+          .disconnect(userInitiated: false));
       state = AuthState(
         status: AuthStatus.banned,
         session: session,
@@ -151,7 +155,9 @@ class AuthController extends StateNotifier<AuthState> {
       return;
     }
     if (session.isExpired) {
-      unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+      unawaited(_ref
+          .read(sessionControllerProvider.notifier)
+          .disconnect(userInitiated: false));
       state = const AuthState(
         status: AuthStatus.expired,
         code: 'account_expired',
@@ -303,7 +309,9 @@ class AuthController extends StateNotifier<AuthState> {
         return;
       }
       if (_isExpiredAuthError(e.code)) {
-        unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+        unawaited(_ref
+            .read(sessionControllerProvider.notifier)
+            .disconnect(userInitiated: false));
         state = AuthState(
             status: AuthStatus.expired,
             session: saved,
@@ -398,7 +406,9 @@ class AuthController extends StateNotifier<AuthState> {
         return false;
       }
       if (_isExpiredAuthError(e.code)) {
-        unawaited(_ref.read(sessionControllerProvider.notifier).disconnect());
+        unawaited(_ref
+            .read(sessionControllerProvider.notifier)
+            .disconnect(userInitiated: false));
         state = AuthState(
             status: AuthStatus.expired,
             session: s,

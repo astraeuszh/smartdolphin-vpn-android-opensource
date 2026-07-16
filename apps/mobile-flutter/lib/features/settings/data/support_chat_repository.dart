@@ -41,6 +41,7 @@ class SupportChatRepository {
     if (_prefs.getString(_legacyKey) != null) {
       await _prefs.remove(_legacyKey);
     }
+    await _removeUnownedLegacyMedia();
     final raw = _prefs.getString(_key);
     if (raw == null || raw.isEmpty) return const [];
     try {
@@ -66,8 +67,14 @@ class SupportChatRepository {
 
   Future<Directory> mediaCacheDirectory() async {
     final root = await getApplicationSupportDirectory();
-    final directory =
-        Directory('${root.path}/support-media-cache/$accountKey');
+    final directory = Directory('${root.path}/support-media-cache/$accountKey');
+    await directory.create(recursive: true);
+    return directory;
+  }
+
+  Future<Directory> outgoingMediaDirectory() async {
+    final root = await getApplicationSupportDirectory();
+    final directory = Directory('${root.path}/support-media/$accountKey');
     await directory.create(recursive: true);
     return directory;
   }
@@ -76,10 +83,32 @@ class SupportChatRepository {
     await _prefs.remove(_key);
     await _prefs.remove(_legacyKey);
     final root = await getApplicationSupportDirectory();
-    final directory =
-        Directory('${root.path}/support-media-cache/$accountKey');
-    if (await directory.exists()) {
-      await directory.delete(recursive: true);
+    await _removeUnownedLegacyMedia(root: root);
+    for (final directory in <Directory>[
+      Directory('${root.path}/support-media-cache/$accountKey'),
+      Directory('${root.path}/support-media/$accountKey'),
+    ]) {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    }
+  }
+
+  Future<void> _removeUnownedLegacyMedia({Directory? root}) async {
+    final supportRoot = Directory(
+        '${(root ?? await getApplicationSupportDirectory()).path}/support-media');
+    if (!await supportRoot.exists()) return;
+    // Older builds stored every account's outgoing files directly in this
+    // shared directory. Ownership cannot be reconstructed safely, so discard
+    // only those flat legacy files while preserving new per-account folders.
+    await for (final entry in supportRoot.list(followLinks: false)) {
+      if (entry is File) {
+        try {
+          await entry.delete();
+        } catch (_) {
+          // Best-effort migration; account-scoped cleanup still continues.
+        }
+      }
     }
   }
 

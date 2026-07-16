@@ -41,6 +41,9 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   bool _typingRequestInFlight = false;
   Timer? _typingTimer;
   Timer? _messagePollTimer;
+  ProviderSubscription<AuthState>? _authSubscription;
+  int _authEpoch = 0;
+  final Map<String, String> _pendingAttachments = {};
   bool _syncing = false;
   int _pollCycle = 0;
   DateTime? _lastSupportAuthRecovery;
@@ -55,6 +58,21 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _authSubscription = ref.listenManual<AuthState>(
+      authControllerProvider,
+      (previous, next) {
+        final oldIdentity = previous?.session == null
+            ? null
+            : SupportChatRepository.accountKeyFor(previous!.session!);
+        final newIdentity = next.session == null
+            ? null
+            : SupportChatRepository.accountKeyFor(next.session!);
+        if (next.session == null ||
+            (oldIdentity != null && newIdentity != oldIdentity)) {
+          _handleSessionInvalidated();
+        }
+      },
+    );
     _restore();
   }
 
@@ -63,8 +81,30 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     WidgetsBinding.instance.removeObserver(this);
     _typingTimer?.cancel();
     _messagePollTimer?.cancel();
+    _authSubscription?.close();
     _message.dispose();
     super.dispose();
+  }
+
+  void _handleSessionInvalidated() {
+    _authEpoch++;
+    _typingTimer?.cancel();
+    _messagePollTimer?.cancel();
+    _messagePollTimer = null;
+    _typingActive = false;
+    _syncing = false;
+    _sending = false;
+    _repository = null;
+    _pendingAttachments.clear();
+    if (!mounted) return;
+    setState(() {
+      _conversations.clear();
+      _activeConversationId = null;
+      _loading = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    });
   }
 
   @override
@@ -137,12 +177,20 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       if (mounted) setState(() => _loading = false);
       return;
     }
+    final epoch = _authEpoch;
+    final accountKey = SupportChatRepository.accountKeyFor(session);
     final repository = SupportChatRepository.forSession(
       await PrefsStore.create(),
       session,
     );
     final conversations = await repository.load();
-    if (!mounted) return;
+    final current = ref.read(authControllerProvider).session;
+    if (!mounted ||
+        epoch != _authEpoch ||
+        current == null ||
+        SupportChatRepository.accountKeyFor(current) != accountKey) {
+      return;
+    }
     setState(() {
       _repository = repository;
       _conversations.addAll(conversations);
@@ -234,9 +282,12 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     if (_syncing || _sending) return;
     final session = ref.read(authControllerProvider).session;
     if (session == null || session.sessionToken.isEmpty) return;
+    final epoch = _authEpoch;
+    final accountKey = SupportChatRepository.accountKeyFor(session);
     _syncing = true;
     try {
       final remote = await _api.conversations(session);
+      if (!_isCurrentSupportSession(epoch, accountKey)) return;
       final remoteIds = remote.map((item) => item.id).toSet();
       // The server list is authoritative. Only failed local drafts are kept;
       // conversations removed with an account/server-side deletion must not
@@ -245,8 +296,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
           .where((item) =>
               !remoteIds.contains(item.id) &&
               (item.messages.any((message) => message.failed) ||
-                  (item.id == _activeConversationId &&
-                      item.messages.isEmpty)))
+                  (item.id == _activeConversationId && item.messages.isEmpty)))
           .toList();
       _conversations.removeWhere((item) => !remoteIds.contains(item.id));
       for (final conversation in remote) {
@@ -259,16 +309,18 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
         // The list response includes updatedAt/messageCount. Fetch message
         // bodies only for changed conversations (and periodically reconcile
         // the active one), instead of N extra requests every ten seconds.
-        final reconcileActive = conversation.id == _activeConversationId &&
-            _pollCycle % 6 == 0;
+        final reconcileActive =
+            conversation.id == _activeConversationId && _pollCycle % 6 == 0;
         if (!changed && !reconcileActive) continue;
         final remoteMessages = await _api.messages(session, conversation.id);
+        if (!_isCurrentSupportSession(epoch, accountKey)) return;
         final messages = <SupportMessage>[];
         for (final message in remoteMessages) {
           final local = localIndex < 0
               ? const <SupportMessage>[]
               : _conversations[localIndex].messages;
           messages.add(await _mergeRemoteMessage(session, local, message));
+          if (!_isCurrentSupportSession(epoch, accountKey)) return;
         }
         final index =
             _conversations.indexWhere((item) => item.id == conversation.id);
@@ -300,8 +352,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       _conversations.addAll(unresolvedLocalDrafts);
       _pollCycle++;
       _conversations.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      if (!_conversations
-          .any((item) => item.id == _activeConversationId)) {
+      if (!_conversations.any((item) => item.id == _activeConversationId)) {
         _activeConversationId = _conversations.firstOrNull?.id;
       }
       if (mounted) setState(() {});
@@ -330,6 +381,13 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     } finally {
       _syncing = false;
     }
+  }
+
+  bool _isCurrentSupportSession(int epoch, String accountKey) {
+    if (!mounted || epoch != _authEpoch) return false;
+    final current = ref.read(authControllerProvider).session;
+    return current != null &&
+        SupportChatRepository.accountKeyFor(current) == accountKey;
   }
 
   bool _canRecoverSupportAuth(Object error) {
@@ -465,12 +523,14 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       _append(draft);
       if (mounted) setState(() => _sending = true);
       await _api.create(session, current.id);
-      String attachmentId = '';
-      if (draft.kind != SupportMessageKind.text) {
+      String attachmentId = _pendingAttachments[draft.id] ?? '';
+      if (draft.kind != SupportMessageKind.text && attachmentId.isEmpty) {
         attachmentId = await _api.upload(session, File(draft.value));
+        _pendingAttachments[draft.id] = attachmentId;
       }
       final sent = await _api.send(session, current.id, draft,
           attachmentId: attachmentId);
+      _pendingAttachments.remove(draft.id);
       _replaceMessage(draft.id, sent);
     } catch (error) {
       Object effectiveError = error;
@@ -489,12 +549,14 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
             throw const FormatException('support_session_refresh_failed');
           }
           await _api.create(refreshed, current.id);
-          String attachmentId = '';
-          if (draft.kind != SupportMessageKind.text) {
+          String attachmentId = _pendingAttachments[draft.id] ?? '';
+          if (draft.kind != SupportMessageKind.text && attachmentId.isEmpty) {
             attachmentId = await _api.upload(refreshed, File(draft.value));
+            _pendingAttachments[draft.id] = attachmentId;
           }
           final sent = await _api.send(refreshed, current.id, draft,
               attachmentId: attachmentId);
+          _pendingAttachments.remove(draft.id);
           _replaceMessage(draft.id, sent);
           return;
         } catch (retryError) {
@@ -588,9 +650,9 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     final kind = const {'mp4', 'mkv', 'mov', 'webm', '3gp'}.contains(ext)
         ? SupportMessageKind.video
         : SupportMessageKind.image;
-    final directory = await getApplicationSupportDirectory();
-    final mediaDirectory = Directory('${directory.path}/support-media');
-    await mediaDirectory.create(recursive: true);
+    final repository = _repository;
+    if (repository == null) return;
+    final mediaDirectory = await repository.outgoingMediaDirectory();
     final local = File(
         '${mediaDirectory.path}/${DateTime.now().millisecondsSinceEpoch}.$ext');
     await File(source).copy(local.path);
@@ -660,9 +722,9 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
 
   Future<void> _copyAndSendMedia(String source, SupportMessageKind kind) async {
     final extension = source.split('.').last.toLowerCase();
-    final directory = await getApplicationSupportDirectory();
-    final mediaDirectory = Directory('${directory.path}/support-media');
-    await mediaDirectory.create(recursive: true);
+    final repository = _repository;
+    if (repository == null) return;
+    final mediaDirectory = await repository.outgoingMediaDirectory();
     final local = File(
         '${mediaDirectory.path}/${DateTime.now().millisecondsSinceEpoch}.$extension');
     await File(source).copy(local.path);
@@ -714,8 +776,21 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     final durationMs = startedAt == null
         ? 0
         : DateTime.now().difference(startedAt).inMilliseconds;
-    await _sendMessage(
-        _newMessage(SupportMessageKind.voice, path, durationMs: durationMs));
+    final repository = _repository;
+    if (repository == null) return;
+    final directory = await repository.outgoingMediaDirectory();
+    final extension = path.split('.').last.toLowerCase();
+    final local = File(
+        '${directory.path}/${DateTime.now().millisecondsSinceEpoch}.$extension');
+    await File(path).copy(local.path);
+    try {
+      await File(path).delete();
+    } catch (_) {
+      // The private cache directory is disposable; failure must not block send.
+    }
+    if (!mounted) return;
+    await _sendMessage(_newMessage(SupportMessageKind.voice, local.path,
+        durationMs: durationMs));
   }
 
   Future<void> _cancelActiveVoice() async {

@@ -76,9 +76,9 @@ android {
 
 
 flutter {
-    // Flutter launches Gradle through apps/mobile-flutter/android (a junction).
-    // Resolve from that logical app directory so lib/main.dart stays reachable.
-    source = "../.."
+    // Gradle canonicalizes the Android junction to platforms/android. Point to
+    // the real Flutter project so lib/main.dart remains reachable either way.
+    source = "../../../apps/mobile-flutter"
 }
 
 // Local Dolphin-Core (Go/libbox) archive lives in app/libs.

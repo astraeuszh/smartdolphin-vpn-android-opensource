@@ -110,11 +110,10 @@ class SupportChatApi {
 
   Future<List<SupportConversation>> conversations(
       AccountSession session) async {
-    final response = await _client
-        .get(
-            Uri.parse('${ConsoleEndpoint.base}/api/auth/support/conversations'),
-            headers: await _headers(session, json: false))
-        .timeout(const Duration(seconds: 15));
+    final response = await _getWithFallback(
+      '/api/auth/support/conversations',
+      headers: await _headers(session, json: false),
+    );
     final body = _jsonObject(response.body, 'support_load');
     _requireSuccess(response, body, 'support_load');
     return (body['conversations'] as List<dynamic>? ?? const [])
@@ -126,13 +125,10 @@ class SupportChatApi {
 
   Future<List<SupportMessage>> messages(
       AccountSession session, String conversationId) async {
-    final response = await _client
-        .get(
-          Uri.parse(
-              '${ConsoleEndpoint.base}/api/auth/support/conversations/$conversationId/messages'),
-          headers: await _headers(session, json: false),
-        )
-        .timeout(const Duration(seconds: 15));
+    final response = await _getWithFallback(
+      '/api/auth/support/conversations/$conversationId/messages',
+      headers: await _headers(session, json: false),
+    );
     final body = _jsonObject(response.body, 'support_messages');
     _requireSuccess(response, body, 'support_messages');
     return (body['messages'] as List<dynamic>? ?? const [])
@@ -162,6 +158,32 @@ class SupportChatApi {
               jsonEncode({'conversationId': conversationId, 'typing': typing}),
         )
         .timeout(const Duration(seconds: 8));
+  }
+
+  Future<http.Response> _getWithFallback(
+    String path, {
+    required Map<String, String> headers,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    Object? lastError;
+    http.Response? lastResponse;
+    for (final base in _bases) {
+      try {
+        final response = await _client
+            .get(Uri.parse('$base$path'), headers: headers)
+            .timeout(timeout);
+        lastResponse = response;
+        if ((response.statusCode >= 200 && response.statusCode < 300) ||
+            const {400, 401, 403, 409, 413, 422, 429}
+                .contains(response.statusCode)) {
+          return response;
+        }
+      } on Object catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastResponse != null) return lastResponse;
+    throw FormatException('support_network: $lastError');
   }
 
   Future<SupportMessage> send(
@@ -242,10 +264,16 @@ class SupportChatApi {
               file.path,
               contentType: contentType,
             ));
-          response = await http.Response.fromStream(
+          final candidate = await http.Response.fromStream(
             await request.send().timeout(const Duration(seconds: 45)),
           );
-          break;
+          response = candidate;
+          if ((candidate.statusCode >= 200 && candidate.statusCode < 300) ||
+              const {400, 401, 403, 409, 413, 422, 429}
+                  .contains(candidate.statusCode)) {
+            break;
+          }
+          response = null;
         } on Object catch (error) {
           lastError = error;
         }
@@ -278,13 +306,11 @@ class SupportChatApi {
 
   Future<File> download(AccountSession session, String attachmentId,
       String fileName, Directory cache) async {
-    final response = await _client
-        .get(
-          Uri.parse(
-              '${ConsoleEndpoint.base}/api/auth/support/attachments/$attachmentId'),
-          headers: await _headers(session, json: false),
-        )
-        .timeout(const Duration(seconds: 30));
+    final response = await _getWithFallback(
+      '/api/auth/support/attachments/$attachmentId',
+      headers: await _headers(session, json: false),
+      timeout: const Duration(seconds: 30),
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw const FormatException('support_download');
     }

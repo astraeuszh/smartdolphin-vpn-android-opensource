@@ -56,7 +56,9 @@ class _AccountFloatingBannerState extends ConsumerState<AccountFloatingBanner>
 
   void _startTimer() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // Status text is minute-granular; rebuilding every second needlessly keeps
+    // the UI thread awake for the lifetime of every signed-in session.
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
   }

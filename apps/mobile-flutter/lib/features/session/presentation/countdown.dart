@@ -72,10 +72,10 @@ class _SessionCountdownState extends ConsumerState<SessionCountdown>
     _tickDisplay();
     _timer?.cancel();
     if (_foreground) {
-      // 100 ms remains visually fluid while cutting precise-mode rebuilds by
-      // about 67% compared with the old 33 ms timer.
+      // Precise mode displays milliseconds but does not need game-loop cadence;
+      // four updates per second remains readable and sharply reduces wakeups.
       final tick = precise
-          ? const Duration(milliseconds: 100)
+          ? const Duration(milliseconds: 250)
           : const Duration(seconds: 1);
       _timer = Timer.periodic(tick, (_) => _tickDisplay());
     }

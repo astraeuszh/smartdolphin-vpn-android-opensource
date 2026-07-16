@@ -12,6 +12,7 @@ Future<void> checkAndPromptForUpdate(
   bool automatic = false,
 }) async {
   final info = await PackageInfo.fromPlatform();
+  if (!context.mounted) return;
   final l10n = AppLocalizations.of(context);
   final service = ConsoleUpdate();
   UpdateCheckResult update;
@@ -37,7 +38,10 @@ Future<void> checkAndPromptForUpdate(
     );
     return;
   }
-  if (!update.isNewerThan(info.version)) {
+  if (!update.isNewerThan(
+    currentVersion: info.version,
+    currentBuild: info.buildNumber,
+  )) {
     if (automatic || !context.mounted) return;
     await showDialog<void>(
       context: context,
@@ -55,9 +59,10 @@ Future<void> checkAndPromptForUpdate(
     return;
   }
   final preferences = await SharedPreferences.getInstance();
+  final updateIdentity = '${update.versionName}+${update.versionCode}';
   if (automatic &&
       !update.forceUpdate &&
-      preferences.getString('dismissed_update') == update.versionName) {
+      preferences.getString('dismissed_update') == updateIdentity) {
     return;
   }
   if (!context.mounted) return;
@@ -104,7 +109,7 @@ Future<void> checkAndPromptForUpdate(
                       : () async {
                           await preferences.setString(
                             'dismissed_update',
-                            update.versionName,
+                            updateIdentity,
                           );
                           if (dialogContext.mounted) {
                             Navigator.of(dialogContext).pop();
@@ -194,12 +199,11 @@ Future<void> checkAndPromptForUpdate(
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.system_update_alt_rounded),
-                label: Text(
-                    update.forceUpdate && progress >= 1
+                label: Text(update.forceUpdate && progress >= 1
+                    ? l10n.updateNow
+                    : update.forceUpdate
                         ? l10n.updateNow
-                        : update.forceUpdate
-                            ? l10n.updateNow
-                            : l10n.updateDownload),
+                        : l10n.updateDownload),
               ),
             ],
           ),

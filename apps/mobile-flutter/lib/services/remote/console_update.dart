@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter/services.dart';
 
 import '../../platform/android/voice_recorder_channel.dart';
 import 'console_endpoint.dart';
@@ -36,8 +36,20 @@ class UpdateCheckResult {
 
   String get minimumVersion => versionName;
 
-  bool isNewerThan(String currentVersion) =>
-      published && _compareVersions(versionName, currentVersion) > 0;
+  bool isNewerThan({
+    required String currentVersion,
+    required String currentBuild,
+  }) {
+    if (!published) return false;
+
+    final installedVersionCode = int.tryParse(currentBuild.trim());
+    if (installedVersionCode != null && versionCode > 0) {
+      // Android refuses to replace an installed package with a lower or equal
+      // versionCode, even if versionName looks newer.
+      return versionCode > installedVersionCode;
+    }
+    return _compareVersions(versionName, currentVersion) > 0;
+  }
 
   static int _compareVersions(String left, String right) {
     final a = left.split('.').map((part) => int.tryParse(part) ?? 0).toList();
@@ -57,10 +69,11 @@ class ConsoleUpdate {
 
   final http.Client _client;
   static const _native = MethodChannel('smartdolphin/update');
+  static const int _maximumApkBytes = 1024 * 1024 * 1024;
 
   Future<void> enqueueBackground(UpdateCheckResult update) async {
     await _native.invokeMethod<int>('enqueue', {
-      'version': update.versionName,
+      'version': '${update.versionName}+${update.versionCode}',
       'url': update.apkUrl,
       'sha256': update.sha256,
       'size': update.packageSize,
@@ -70,7 +83,8 @@ class ConsoleUpdate {
   }
 
   Future<({String status, int received, int total})> backgroundState() async {
-    final value = await _native.invokeMapMethod<String, dynamic>('state') ?? const {};
+    final value =
+        await _native.invokeMapMethod<String, dynamic>('state') ?? const {};
     return (
       status: value['status']?.toString() ?? 'idle',
       received: (value['received'] as num?)?.toInt() ?? 0,
@@ -108,8 +122,7 @@ class ConsoleUpdate {
               .where((value) => value.startsWith('https://'))
               .toList() ??
           const [],
-      chunkManifestUrl:
-          (body['chunk_manifest_url'] as String?)?.trim() ?? '',
+      chunkManifestUrl: (body['chunk_manifest_url'] as String?)?.trim() ?? '',
     );
   }
 
@@ -134,21 +147,48 @@ class ConsoleUpdate {
       throw StateError('APK download failed');
     }
     try {
-      final expectedLength = response.contentLength ?? update.packageSize;
+      final responseLength = response.contentLength;
+      if (responseLength != null && responseLength > _maximumApkBytes) {
+        throw StateError('APK package is too large');
+      }
+      if (update.packageSize > _maximumApkBytes) {
+        throw StateError('APK package is too large');
+      }
+      if (responseLength != null &&
+          update.packageSize > 0 &&
+          responseLength != update.packageSize) {
+        throw StateError('APK package size does not match the manifest');
+      }
+      final expectedLength =
+          update.packageSize > 0 ? update.packageSize : responseLength ?? 0;
       var received = 0;
       final sink = apk.openWrite();
-      await for (final chunk
-          in response.stream.timeout(const Duration(minutes: 10))) {
-        received += chunk.length;
-        sink.add(chunk);
-        onProgress?.call(received, expectedLength);
+      try {
+        await for (final chunk
+            in response.stream.timeout(const Duration(minutes: 10))) {
+          received += chunk.length;
+          if (received > _maximumApkBytes ||
+              (expectedLength > 0 && received > expectedLength)) {
+            throw StateError('APK package is too large');
+          }
+          sink.add(chunk);
+          onProgress?.call(received, expectedLength);
+        }
+      } finally {
+        await sink.close();
       }
-      await sink.close();
       if (expectedLength > 0 && received != expectedLength) {
         throw StateError('APK download is incomplete');
       }
       if (update.sha256.isNotEmpty) {
-        final digest = await Sha256().hash(await apk.readAsBytes());
+        // The platform-default HashSink may buffer all chunks. The pure Dart
+        // implementation incrementally consumes them and keeps memory bounded.
+        final hashSink = Sha256().toSync().newHashSink();
+        await for (final chunk in apk.openRead()) {
+          hashSink.add(chunk);
+        }
+        hashSink.close();
+        final digest = await hashSink.hash();
         final actual = digest.bytes
             .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
             .join();

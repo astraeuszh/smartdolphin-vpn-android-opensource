@@ -42,7 +42,8 @@ class _AccountRiskScreenState extends ConsumerState<AccountRiskScreen>
 
   void _startClock() {
     _clock?.cancel();
-    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+    // Restriction countdowns are displayed at minute precision.
+    _clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
   }
