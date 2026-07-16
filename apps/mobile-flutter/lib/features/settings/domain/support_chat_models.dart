@@ -65,6 +65,7 @@ class SupportConversation {
     required this.messages,
     this.updatedAt = 0,
     this.messageCount = 0,
+    this.customTitle = '',
   });
 
   final String id;
@@ -72,8 +73,10 @@ class SupportConversation {
   final List<SupportMessage> messages;
   final int updatedAt;
   final int messageCount;
+  final String customTitle;
 
   String get title {
+    if (customTitle.trim().isNotEmpty) return customTitle.trim();
     final texts =
         messages.where((message) => message.kind == SupportMessageKind.text);
     if (texts.isEmpty || texts.first.value.trim().isEmpty) {
@@ -87,6 +90,7 @@ class SupportConversation {
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'messageCount': messageCount,
+        'customTitle': customTitle,
         'messages': messages.map((message) => message.toJson()).toList(),
       };
 
@@ -98,6 +102,7 @@ class SupportConversation {
       updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
       messageCount:
           (json['messageCount'] as num?)?.toInt() ?? rawMessages.length,
+      customTitle: json['customTitle'] as String? ?? '',
       messages: rawMessages
           .whereType<Map>()
           .map((entry) =>
@@ -112,6 +117,7 @@ class SupportConversation {
         createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
         updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
         messageCount: (json['messageCount'] as num?)?.toInt() ?? 0,
+        customTitle: json['title'] as String? ?? '',
         messages: const [],
       );
 }

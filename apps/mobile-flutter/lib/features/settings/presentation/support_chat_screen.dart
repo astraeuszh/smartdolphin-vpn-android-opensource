@@ -240,6 +240,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       createdAt: current.createdAt,
       updatedAt: DateTime.now().millisecondsSinceEpoch,
       messageCount: current.messages.length + 1,
+      customTitle: current.customTitle,
       messages: [...current.messages, message],
     );
     setState(() {
@@ -265,6 +266,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       createdAt: current.createdAt,
       updatedAt: current.updatedAt,
       messageCount: messages.length,
+      customTitle: current.customTitle,
       messages: messages,
     );
     setState(() {
@@ -341,6 +343,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
           messageCount: conversation.messageCount,
+          customTitle: conversation.customTitle,
           messages: [...messages, ...unresolved],
         );
         if (index < 0) {
@@ -1016,6 +1019,91 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     }
   }
 
+  Future<void> _renameConversation(SupportConversation conversation) async {
+    final session = ref.read(authControllerProvider).session;
+    if (session == null) return;
+    final controller = TextEditingController(text: conversation.title);
+    final title = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('更改标题名'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 80,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(hintText: '请输入新的对话标题'),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (title == null || title.isEmpty || title == conversation.title) return;
+    final index =
+        _conversations.indexWhere((item) => item.id == conversation.id);
+    if (index < 0) return;
+    final current = _conversations[index];
+    setState(() {
+      _conversations[index] = SupportConversation(
+        id: current.id,
+        createdAt: current.createdAt,
+        updatedAt: current.updatedAt,
+        messageCount: current.messageCount,
+        messages: current.messages,
+        customTitle: title,
+      );
+    });
+    await _persist();
+    // Title sync is best effort so a client can still rename local history
+    // during a rolling server deployment. The account-scoped repository keeps
+    // the title stable on this device and a later rename will sync it again.
+    try {
+      await _api.create(session, conversation.id);
+      await _api.renameConversation(session, conversation.id, title);
+    } catch (_) {}
+  }
+
+  Future<void> _conversationActions(SupportConversation conversation) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('更改标题名'),
+              onTap: () => Navigator.pop(sheetContext, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded,
+                  color: Colors.redAccent),
+              title:
+                  const Text('删除', style: TextStyle(color: Colors.redAccent)),
+              onTap: () => Navigator.pop(sheetContext, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == 'rename') {
+      await _renameConversation(conversation);
+    } else if (action == 'delete') {
+      await _deleteConversation(conversation);
+    }
+  }
+
   void _selectConversation(String id) {
     setState(() => _activeConversationId = id);
     Navigator.of(context).pop();
@@ -1051,17 +1139,12 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
                           return ListTile(
                             selected: item.id == _activeConversationId,
                             leading: const Icon(Icons.chat_bubble_outline),
-                            trailing: IconButton(
-                              tooltip: '删除对话',
-                              icon: const Icon(Icons.delete_outline_rounded),
-                              onPressed: () => _deleteConversation(item),
-                            ),
                             title: Text(item.title,
                                 maxLines: 1, overflow: TextOverflow.ellipsis),
                             subtitle: Text(
                                 _messageCount(context, item.messages.length)),
                             onTap: () => _selectConversation(item.id),
-                            onLongPress: () => _deleteConversation(item),
+                            onLongPress: () => _conversationActions(item),
                           );
                         },
                       ),

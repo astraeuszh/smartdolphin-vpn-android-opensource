@@ -236,6 +236,20 @@ class SupportChatApi {
     _requireSuccess(response, body, 'support_delete');
   }
 
+  Future<void> renameConversation(
+      AccountSession session, String conversationId, String title) async {
+    final response = await _client
+        .patch(
+          Uri.parse(
+              '${ConsoleEndpoint.base}/api/auth/support/conversations/$conversationId'),
+          headers: await _headers(session),
+          body: jsonEncode({'title': title}),
+        )
+        .timeout(const Duration(seconds: 15));
+    final body = _jsonObject(response.body, 'support_rename');
+    _requireSuccess(response, body, 'support_rename');
+  }
+
   Future<String> upload(AccountSession session, File file) async {
     final size = await file.length();
     if (size <= 0 || size > 1024 * 1024 * 1024) {
@@ -257,6 +271,7 @@ class SupportChatApi {
     Object? lastError;
     for (final base in _bases) {
       for (var attempt = 0; attempt < 2; attempt++) {
+        final uploadClient = http.Client();
         try {
           final request = http.MultipartRequest(
             'POST',
@@ -269,7 +284,9 @@ class SupportChatApi {
               contentType: contentType,
             ));
           final candidate = await http.Response.fromStream(
-            await request.send().timeout(const Duration(minutes: 20)),
+            await uploadClient
+                .send(request)
+                .timeout(const Duration(minutes: 20)),
           );
           response = candidate;
           if ((candidate.statusCode >= 200 && candidate.statusCode < 300) ||
@@ -280,6 +297,11 @@ class SupportChatApi {
           response = null;
         } on Object catch (error) {
           lastError = error;
+        } finally {
+          // Multipart retries must never reuse a half-closed Android socket.
+          // A fresh client also avoids carrying a failed HTTP/1.1 connection
+          // from the apex proxy over to the API hostname.
+          uploadClient.close();
         }
       }
       if (response != null) break;
