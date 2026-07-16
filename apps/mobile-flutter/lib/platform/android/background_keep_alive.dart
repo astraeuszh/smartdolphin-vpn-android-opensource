@@ -24,7 +24,8 @@ Future<void> requestBatteryOptimizationExemption() async {
 Future<bool> isIgnoringBatteryOptimizations() async {
   if (!isAndroidNative) return true;
   try {
-    final r = await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations');
+    final r =
+        await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations');
     return r ?? false;
   } on PlatformException {
     return false;
@@ -84,5 +85,22 @@ Future<void> syncUninstallMeta({
     });
   } on PlatformException {
     // ignore
+  }
+}
+
+Future<void> syncNativeAccountSession({
+  required int uid,
+  required String sessionToken,
+  required int lastNotificationId,
+}) async {
+  if (!isAndroidNative) return;
+  try {
+    await _channel.invokeMethod<void>('syncAccountSession', {
+      'uid': uid,
+      'session_token': sessionToken,
+      'last_notification_id': lastNotificationId,
+    });
+  } on PlatformException {
+    // The Dart notification path remains active while the UI is running.
   }
 }

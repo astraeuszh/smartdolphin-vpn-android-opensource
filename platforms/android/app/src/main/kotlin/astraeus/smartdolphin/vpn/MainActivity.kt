@@ -12,8 +12,12 @@ import android.media.MediaRecorder
 import android.media.MediaPlayer
 import android.os.Build
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.FileInputStream
+import android.content.ContentValues
+import android.os.Environment
 import java.security.MessageDigest
 import android.app.ActivityManager
 import android.os.Bundle
@@ -93,6 +97,11 @@ class MainActivity : FlutterFragmentActivity() {
                 "stop" -> stopVoiceRecording(result)
                 "cancel" -> cancelVoiceRecording(result)
                 "openMedia" -> openMedia(call.argument<String>("path"), result)
+                "saveToDownloads" -> saveToDownloads(
+                    call.argument<String>("path"),
+                    call.argument<String>("fileName"),
+                    result,
+                )
                 "playVoice" -> playVoice(call.argument<String>("path"), call.argument<Double>("speed") ?: 1.0, result)
                 else -> result.notImplemented()
             }
@@ -237,6 +246,16 @@ class MainActivity : FlutterFragmentActivity() {
                         .apply()
                     result.success(null)
                 }
+                "syncAccountSession" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val args = call.arguments as? Map<String, Any?>
+                    getSharedPreferences(prefsName, Context.MODE_PRIVATE).edit()
+                        .putInt("account_uid", (args?.get("uid") as? Number)?.toInt() ?: 0)
+                        .putString("account_session_token", args?.get("session_token") as? String ?: "")
+                        .putInt("account_notification_last", (args?.get("last_notification_id") as? Number)?.toInt() ?: 0)
+                        .apply()
+                    result.success(null)
+                }
                 "setHasActiveSession" -> {
                     val hasSession = call.arguments as? Boolean ?: false
                     getSharedPreferences(prefsName, Context.MODE_PRIVATE).edit()
@@ -367,6 +386,49 @@ class MainActivity : FlutterFragmentActivity() {
         }
         startActivity(Intent.createChooser(intent, "Open media"))
         result.success(true)
+    }
+
+    private fun saveToDownloads(path: String?, requestedName: String?, result: MethodChannel.Result) {
+        if (path.isNullOrBlank()) {
+            result.error("DOWNLOAD_PATH", "Download path is empty", null)
+            return
+        }
+        val source = File(path)
+        if (!source.isFile) {
+            result.error("DOWNLOAD_MISSING", "Downloaded file is unavailable", null)
+            return
+        }
+        val safeName = (requestedName ?: source.name)
+            .replace(Regex("[^A-Za-z0-9._ -]"), "_")
+            .trim().ifBlank { source.name }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, safeName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/SmartDolphin")
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("Unable to create download")
+                contentResolver.openOutputStream(uri, "w")!!.use { output ->
+                    FileInputStream(source).use { input -> input.copyTo(output, 256 * 1024) }
+                }
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                contentResolver.update(uri, values, null, null)
+                result.success(uri.toString())
+            } else {
+                @Suppress("DEPRECATION")
+                val directory = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "SmartDolphin")
+                directory.mkdirs()
+                val target = File(directory, safeName)
+                FileInputStream(source).use { input -> target.outputStream().use { output -> input.copyTo(output, 256 * 1024) } }
+                result.success(target.absolutePath)
+            }
+        } catch (error: Throwable) {
+            result.error("DOWNLOAD_SAVE", error.message ?: "Unable to save download", null)
+        }
     }
 
     private fun playVoice(path: String?, speed: Double, result: MethodChannel.Result) {

@@ -1017,9 +1017,12 @@ class SessionController extends StateNotifier<SessionState> {
         _lastTickRx = rx;
         _lastTickTx = tx;
       } catch (_) {}
-      if (_tickCounter % 4 == 0) {
-        unawaited(_ref.read(authControllerProvider.notifier).refreshSession());
-      }
+      // The VPN foreground service keeps this lightweight heartbeat alive even
+      // while the Flutter UI is backgrounded. Refresh the account queue every
+      // 30 seconds so administrator notifications reach Android promptly.
+      unawaited(
+        _ref.read(authControllerProvider.notifier).refreshSession(force: true),
+      );
       if (_tickCounter % 10 == 0 && _bytesSinceTrafficReport > 0) {
         final session = _ref.read(authControllerProvider).session;
         if (session != null) {

@@ -34,8 +34,17 @@ class VoiceRecorderChannel {
     await _channel.invokeMethod<void>('openMedia', {'path': path});
   }
 
+  static Future<String?> saveToDownloads(String path, String fileName) async {
+    if (!isAndroidNative) return null;
+    return _channel.invokeMethod<String>('saveToDownloads', {
+      'path': path,
+      'fileName': fileName,
+    });
+  }
+
   static Future<void> playVoice(String path, {double speed = 1}) async {
     if (!isAndroidNative) return;
-    await _channel.invokeMethod<void>('playVoice', {'path': path, 'speed': speed});
+    await _channel
+        .invokeMethod<void>('playVoice', {'path': path, 'speed': speed});
   }
 }

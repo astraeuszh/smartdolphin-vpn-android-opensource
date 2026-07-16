@@ -237,6 +237,10 @@ class SupportChatApi {
   }
 
   Future<String> upload(AccountSession session, File file) async {
+    final size = await file.length();
+    if (size <= 0 || size > 1024 * 1024 * 1024) {
+      throw const FormatException('upload_too_large');
+    }
     final extension = file.path.split('.').last.toLowerCase();
     final contentType = switch (extension) {
       'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
@@ -265,7 +269,7 @@ class SupportChatApi {
               contentType: contentType,
             ));
           final candidate = await http.Response.fromStream(
-            await request.send().timeout(const Duration(seconds: 45)),
+            await request.send().timeout(const Duration(minutes: 20)),
           );
           response = candidate;
           if ((candidate.statusCode >= 200 && candidate.statusCode < 300) ||
@@ -306,20 +310,57 @@ class SupportChatApi {
 
   Future<File> download(AccountSession session, String attachmentId,
       String fileName, Directory cache) async {
-    final response = await _getWithFallback(
-      '/api/auth/support/attachments/$attachmentId',
-      headers: await _headers(session, json: false),
-      timeout: const Duration(seconds: 30),
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw const FormatException('support_download');
-    }
     final safeName = fileName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     final file = File('${cache.path}/$attachmentId-$safeName');
     final partial = File('${file.path}.part');
-    await partial.writeAsBytes(response.bodyBytes, flush: true);
-    if (await file.exists()) await file.delete();
-    await partial.rename(file.path);
-    return file;
+    Object? lastError;
+    for (final base in _bases) {
+      final request = http.Request(
+        'GET',
+        Uri.parse('$base/api/auth/support/attachments/$attachmentId'),
+      )..headers.addAll(await _headers(session, json: false));
+      IOSink? sink;
+      try {
+        final response = await _client.send(request).timeout(
+              const Duration(seconds: 30),
+            );
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          await response.stream.drain<void>();
+          if (const {400, 401, 403, 409, 413, 422, 429}
+              .contains(response.statusCode)) {
+            throw const FormatException('support_download');
+          }
+          continue;
+        }
+        await partial.parent.create(recursive: true);
+        sink = partial.openWrite();
+        var received = 0;
+        await for (final chunk in response.stream.timeout(
+          const Duration(minutes: 20),
+        )) {
+          received += chunk.length;
+          if (received > 1024 * 1024 * 1024) {
+            throw const FormatException('download_too_large');
+          }
+          sink.add(chunk);
+        }
+        await sink.flush();
+        await sink.close();
+        sink = null;
+        if (received <= 0) throw const FormatException('support_download');
+        if (await file.exists()) await file.delete();
+        return partial.rename(file.path);
+      } on Object catch (error) {
+        lastError = error;
+        await sink?.close();
+        if (await partial.exists()) await partial.delete();
+        if (error is FormatException &&
+            const {'support_download', 'download_too_large'}
+                .contains(error.message)) {
+          rethrow;
+        }
+      }
+    }
+    throw FormatException('support_download: $lastError');
   }
 }

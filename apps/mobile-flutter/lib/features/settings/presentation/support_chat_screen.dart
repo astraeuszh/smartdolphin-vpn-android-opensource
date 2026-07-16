@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -121,7 +122,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   void _startMessagePolling() {
     _messagePollTimer?.cancel();
     _messagePollTimer = Timer.periodic(
-      const Duration(seconds: 10),
+      const Duration(seconds: 3),
       (_) {
         if (_isPageActive) unawaited(_syncRemote());
       },
@@ -309,8 +310,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
         // The list response includes updatedAt/messageCount. Fetch message
         // bodies only for changed conversations (and periodically reconcile
         // the active one), instead of N extra requests every ten seconds.
-        final reconcileActive =
-            conversation.id == _activeConversationId && _pollCycle % 6 == 0;
+        final reconcileActive = conversation.id == _activeConversationId;
         if (!changed && !reconcileActive) continue;
         final remoteMessages = await _api.messages(session, conversation.id);
         if (!_isCurrentSupportSession(epoch, accountKey)) return;
@@ -431,6 +431,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   Future<SupportMessage> _cacheRemoteMedia(
       AccountSession session, SupportMessage message) async {
     if (message.kind == SupportMessageKind.text ||
+        message.kind == SupportMessageKind.file ||
         message.attachmentId.isEmpty ||
         File(message.value).existsSync()) {
       return message;
@@ -660,6 +661,36 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     await _sendMessage(_newMessage(kind, local.path));
   }
 
+  Future<void> _pickFile() async {
+    final selected = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      allowMultiple: false,
+    );
+    if (!mounted || selected == null || selected.files.isEmpty) return;
+    final picked = selected.files.single;
+    final source = picked.path;
+    if (source == null) return;
+    final size = await File(source).length();
+    if (size <= 0 || size > 1024 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Files must be no larger than 1 GB.')),
+        );
+      }
+      return;
+    }
+    final repository = _repository;
+    if (repository == null) return;
+    final directory = await repository.outgoingMediaDirectory();
+    final safeName = picked.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final local = File(
+      '${directory.path}/${DateTime.now().millisecondsSinceEpoch}-$safeName',
+    );
+    await File(source).copy(local.path);
+    if (!mounted) return;
+    await _sendMessage(_newMessage(SupportMessageKind.file, local.path));
+  }
+
   Future<void> _captureMedia() async {
     if (!mounted) return;
     final video = await showModalBottomSheet<bool>(
@@ -710,6 +741,11 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
             title: Text(context.l10n.chatChooseMedia),
             onTap: () => Navigator.pop(context, 'library'),
           ),
+          ListTile(
+            leading: const Icon(Icons.attach_file_rounded),
+            title: const Text('Send file (up to 1 GB)'),
+            onTap: () => Navigator.pop(context, 'file'),
+          ),
         ]),
       ),
     );
@@ -717,6 +753,8 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       await _captureMedia();
     } else if (action == 'library') {
       await _pickMedia();
+    } else if (action == 'file') {
+      await _pickFile();
     }
   }
 
@@ -861,19 +899,81 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   }
 
   Future<void> _messageActions(SupportMessage message) async {
-    if (!message.mine) return;
-    final recall = await showModalBottomSheet<bool>(
+    final action = await showModalBottomSheet<String>(
       context: context,
       builder: (sheetContext) => SafeArea(
-        child: ListTile(
-          leading: const Icon(Icons.undo_rounded),
-          title:
-              Text(message.failed ? 'Remove failed message' : 'Recall message'),
-          onTap: () => Navigator.pop(sheetContext, true),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message.kind == SupportMessageKind.text)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Copy text'),
+                onTap: () => Navigator.pop(sheetContext, 'copy'),
+              ),
+            if (message.kind != SupportMessageKind.text)
+              ListTile(
+                leading: const Icon(Icons.download_rounded),
+                title: const Text('Download'),
+                onTap: () => Navigator.pop(sheetContext, 'download'),
+              ),
+            if (message.mine)
+              ListTile(
+                leading: const Icon(Icons.undo_rounded),
+                title: Text(message.failed
+                    ? 'Remove failed message'
+                    : 'Recall message'),
+                onTap: () => Navigator.pop(sheetContext, 'recall'),
+              ),
+          ],
         ),
       ),
     );
-    if (recall == true) await _recall(message);
+    if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: message.value));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Copied')),
+        );
+      }
+    } else if (action == 'download') {
+      await _downloadMessage(message);
+    } else if (action == 'recall') {
+      await _recall(message);
+    }
+  }
+
+  Future<void> _downloadMessage(SupportMessage message) async {
+    var path = message.value;
+    final fileName = File(path).uri.pathSegments.lastOrNull ??
+        (message.value.trim().isEmpty ? 'attachment' : message.value.trim());
+    if (!File(path).existsSync()) {
+      final session = ref.read(authControllerProvider).session;
+      final repository = _repository;
+      if (session == null ||
+          repository == null ||
+          message.attachmentId.isEmpty) {
+        return;
+      }
+      try {
+        path = (await _api.download(
+          session,
+          message.attachmentId,
+          fileName,
+          await repository.mediaCacheDirectory(),
+        ))
+            .path;
+      } catch (_) {
+        if (mounted) _showSendError(const FormatException('support_download'));
+        return;
+      }
+    }
+    final saved = await VoiceRecorderChannel.saveToDownloads(path, fileName);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(saved == null ? 'Download failed' : 'Saved to Downloads'),
+      ));
+    }
   }
 
   void _newConversation() {
@@ -1032,10 +1132,11 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
                             ),
                             child: Row(children: [
                               IconButton(
-                                tooltip: _text(context, 'photoOrVideo'),
+                                tooltip: 'Photo, video or file',
                                 onPressed: _chooseMediaSource,
                                 color: Colors.black87,
-                                icon: const Icon(Icons.camera_alt_outlined),
+                                icon: const Icon(
+                                    Icons.add_circle_outline_rounded),
                               ),
                               Expanded(
                                 child: _voiceMode
@@ -1329,6 +1430,11 @@ class _MessageBubble extends StatelessWidget {
           message: message,
           icon: Icons.play_arrow_rounded,
           onOpen: onOpen,
+          onLongPress: onLongPress),
+      SupportMessageKind.file => _MediaBubble(
+          message: message,
+          icon: Icons.insert_drive_file_outlined,
+          onOpen: onLongPress,
           onLongPress: onLongPress),
     };
   }

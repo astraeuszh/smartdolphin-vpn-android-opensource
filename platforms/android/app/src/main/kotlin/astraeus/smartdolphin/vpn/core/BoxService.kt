@@ -17,6 +17,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import java.net.HttpURLConnection
+import java.net.URL
 import com.smartdolphin.libbox.CommandClient
 import com.smartdolphin.libbox.CommandClientOptions
 import com.smartdolphin.libbox.CommandClientHandler
@@ -52,6 +54,8 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
         const val EXTRA_CONFIG = "config"
         private const val NOTIF_CHANNEL = "dolphin_vpn"
         private const val NOTIF_ID = 7301
+        private const val ACCOUNT_NOTIF_CHANNEL = "account_messages"
+        private const val ACCOUNT_NOTIF_BASE_ID = 20000
 
         @Volatile
         var instance: BoxService? = null
@@ -68,6 +72,13 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var defaultInterfaceListener: com.smartdolphin.libbox.InterfaceUpdateListener? = null
     @Volatile private var defaultInterfaceReady = false
+    @Volatile private var notificationPollRunning = false
+    private val notificationPoll = object : Runnable {
+        override fun run() {
+            pollAccountNotification()
+            mainHandler.postDelayed(this, 15_000L)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -89,6 +100,8 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                     return START_NOT_STICKY
                 }
                 startForeground(NOTIF_ID, buildNotification())
+                mainHandler.removeCallbacks(notificationPoll)
+                mainHandler.post(notificationPoll)
                 Thread {
                     synchronized(boxLock) {
                         // A second START without STOP (reconnect / stale service) must not
@@ -144,6 +157,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
 
     /** Tear down libbox + tun without necessarily killing the VpnService process. */
     private fun teardownBox(emitDisconnected: Boolean) {
+        mainHandler.removeCallbacks(notificationPoll)
         mainHandler.removeCallbacksAndMessages(null)
         clearDefaultInterface()
         try { commandClient?.disconnect() } catch (_: Exception) {}
@@ -168,6 +182,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(notificationPoll)
         instance = null
         try { tunPfd?.close() } catch (_: Exception) {}
         super.onDestroy()
@@ -513,6 +528,91 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
     override fun clearDNSCache() {}
 
     override fun sendNotification(notification: LibboxNotification?) {}
+
+    private fun pollAccountNotification() {
+        if (notificationPollRunning || !CoreBridge.connected) return
+        val prefs = getSharedPreferences("smartdolphin_vpn", Context.MODE_PRIVATE)
+        val token = prefs.getString("account_session_token", "")?.trim().orEmpty()
+        if (token.isEmpty()) return
+        notificationPollRunning = true
+        Thread {
+            try {
+                val connection = (URL("https://smartdolphinvpn.com/api/auth/account-status").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8_000
+                    readTimeout = 8_000
+                    setRequestProperty("Authorization", "Bearer $token")
+                    setRequestProperty("X-SmartDolphin-Client", "android")
+                    val packageInfo = packageManager.getPackageInfo(packageName, 0)
+                    val versionName = packageInfo.versionName ?: "0"
+                    val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        packageInfo.longVersionCode
+                    } else {
+                        @Suppress("DEPRECATION") packageInfo.versionCode.toLong()
+                    }
+                    setRequestProperty("X-SmartDolphin-Version", versionName)
+                    setRequestProperty("X-SmartDolphin-Build", versionCode.toString())
+                }
+                val code = connection.responseCode
+                if (code == 200) {
+                    val body = connection.inputStream.bufferedReader().use { it.readText() }
+                    val notification = JSONObject(body).optJSONObject("notification")
+                    if (notification != null) {
+                        val id = notification.optInt("id", 0)
+                        val last = prefs.getInt("account_notification_last", 0)
+                        val title = notification.optString("title").trim()
+                        val text = notification.optString("body").trim()
+                        if (id > last && title.isNotEmpty() && text.isNotEmpty()) {
+                            showAccountNotification(id, title, text)
+                            prefs.edit().putInt("account_notification_last", id).apply()
+                        }
+                    }
+                } else if (code == 401 || code == 403) {
+                    prefs.edit().remove("account_session_token").apply()
+                }
+                connection.disconnect()
+            } catch (error: Throwable) {
+                Log.d(TAG, "Account notification poll deferred: ${error.message}")
+            } finally {
+                notificationPollRunning = false
+            }
+        }.start()
+    }
+
+    private fun showAccountNotification(id: Int, title: String, text: String) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    ACCOUNT_NOTIF_CHANNEL,
+                    "Account messages",
+                    NotificationManager.IMPORTANCE_HIGH,
+                )
+            )
+        }
+        val launch = packageManager.getLaunchIntentForPackage(packageName)
+        val pending = PendingIntent.getActivity(
+            this,
+            id,
+            launch ?: Intent(),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, ACCOUNT_NOTIF_CHANNEL)
+        } else {
+            @Suppress("DEPRECATION") Notification.Builder(this)
+        }
+        manager.notify(
+            ACCOUNT_NOTIF_BASE_ID + id.mod(10_000),
+            builder.setSmallIcon(applicationInfo.icon)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(Notification.BigTextStyle().bigText(text))
+                .setAutoCancel(true)
+                .setContentIntent(pending)
+                .build(),
+        )
+    }
 
     // --- helpers ------------------------------------------------------------
 

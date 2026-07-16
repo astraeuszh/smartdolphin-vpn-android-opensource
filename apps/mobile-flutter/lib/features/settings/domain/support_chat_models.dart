@@ -1,4 +1,4 @@
-enum SupportMessageKind { text, image, video, voice }
+enum SupportMessageKind { text, image, video, voice, file }
 
 class SupportMessage {
   const SupportMessage({
@@ -21,6 +21,7 @@ class SupportMessage {
   final int durationMs;
   final String attachmentId;
   final bool failed;
+
   /// The message is authoritative, but its media file is still being cached.
   /// Keeping this state on the same message prevents media bubbles from
   /// disappearing while polling reconciles server history.
@@ -95,8 +96,8 @@ class SupportConversation {
       id: json['id'] as String? ?? '${DateTime.now().microsecondsSinceEpoch}',
       createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
       updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
-      messageCount: (json['messageCount'] as num?)?.toInt() ??
-          rawMessages.length,
+      messageCount:
+          (json['messageCount'] as num?)?.toInt() ?? rawMessages.length,
       messages: rawMessages
           .whereType<Map>()
           .map((entry) =>

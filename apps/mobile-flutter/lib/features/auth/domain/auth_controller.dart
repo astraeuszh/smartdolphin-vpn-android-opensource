@@ -137,6 +137,11 @@ class AuthController extends StateNotifier<AuthState> {
         username: session.username,
         deviceId: session.deviceId,
       ));
+      unawaited(syncNativeAccountSession(
+        uid: session.uid,
+        sessionToken: session.sessionToken,
+        lastNotificationId: session.notificationId,
+      ));
     }
     if (session.banned ||
         session.locked ||
