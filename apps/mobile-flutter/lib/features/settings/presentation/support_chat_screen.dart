@@ -46,9 +46,9 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   int _authEpoch = 0;
   final Map<String, String> _pendingAttachments = {};
   bool _syncing = false;
-  int _pollCycle = 0;
   DateTime? _lastSupportAuthRecovery;
   final _api = SupportChatApi();
+  static const int _messageWindowSize = 150;
 
   List<SupportMessage> get _messages => _active?.messages ?? const [];
   SupportConversation? get _active => _conversations
@@ -184,7 +184,28 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       await PrefsStore.create(),
       session,
     );
-    final conversations = await repository.load();
+    final restored = await repository.load();
+    final conversations = <SupportConversation>[];
+    for (var index = 0; index < restored.length; index++) {
+      final conversation = restored[index];
+      final keepMessages = index == 0;
+      final messages = keepMessages
+          ? conversation.messages
+              .skip((conversation.messages.length - _messageWindowSize)
+                  .clamp(0, conversation.messages.length))
+              .toList(growable: false)
+          : const <SupportMessage>[];
+      conversations.add(SupportConversation(
+        id: conversation.id,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messageCount: conversation.messageCount,
+        customTitle: conversation.customTitle.trim().isNotEmpty
+            ? conversation.customTitle
+            : conversation.title,
+        messages: messages,
+      ));
+    }
     final current = ref.read(authControllerProvider).session;
     if (!mounted ||
         epoch != _authEpoch ||
@@ -229,7 +250,28 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   Future<void> _persist() async {
     final repository = _repository;
     if (repository == null) return;
-    await repository.save(_conversations);
+    // Keep only one bounded active history in memory/storage. Other threads
+    // retain authoritative metadata and are hydrated when selected.
+    final snapshots = _conversations.map((conversation) {
+      final active = conversation.id == _activeConversationId;
+      final messages = active
+          ? conversation.messages
+              .skip((conversation.messages.length - _messageWindowSize)
+                  .clamp(0, conversation.messages.length))
+              .toList(growable: false)
+          : const <SupportMessage>[];
+      return SupportConversation(
+        id: conversation.id,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messageCount: conversation.messageCount,
+        customTitle: conversation.customTitle.trim().isNotEmpty
+            ? conversation.customTitle
+            : conversation.title,
+        messages: messages,
+      );
+    }).toList(growable: false);
+    await repository.save(snapshots);
   }
 
   void _append(SupportMessage message) {
@@ -313,11 +355,33 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
         // bodies only for changed conversations (and periodically reconcile
         // the active one), instead of N extra requests every ten seconds.
         final reconcileActive = conversation.id == _activeConversationId;
-        if (!changed && !reconcileActive) continue;
+        if (!reconcileActive) {
+          final summary = SupportConversation(
+            id: conversation.id,
+            createdAt: conversation.createdAt,
+            updatedAt: conversation.updatedAt,
+            messageCount: conversation.messageCount,
+            customTitle: conversation.customTitle.trim().isNotEmpty
+                ? conversation.customTitle
+                : (cached?.title ?? ''),
+            messages: const [],
+          );
+          if (localIndex < 0) {
+            _conversations.add(summary);
+          } else {
+            _conversations[localIndex] = summary;
+          }
+          continue;
+        }
+        if (!changed && cached.messages.isNotEmpty && !force) {
+          continue;
+        }
         final remoteMessages = await _api.messages(session, conversation.id);
         if (!_isCurrentSupportSession(epoch, accountKey)) return;
         final messages = <SupportMessage>[];
-        for (final message in remoteMessages) {
+        final windowStart = (remoteMessages.length - _messageWindowSize)
+            .clamp(0, remoteMessages.length);
+        for (final message in remoteMessages.skip(windowStart)) {
           final local = localIndex < 0
               ? const <SupportMessage>[]
               : _conversations[localIndex].messages;
@@ -353,7 +417,6 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
         }
       }
       _conversations.addAll(unresolvedLocalDrafts);
-      _pollCycle++;
       _conversations.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       if (!_conversations.any((item) => item.id == _activeConversationId)) {
         _activeConversationId = _conversations.firstOrNull?.id;
@@ -428,68 +491,10 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
         attachmentId: remote.attachmentId,
       );
     }
-    return _cacheRemoteMedia(session, remote);
-  }
-
-  Future<SupportMessage> _cacheRemoteMedia(
-      AccountSession session, SupportMessage message) async {
-    if (message.kind == SupportMessageKind.text ||
-        message.kind == SupportMessageKind.file ||
-        message.attachmentId.isEmpty ||
-        File(message.value).existsSync()) {
-      return message;
-    }
-    try {
-      final repository = _repository;
-      if (repository == null) return message;
-      final cache = await repository.mediaCacheDirectory();
-      final safeName =
-          message.value.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final cached = File('${cache.path}/${message.attachmentId}-$safeName');
-      if (cached.existsSync()) {
-        return SupportMessage(
-          id: message.id,
-          createdAt: message.createdAt,
-          kind: message.kind,
-          value: cached.path,
-          mine: message.mine,
-          durationMs: message.durationMs,
-          attachmentId: message.attachmentId,
-          failed: message.failed,
-        );
-      }
-      final file = await _api.download(
-        session,
-        message.attachmentId,
-        message.value,
-        cache,
-      );
-      return SupportMessage(
-        id: message.id,
-        createdAt: message.createdAt,
-        kind: message.kind,
-        value: file.path,
-        mine: message.mine,
-        durationMs: message.durationMs,
-        attachmentId: message.attachmentId,
-        failed: message.failed,
-        mediaLoading: false,
-      );
-    } catch (_) {
-      // The server has already confirmed this message. Keep a deterministic
-      // placeholder and retry caching on the next poll instead of removing it.
-      return SupportMessage(
-        id: message.id,
-        createdAt: message.createdAt,
-        kind: message.kind,
-        value: message.value,
-        mine: message.mine,
-        durationMs: message.durationMs,
-        attachmentId: message.attachmentId,
-        failed: message.failed,
-        mediaLoading: true,
-      );
-    }
+    // Remote media is downloaded only when the user opens or saves it. Eager
+    // downloads on every poll retained large buffers/files and made an idle
+    // support screen consume several times the expected memory and power.
+    return remote;
   }
 
   Future<void> _send() async {
@@ -1105,8 +1110,32 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   }
 
   void _selectConversation(String id) {
-    setState(() => _activeConversationId = id);
+    if (id == _activeConversationId) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      final previous = _activeConversationId;
+      _activeConversationId = id;
+      if (previous != null) {
+        final index = _conversations.indexWhere((item) => item.id == previous);
+        if (index >= 0) {
+          final item = _conversations[index];
+          _conversations[index] = SupportConversation(
+            id: item.id,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            messageCount: item.messageCount,
+            customTitle: item.customTitle.trim().isNotEmpty
+                ? item.customTitle
+                : item.title,
+            messages: const [],
+          );
+        }
+      }
+    });
     Navigator.of(context).pop();
+    unawaited(_syncRemote(force: true));
   }
 
   @override
@@ -1141,8 +1170,11 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
                             leading: const Icon(Icons.chat_bubble_outline),
                             title: Text(item.title,
                                 maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text(
-                                _messageCount(context, item.messages.length)),
+                            subtitle: Text(_messageCount(
+                                context,
+                                item.messageCount > 0
+                                    ? item.messageCount
+                                    : item.messages.length)),
                             onTap: () => _selectConversation(item.id),
                             onLongPress: () => _conversationActions(item),
                           );
@@ -1176,21 +1208,25 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
               Column(
                 children: [
                   Expanded(
-                    child: ListView(
+                    child: ListView.builder(
                       padding: const EdgeInsets.all(16),
-                      children: [
-                        const _TextBubble(
-                          text:
-                              'Hello. Describe the issue and include the steps that led to it. Astraeus will review your report.',
-                          mine: false,
-                        ),
-                        for (final message in _messages)
-                          _MessageBubble(
-                            message: message,
-                            onOpen: () => _openMedia(message),
-                            onLongPress: () => _messageActions(message),
-                          ),
-                      ],
+                      itemCount: _messages.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return const _TextBubble(
+                            text:
+                                'Hello. Describe the issue and include the steps that led to it. Astraeus will review your report.',
+                            mine: false,
+                          );
+                        }
+                        final message = _messages[index - 1];
+                        return _MessageBubble(
+                          key: ValueKey(message.id),
+                          message: message,
+                          onOpen: () => _openMedia(message),
+                          onLongPress: () => _messageActions(message),
+                        );
+                      },
                     ),
                   ),
                   SafeArea(
@@ -1487,7 +1523,10 @@ class _VoiceArcClipper extends CustomClipper<Path> {
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble(
-      {required this.message, required this.onOpen, required this.onLongPress});
+      {super.key,
+      required this.message,
+      required this.onOpen,
+      required this.onLongPress});
   final SupportMessage message;
   final VoidCallback onOpen;
   final VoidCallback onLongPress;
