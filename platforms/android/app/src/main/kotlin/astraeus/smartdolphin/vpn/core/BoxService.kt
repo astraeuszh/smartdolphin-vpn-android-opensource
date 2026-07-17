@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import com.smartdolphin.libbox.CommandClient
@@ -51,6 +52,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
         private const val TAG = "BoxService"
         const val ACTION_START = "com.smartdolphin.vpn.START"
         const val ACTION_STOP = "com.smartdolphin.vpn.STOP"
+        const val ACTION_NETWORK_CHANGED = "com.smartdolphin.vpn.NETWORK_CHANGED"
         const val EXTRA_CONFIG = "config"
         private const val NOTIF_CHANNEL = "dolphin_vpn"
         private const val NOTIF_ID = 7301
@@ -80,6 +82,34 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
         }
     }
 
+    private fun persistedConfigFile(): File = File(filesDir, "dolphin_core/active-config.json")
+
+    /**
+     * A sticky VPN service may be recreated after Android kills the app process.
+     * CoreBridge is process memory, so it cannot be the only copy of a running
+     * tunnel's configuration. This app-private file is replaced atomically and
+     * removed only for an explicit service stop.
+     */
+    private fun persistConfig(config: String) {
+        val target = persistedConfigFile()
+        target.parentFile?.mkdirs()
+        val temporary = File(target.parentFile, "${target.name}.tmp")
+        temporary.writeText(config, Charsets.UTF_8)
+        if (!temporary.renameTo(target)) {
+            target.writeText(config, Charsets.UTF_8)
+            temporary.delete()
+        }
+    }
+
+    private fun restorePersistedConfig(): String? = runCatching {
+        persistedConfigFile().takeIf { it.isFile }?.readText(Charsets.UTF_8)
+            ?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    private fun clearPersistedConfig() {
+        runCatching { persistedConfigFile().delete() }
+    }
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -90,15 +120,37 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                clearPersistedConfig()
                 synchronized(boxLock) { stopBox() }
                 return START_NOT_STICKY
             }
+            ACTION_NETWORK_CHANGED -> {
+                val config = restorePersistedConfig()
+                if (commandServer != null) {
+                    // Do not reload the core for a harmless Wi-Fi/cellular
+                    // transition. The existing interface monitor will publish
+                    // the new NIC; reloading here caused visible flashes and
+                    // dropped otherwise healthy background tunnels.
+                    scheduleDefaultInterfaceRefresh()
+                    return START_STICKY
+                }
+                if (config.isNullOrBlank()) return START_NOT_STICKY
+                startForeground(NOTIF_ID, buildNotification())
+                mainHandler.removeCallbacks(notificationPoll)
+                mainHandler.post(notificationPoll)
+                Thread { synchronized(boxLock) { startBox(config) } }.start()
+                return START_STICKY
+            }
             else -> {
-                val config = intent?.getStringExtra(EXTRA_CONFIG) ?: CoreBridge.pendingConfig
+                val config = intent?.getStringExtra(EXTRA_CONFIG)
+                    ?: CoreBridge.pendingConfig
+                    ?: restorePersistedConfig()
                 if (config.isNullOrBlank()) {
-                    synchronized(boxLock) { stopBox() }
+                    // This is a sticky restart with no surviving session, not
+                    // an error. Avoid bringing an Activity to the foreground.
                     return START_NOT_STICKY
                 }
+                persistConfig(config)
                 startForeground(NOTIF_ID, buildNotification())
                 mainHandler.removeCallbacks(notificationPoll)
                 mainHandler.post(notificationPoll)

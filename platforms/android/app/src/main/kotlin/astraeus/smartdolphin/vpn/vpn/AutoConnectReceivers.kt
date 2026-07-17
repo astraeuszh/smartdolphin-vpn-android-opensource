@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.os.Build
 import com.smartdolphin.vpn.MainActivity
+import com.smartdolphin.vpn.core.BoxService
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -39,11 +41,19 @@ class NetworkChangeReceiver : BroadcastReceiver() {
         if (!prefs.getBoolean("reconnect_on_network_change", true)) {
             return
         }
-        Log.d(TAG, "Network change while session active; launching app to reconnect.")
-        val launch = Intent(context, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        Log.d(TAG, "Network change while session active; refreshing VPN service.")
+        val refresh = Intent(context, BoxService::class.java).apply {
+            action = BoxService.ACTION_NETWORK_CHANGED
         }
-        context.startActivity(launch)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(refresh)
+            } else {
+                context.startService(refresh)
+            }
+        }.onFailure { error ->
+            Log.w(TAG, "Unable to refresh VPN service after network change", error)
+        }
     }
 
     companion object {
