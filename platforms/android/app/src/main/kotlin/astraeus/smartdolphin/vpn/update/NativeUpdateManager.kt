@@ -66,14 +66,17 @@ object NativeUpdateManager {
         ) { "invalid manifest URL" }
         val preferences = prefs(context)
         val normalizedSha256 = sha256.lowercase()
-        if (
+        val sameRelease =
             preferences.getString("version", "") == version &&
             preferences.getString("sha256", "") == normalizedSha256 &&
             preferences.getLong("size", -1) == size &&
             preferences.getString("apk_url", "") == apkUrl &&
-            preferences.getString("manifest_url", "") == chunkManifestUrl &&
-            state(context).status in setOf("pending", "running", "successful")
-        ) {
+            preferences.getString("manifest_url", "") == chunkManifestUrl
+        val currentStatus = state(context).status
+        if (sameRelease && currentStatus == "successful") {
+            return 1L
+        }
+        if (running && sameRelease && currentStatus in setOf("pending", "running")) {
             return 1L
         }
         val target = File(
@@ -114,7 +117,14 @@ object NativeUpdateManager {
         try {
             val manifestUrl = preferences.getString("manifest_url", "") ?: ""
             if (manifestUrl.isNotBlank()) {
-                downloadChunks(context, manifestUrl)
+                try {
+                    downloadChunks(context, manifestUrl)
+                } catch (_: Throwable) {
+                    // A flaky chunk or a process-resume race must not strand a
+                    // mandatory update. Fall back to the verified whole APK.
+                    preferences.edit().putLong("received", 0).apply()
+                    downloadWhole(context)
+                }
             } else {
                 downloadWhole(context)
             }
@@ -214,6 +224,7 @@ object NativeUpdateManager {
                             val base = mirrors[(worker + offset) % mirrors.size]
                             val destination = File(root, chunk.name)
                             val temporary = File(root, ".${chunk.name}.$worker.tmp")
+                            var reportedBytes = 0L
                             try {
                                 val length = streamDownload(
                                     rawUrl = "$base/chunks/$platform/$version/${chunk.name}",
@@ -221,16 +232,28 @@ object NativeUpdateManager {
                                     timeout = 45_000,
                                     maximumBytes = chunk.size,
                                     expectedBytes = chunk.size,
+                                    onProgress = { chunkBytes ->
+                                        val delta = chunkBytes - reportedBytes
+                                        reportedBytes = chunkBytes
+                                        preferences.edit()
+                                            .putLong("received", received.addAndGet(delta))
+                                            .apply()
+                                    },
                                 )
                                 check(sha256(temporary).equals(chunk.sha256, true)) {
                                     "chunk hash mismatch"
                                 }
                                 replaceFile(temporary, destination)
-                                received.addAndGet(length)
+                                check(length == reportedBytes) { "chunk progress mismatch" }
                                 preferences.edit().putLong("received", received.get()).apply()
                                 downloaded = true
                                 break
                             } catch (_: Throwable) {
+                                if (reportedBytes > 0) {
+                                    preferences.edit()
+                                        .putLong("received", received.addAndGet(-reportedBytes))
+                                        .apply()
+                                }
                                 temporary.delete()
                             }
                         }
