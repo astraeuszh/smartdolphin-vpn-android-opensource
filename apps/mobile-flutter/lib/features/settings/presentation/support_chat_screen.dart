@@ -28,6 +28,7 @@ class SupportChatScreen extends ConsumerStatefulWidget {
 class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     with WidgetsBindingObserver {
   final _message = TextEditingController();
+  final _chatScroll = ScrollController();
   final List<SupportConversation> _conversations = [];
   SupportChatRepository? _repository;
   String? _activeConversationId;
@@ -38,6 +39,8 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   double _voiceDragDistance = 0;
   DateTime? _voiceStartedAt;
   bool _sending = false;
+  bool _followLatest = true;
+  bool _showScrollToLatest = false;
   bool _typingActive = false;
   bool _typingRequestInFlight = false;
   Timer? _typingTimer;
@@ -59,6 +62,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _chatScroll.addListener(_onChatScroll);
     _authSubscription = ref.listenManual<AuthState>(
       authControllerProvider,
       (previous, next) {
@@ -84,7 +88,40 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
     _messagePollTimer?.cancel();
     _authSubscription?.close();
     _message.dispose();
+    _chatScroll.removeListener(_onChatScroll);
+    _chatScroll.dispose();
     super.dispose();
+  }
+
+  void _onChatScroll() {
+    if (!_chatScroll.hasClients) return;
+    final follow =
+        _chatScroll.position.maxScrollExtent - _chatScroll.offset < 72;
+    if (follow != _followLatest && mounted) {
+      setState(() {
+        _followLatest = follow;
+        _showScrollToLatest = !follow;
+      });
+    }
+  }
+
+  void _scrollToLatest({bool instant = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_chatScroll.hasClients) return;
+      final target = _chatScroll.position.maxScrollExtent;
+      if (instant) {
+        _chatScroll.jumpTo(target);
+      } else {
+        _chatScroll.animateTo(target,
+            duration: const Duration(milliseconds: 230),
+            curve: Curves.easeOutCubic);
+      }
+      if (mounted)
+        setState(() {
+          _followLatest = true;
+          _showScrollToLatest = false;
+        });
+    });
   }
 
   void _handleSessionInvalidated() {
@@ -289,6 +326,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       final index = _conversations.indexWhere((item) => item.id == current.id);
       _conversations[index] = updated;
     });
+    _scrollToLatest();
     _persist();
   }
 
@@ -421,7 +459,13 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
       if (!_conversations.any((item) => item.id == _activeConversationId)) {
         _activeConversationId = _conversations.firstOrNull?.id;
       }
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        if (_followLatest)
+          _scrollToLatest(instant: force);
+        else
+          _showScrollToLatest = true;
+      }
       await _persist();
     } catch (error) {
       // Local conversations remain available as drafts while offline.
@@ -1209,6 +1253,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
                 children: [
                   Expanded(
                     child: ListView.builder(
+                      controller: _chatScroll,
                       padding: const EdgeInsets.all(16),
                       itemCount: _messages.length + 1,
                       itemBuilder: (context, index) {
@@ -1358,6 +1403,17 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen>
                   ),
                 ],
               ),
+              if (_showScrollToLatest)
+                Positioned(
+                  right: 20,
+                  bottom: 88,
+                  child: FloatingActionButton.small(
+                    heroTag: 'support-scroll-latest',
+                    tooltip: 'Jump to latest message',
+                    onPressed: _scrollToLatest,
+                    child: const Icon(Icons.keyboard_arrow_down_rounded),
+                  ),
+                ),
               if (_recording)
                 Positioned(
                   left: 0,
