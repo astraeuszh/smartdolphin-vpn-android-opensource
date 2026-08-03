@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smartdolphin_vpn/services/vpn/node_table.dart';
 
 void main() {
-  test('Reality config uses the production server public key', () {
+  test('Reality config uses a repository-safe placeholder public key', () {
     final config =
         jsonDecode(
               buildSingBoxConfig(
@@ -21,9 +21,9 @@ void main() {
 
     expect(
       reality['public_key'],
-      '-vjbn6uLtRHtqFwM9GOX2tLJasW8F9fS5MsQdf9cfGo',
+      'REPLACE_WITH_REALITY_PUBLIC_KEY',
     );
-    expect(reality['short_id'], 'd4cd34b97f9631a6');
+    expect(reality['short_id'], '0000000000000000');
   });
 
   test('WireGuard uses the endpoint schema required by the bundled core', () {
