@@ -1,7 +1,5 @@
-# Android 客户端 Rust 安全层（待平台适配）
+# Android Rust Security Layer
 
-本目录为 **SmartDolphinVPNAndroid 独立项目** 内的 Rust 副本，与 Linux/Windows **各自维护一份代码**。
+This directory contains the Rust security-layer code intended for Android platform adaptation. The current implementation is a specification-aligned baseline; platform-specific modules such as `device.rs` and `guard.rs` require Android API and JNI integration before inclusion in a release build.
 
-当前为规范对齐的初始副本；`device.rs` / `guard.rs` 等需改为 Android API + JNI 后再编译进 APK。
-
-规范见 `docs/SECURITY_RUST_SPEC.md`。
+See `docs/SECURITY_RUST_SPEC.md` for the public security specification.

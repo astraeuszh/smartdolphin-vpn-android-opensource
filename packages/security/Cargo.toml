@@ -25,4 +25,4 @@ serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
 
-# 平台适配：JNI 接入与 Android ID / Keystore 见 docs/SECURITY_RUST_SPEC.md
+# Platform adaptation: see docs/SECURITY_RUST_SPEC.md for JNI, Android ID, and Keystore requirements.

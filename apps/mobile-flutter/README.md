@@ -1,3 +1,3 @@
-# SmartDolphin VPN Android
+# Smart Dolphin VPN Android Flutter Client
 
-Flutter 客户端（`astraeus.smartdolphin.vpn`）。变更说明见 [docs/CHANGELOG_2026-05-23.md](docs/CHANGELOG_2026-05-23.md)。
+This directory contains the Flutter application for Smart Dolphin VPN Android. Repository-level development, security, and contribution guidance is available from the project root.

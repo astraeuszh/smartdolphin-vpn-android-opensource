@@ -1,6 +1,8 @@
 # Smart Dolphin VPN Android
 
-Smart Dolphin VPN Android is an Android VPN client built with Flutter and native Android integrations.
+Smart Dolphin VPN Android is an Android VPN client built with Flutter, Kotlin, and a native VPN service integration.
+
+Deployment-specific endpoints, credentials, signing material, and node configuration are intentionally excluded. The repository contains safe placeholder values so contributors can provide their own development configuration.
 
 ## Repository layout
 
@@ -9,9 +11,17 @@ Smart Dolphin VPN Android is an Android VPN client built with Flutter and native
 - `packages/security/`: security-related package code
 - `qa/tests/`: automated tests
 
-## Getting started
+## Development
 
-Install a compatible Flutter SDK, then run the Flutter commands from `apps/mobile-flutter/`. Android-specific project files live in `platforms/android/`.
+Install a compatible Flutter SDK, then run the following commands from `apps/mobile-flutter/`:
+
+```powershell
+flutter pub get
+flutter analyze
+flutter test ../../qa/tests
+```
+
+Android-specific project files live in `platforms/android/`. Refer to [the development workflow](docs/development/flutter-development-workflow.md) before working with a physical device.
 
 ## Open-source preparation
 
@@ -23,5 +33,7 @@ Run `scripts/audit-open-source.ps1` before publishing a release or pushing the r
 - [Security policy](SECURITY.md)
 - [Contributors](CONTRIBUTORS.md)
 - [Acknowledgments](ACKNOWLEDGMENTS.md)
+- [Architecture](docs/architecture/FRAMEWORK_ANDROID.md)
+- [Security specification](docs/SECURITY_RUST_SPEC.md)
 
 This repository is licensed under the [Apache License 2.0](LICENSE).
