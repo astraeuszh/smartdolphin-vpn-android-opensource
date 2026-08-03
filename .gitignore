@@ -43,6 +43,8 @@ apps/mobile-flutter/web/
 platforms/.dart_tool/
 platforms/.flutter-plugins-dependencies
 archive/
+artifacts/
+.audit/
 
 # Symbolication related
 app.*.symbols
