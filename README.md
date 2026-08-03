@@ -24,4 +24,4 @@ Run `scripts/audit-open-source.ps1` before publishing a release or pushing the r
 - [Contributors](CONTRIBUTORS.md)
 - [Acknowledgments](ACKNOWLEDGMENTS.md)
 
-No license has been selected for this repository yet. Do not assume redistribution rights until a license is added.
+This repository is licensed under the [Apache License 2.0](LICENSE).
