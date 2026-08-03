@@ -3,9 +3,9 @@ const Map<String, String> kAppStringsEn = {
   'accountAuditPolicySubtitle':
       'Basic connection metadata is retained for 90 days. Optional modes never collect page content or full packets.',
   'accountAuditPolicyBasic': 'Basic link logs',
-  'accountAuditPolicySecurity': 'Connection metadata (source IP, destination IP and hops)',
-  'accountAuditPolicyEnhanced':
-      'Authorized SNI diagnostics (IP, hops and SNI)',
+  'accountAuditPolicySecurity':
+      'Connection metadata (source IP, destination IP and hops)',
+  'accountAuditPolicyEnhanced': 'Authorized SNI diagnostics (IP, hops and SNI)',
   'accountAuditPolicySaved': 'Audit setting saved',
   'accountAboutUs': 'About us',
   'accountChangeEmail': 'Change email',

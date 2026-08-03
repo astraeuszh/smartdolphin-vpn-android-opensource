@@ -23,7 +23,8 @@ class SpeedTestState extends Equatable {
     this.isVpnTest = false,
   });
 
-  factory SpeedTestState.initial() => const SpeedTestState(status: SpeedTestStatus.idle);
+  factory SpeedTestState.initial() =>
+      const SpeedTestState(status: SpeedTestStatus.idle);
 
   final SpeedTestStatus status;
   final SpeedTestPhase phase;
@@ -37,6 +38,7 @@ class SpeedTestState extends Equatable {
   final SpeedSeries downloadSeries;
   final SpeedSeries uploadSeries;
   final DateTime? lastRun;
+
   /// true = VPN 隧道测速, false = 本地网络测速
   final bool isVpnTest;
 
@@ -77,7 +79,8 @@ class SpeedTestState extends Equatable {
   bool get isBusy =>
       status == SpeedTestStatus.running || status == SpeedTestStatus.preparing;
 
-  bool get hasResult => status == SpeedTestStatus.complete &&
+  bool get hasResult =>
+      status == SpeedTestStatus.complete &&
       (downloadSeries.isNotEmpty || uploadSeries.isNotEmpty || ping != null);
 
   SpeedTestState copyWith({

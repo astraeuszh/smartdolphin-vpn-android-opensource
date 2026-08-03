@@ -12,7 +12,8 @@ class SplitTunnelConfig extends Equatable {
   final Set<String> selectedPackages;
 
   bool get isEnabled =>
-      mode == SplitTunnelMode.includeApps || mode == SplitTunnelMode.excludeApps;
+      mode == SplitTunnelMode.includeApps ||
+      mode == SplitTunnelMode.excludeApps;
 
   SplitTunnelConfig copyWith({
     SplitTunnelMode? mode,
@@ -33,10 +34,9 @@ class SplitTunnelConfig extends Equatable {
     if (json == null) {
       return const SplitTunnelConfig();
     }
-    final packages = (json['packages'] as List<dynamic>?)
-            ?.map((e) => e as String)
-            .toSet() ??
-        <String>{};
+    final packages =
+        (json['packages'] as List<dynamic>?)?.map((e) => e as String).toSet() ??
+            <String>{};
     return SplitTunnelConfig(
       mode: _splitModeFromStored(json['mode'] as String?),
       selectedPackages: packages,

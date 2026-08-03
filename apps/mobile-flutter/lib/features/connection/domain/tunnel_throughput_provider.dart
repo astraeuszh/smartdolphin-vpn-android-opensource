@@ -58,7 +58,7 @@ class TunnelThroughputNotifier extends StateNotifier<TunnelThroughputState>
     _lastTxBytes = 0;
     _lastSampleTime = null;
     if (_foreground) {
-      _timer = Timer.periodic(const Duration(seconds: 10), (_) => _poll());
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) => _poll());
       _poll();
     }
   }

@@ -10,6 +10,7 @@ class RuleDraftState {
   });
 
   final String text;
+
   /// Empty = never saved to a named file; temp_* = ephemeral label.
   final String savedFileName;
   final String savedSnapshot;
@@ -37,8 +38,7 @@ class RuleDraftState {
 class RuleDraftNotifier extends StateNotifier<RuleDraftState> {
   RuleDraftNotifier() : super(const RuleDraftState());
 
-  static String tempLabel() =>
-      'temp_${DateTime.now().millisecondsSinceEpoch}';
+  static String tempLabel() => 'temp_${DateTime.now().millisecondsSinceEpoch}';
 
   void syncFromPersisted({
     required String text,

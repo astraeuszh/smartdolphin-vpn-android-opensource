@@ -95,7 +95,9 @@ class ConnectionQualityController
 
     state = state.copyWith(isSwitching: true);
     try {
-      await _ref.read(sessionControllerProvider.notifier).switchToServerAndConnect(
+      await _ref
+          .read(sessionControllerProvider.notifier)
+          .switchToServerAndConnect(
             context: ctx,
             server: target,
           );

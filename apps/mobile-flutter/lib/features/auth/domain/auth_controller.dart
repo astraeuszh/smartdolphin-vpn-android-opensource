@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/platform/runtime_platform.dart';
 import '../../../platform/android/background_keep_alive.dart';
 import '../../../services/remote/console_auth.dart';
+import '../../../services/remote/console_tunnel_credential.dart';
+import '../../../services/remote/console_audit.dart';
 import '../../../services/notifications/session_notification_service.dart';
 import '../../../services/storage/prefs.dart';
 import '../../session/domain/session_controller.dart';
 import '../../settings/data/support_chat_repository.dart';
+import '../../../platform/android/audit_capture_channel.dart';
 import '../data/auth_repository.dart';
 import 'account_session.dart';
 
@@ -130,7 +133,9 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   void _applySession(AccountSession session) {
+    unawaited(ConsoleTunnelCredential().refresh(session));
     unawaited(_showAccountNotification(session));
+    unawaited(_syncAuditPolicy(session));
     if (isAndroidNative) {
       unawaited(syncUninstallMeta(
         uid: session.uid,
@@ -179,6 +184,15 @@ class AuthController extends StateNotifier<AuthState> {
       return;
     }
     state = AuthState(status: AuthStatus.authenticated, session: session);
+  }
+
+  Future<void> _syncAuditPolicy(AccountSession session) async {
+    try {
+      final mode = await ConsoleAudit().policy(session);
+      await syncNativeAuditCapture(mode);
+    } catch (_) {
+      // Keep the last native policy when the account service is unavailable.
+    }
   }
 
   Future<void> _showAccountNotification(AccountSession session) async {
@@ -390,10 +404,14 @@ class AuthController extends StateNotifier<AuthState> {
   Future<bool> ensureVpnAccess() async {
     final s = state.session;
     if (s == null) return false;
-    if (s.banned) return false;
+    if (!s.canUseVpn) return false;
     if (s.sessionToken.isNotEmpty) {
-      await refreshSession(force: true);
-      return state.session?.canUseVpn ?? s.canUseVpn;
+      // Connection startup must never wait on the account-status endpoint.
+      // The cached signed-in session gives an immediate answer; the refresh
+      // still runs in the background and will disconnect the tunnel if the
+      // server reports a revocation, ban, expiry, or quota change.
+      unawaited(refreshSession(force: true));
+      return true;
     }
     try {
       final updated = await _repo.refresh(s);

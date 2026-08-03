@@ -20,6 +20,8 @@ class SessionState {
     this.sessionLocked = false,
     this.queuedServerId,
     this.extendRequested = false,
+    this.connectionWarning = false,
+    this.connectionElapsedMs,
   });
 
   final SessionStatus status;
@@ -37,6 +39,8 @@ class SessionState {
   final bool sessionLocked;
   final String? queuedServerId;
   final bool extendRequested;
+  final bool connectionWarning;
+  final int? connectionElapsedMs;
 
   factory SessionState.initial() =>
       const SessionState(status: SessionStatus.disconnected);
@@ -57,6 +61,8 @@ class SessionState {
     Object? sessionLocked = _kUnset,
     Object? queuedServerId = _kUnset,
     Object? extendRequested = _kUnset,
+    Object? connectionWarning = _kUnset,
+    Object? connectionElapsedMs = _kUnset,
   }) {
     return SessionState(
       status: status == _kUnset ? this.status : status as SessionStatus,
@@ -71,21 +77,25 @@ class SessionState {
       countryCode:
           countryCode == _kUnset ? this.countryCode : countryCode as String?,
       publicIp: publicIp == _kUnset ? this.publicIp : publicIp as String?,
-      errorMessage: errorMessage == _kUnset
-          ? this.errorMessage
-          : errorMessage as String?,
+      errorMessage:
+          errorMessage == _kUnset ? this.errorMessage : errorMessage as String?,
       errorCode: errorCode == _kUnset ? this.errorCode : errorCode as int?,
       expired: expired == _kUnset ? this.expired : expired as bool,
       meta: meta == _kUnset ? this.meta : meta as SessionMeta?,
-      sessionLocked: sessionLocked == _kUnset
-          ? this.sessionLocked
-          : sessionLocked as bool,
+      sessionLocked:
+          sessionLocked == _kUnset ? this.sessionLocked : sessionLocked as bool,
       queuedServerId: queuedServerId == _kUnset
           ? this.queuedServerId
           : queuedServerId as String?,
       extendRequested: extendRequested == _kUnset
           ? this.extendRequested
           : extendRequested as bool,
+      connectionWarning: connectionWarning == _kUnset
+          ? this.connectionWarning
+          : connectionWarning as bool,
+      connectionElapsedMs: connectionElapsedMs == _kUnset
+          ? this.connectionElapsedMs
+          : connectionElapsedMs as int?,
     );
   }
 
@@ -105,6 +115,8 @@ class SessionState {
       'sessionLocked': sessionLocked,
       'queuedServerId': queuedServerId,
       'extendRequested': extendRequested,
+      'connectionWarning': connectionWarning,
+      'connectionElapsedMs': connectionElapsedMs,
     };
   }
 
@@ -129,6 +141,8 @@ class SessionState {
       sessionLocked: json['sessionLocked'] as bool? ?? false,
       queuedServerId: json['queuedServerId'] as String?,
       extendRequested: json['extendRequested'] as bool? ?? false,
+      connectionWarning: json['connectionWarning'] as bool? ?? false,
+      connectionElapsedMs: (json['connectionElapsedMs'] as num?)?.toInt(),
     );
   }
 
@@ -163,7 +177,9 @@ class SessionState {
         meta == other.meta &&
         sessionLocked == other.sessionLocked &&
         queuedServerId == other.queuedServerId &&
-        extendRequested == other.extendRequested;
+        extendRequested == other.extendRequested &&
+        connectionWarning == other.connectionWarning &&
+        connectionElapsedMs == other.connectionElapsedMs;
   }
 
   @override
@@ -183,6 +199,8 @@ class SessionState {
         sessionLocked,
         queuedServerId,
         extendRequested,
+        connectionWarning,
+        connectionElapsedMs,
       );
 }
 

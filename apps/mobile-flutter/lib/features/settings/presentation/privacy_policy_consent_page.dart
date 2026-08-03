@@ -91,8 +91,8 @@ class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
                           child: Text(
                             l10n.privacyPolicyAvailableInSettings,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color:
-                                  theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.7),
                             ),
                           ),
                         ),
@@ -102,7 +102,7 @@ class _PrivacyPolicyConsentPageState extends State<PrivacyPolicyConsentPage> {
                             width: double.infinity,
                             decoration: BoxDecoration(
                               color: theme.colorScheme.secondaryContainer
-                                   .withValues(alpha: 0.4),
+                                  .withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             padding: const EdgeInsets.all(12),

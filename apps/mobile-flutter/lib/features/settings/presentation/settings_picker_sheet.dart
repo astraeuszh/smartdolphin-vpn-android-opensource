@@ -84,16 +84,10 @@ class SettingsPickerSheet {
                                 curve: Curves.easeOutCubic,
                                 decoration: BoxDecoration(
                                   color: selected
-                                      ? const Color(0xFFEAF2FF)
-                                      : const Color(0xFFF8FAFD),
+                                      ? theme.colorScheme.primaryContainer
+                                          .withValues(alpha: 0.72)
+                                      : theme.colorScheme.surfaceContainerHigh,
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: selected
-                                        ? theme.colorScheme.primary
-                                            .withValues(alpha: 0.26)
-                                        : const Color(0xFFE1E7F0),
-                                    width: 1,
-                                  ),
                                   boxShadow: [
                                     BoxShadow(
                                       color:

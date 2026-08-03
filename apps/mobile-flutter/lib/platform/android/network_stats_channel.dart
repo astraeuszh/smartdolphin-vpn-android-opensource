@@ -12,7 +12,8 @@ class NetworkStatsChannel {
       return null;
     }
     try {
-      final result = await _channel.invokeMethod<Map<dynamic, dynamic>>('getNetworkTotals');
+      final result = await _channel
+          .invokeMethod<Map<dynamic, dynamic>>('getNetworkTotals');
       if (result == null) return null;
       final rx = result['rx'];
       final tx = result['tx'];

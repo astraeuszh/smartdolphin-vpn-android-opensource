@@ -3,20 +3,85 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:web_socket_channel/io.dart';
 
 import '../../features/auth/domain/account_session.dart';
 import '../../features/settings/domain/support_chat_models.dart';
-import 'console_endpoint.dart';
 import 'client_request_headers.dart';
+import 'console_endpoint.dart';
+
+MediaType supportMediaTypeForPath(String path) {
+  final extension = path.split('.').last.toLowerCase();
+  return switch (extension) {
+    'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
+    'png' => MediaType('image', 'png'),
+    'gif' => MediaType('image', 'gif'),
+    'webp' => MediaType('image', 'webp'),
+    'heic' => MediaType('image', 'heic'),
+    'heif' => MediaType('image', 'heif'),
+    'avif' => MediaType('image', 'avif'),
+    'bmp' => MediaType('image', 'bmp'),
+    'mp4' => MediaType('video', 'mp4'),
+    'mov' => MediaType('video', 'quicktime'),
+    'mkv' => MediaType('video', 'x-matroska'),
+    'webm' => MediaType('video', 'webm'),
+    '3gp' => MediaType('video', '3gpp'),
+    'avi' => MediaType('video', 'x-msvideo'),
+    'm4v' => MediaType('video', 'x-m4v'),
+    'm4a' => MediaType('audio', 'mp4'),
+    'aac' => MediaType('audio', 'aac'),
+    'mp3' => MediaType('audio', 'mpeg'),
+    'wav' => MediaType('audio', 'wav'),
+    'ogg' => MediaType('audio', 'ogg'),
+    'opus' => MediaType('audio', 'opus'),
+    _ => MediaType('application', 'octet-stream'),
+  };
+}
 
 class SupportChatApi {
   SupportChatApi({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
   static const _bases = [
-    'https://smartdolphinvpn.com',
     'https://api.smartdolphinvpn.com',
+    'https://smartdolphinvpn.com',
   ];
+
+  Stream<void> events(AccountSession session) async* {
+    var retrySeconds = 1;
+    while (true) {
+      for (final base in _bases) {
+        IOWebSocketChannel? channel;
+        try {
+          final uri = Uri.parse(
+            '${base.replaceFirst('https://', 'wss://')}/api/auth/support/events',
+          );
+          channel = IOWebSocketChannel.connect(
+            uri,
+            headers: await _headers(session, json: false),
+            pingInterval: const Duration(seconds: 30),
+            connectTimeout: const Duration(seconds: 8),
+          );
+          await channel.ready;
+          retrySeconds = 1;
+          await for (final raw in channel.stream) {
+            try {
+              final body = jsonDecode('$raw');
+              if (body is Map && body['type'] == 'support_changed') {
+                yield null;
+              }
+            } catch (_) {}
+          }
+        } catch (_) {
+          // Try the alternate API host, then reconnect with bounded backoff.
+        } finally {
+          await channel?.sink.close();
+        }
+      }
+      await Future<void>.delayed(Duration(seconds: retrySeconds));
+      retrySeconds = retrySeconds < 30 ? retrySeconds * 2 : 30;
+    }
+  }
 
   Future<http.Response> _postWithFallback(
     String path, {
@@ -27,24 +92,18 @@ class SupportChatApi {
     Object? lastError;
     http.Response? lastResponse;
     for (final base in _bases) {
-      for (var attempt = 0; attempt < 2; attempt++) {
-        try {
-          final response = await _client
-              .post(Uri.parse('$base$path'), headers: headers, body: body)
-              .timeout(timeout);
-          lastResponse = response;
-          // Authentication, mute and validation failures are authoritative.
-          // Proxy/not-found/HTML failures may be host-specific, so retry them
-          // against the API domain instead of failing before the request gets
-          // a chance to reach the Rust service.
-          if ((response.statusCode >= 200 && response.statusCode < 300) ||
-              const {400, 401, 403, 409, 413, 422, 429}
-                  .contains(response.statusCode)) {
-            return response;
-          }
-        } on Object catch (error) {
-          lastError = error;
+      try {
+        final response = await _client
+            .post(Uri.parse('$base$path'), headers: headers, body: body)
+            .timeout(timeout);
+        lastResponse = response;
+        if ((response.statusCode >= 200 && response.statusCode < 300) ||
+            const {400, 401, 403, 409, 413, 422, 429}
+                .contains(response.statusCode)) {
+          return response;
         }
+      } on Object catch (error) {
+        lastError = error;
       }
     }
     if (lastResponse != null) return lastResponse;
@@ -59,22 +118,18 @@ class SupportChatApi {
     Object? lastError;
     http.Response? lastResponse;
     for (final base in _bases) {
-      for (var attempt = 0; attempt < 2; attempt++) {
-        try {
-          final response = await _client
-              .delete(Uri.parse('$base$path'), headers: headers)
-              .timeout(timeout);
-          lastResponse = response;
-          // A real authorization/validation result must be returned to the
-          // caller.  Gateway 404/5xx pages are retried on the API hostname.
-          if ((response.statusCode >= 200 && response.statusCode < 300) ||
-              const {400, 401, 403, 409, 413, 422, 429}
-                  .contains(response.statusCode)) {
-            return response;
-          }
-        } on Object catch (error) {
-          lastError = error;
+      try {
+        final response = await _client
+            .delete(Uri.parse('$base$path'), headers: headers)
+            .timeout(timeout);
+        lastResponse = response;
+        if ((response.statusCode >= 200 && response.statusCode < 300) ||
+            const {400, 401, 403, 409, 413, 422, 429}
+                .contains(response.statusCode)) {
+          return response;
         }
+      } on Object catch (error) {
+        lastError = error;
       }
     }
     if (lastResponse != null) return lastResponse;
@@ -255,54 +310,35 @@ class SupportChatApi {
     if (size <= 0 || size > 1024 * 1024 * 1024) {
       throw const FormatException('upload_too_large');
     }
-    final extension = file.path.split('.').last.toLowerCase();
-    final contentType = switch (extension) {
-      'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
-      'png' => MediaType('image', 'png'),
-      'gif' => MediaType('image', 'gif'),
-      'webp' => MediaType('image', 'webp'),
-      'mp4' || 'mov' || 'mkv' || 'webm' || '3gp' => MediaType('video', 'mp4'),
-      'm4a' || 'aac' => MediaType('audio', 'mp4'),
-      'mp3' => MediaType('audio', 'mpeg'),
-      'wav' => MediaType('audio', 'wav'),
-      _ => MediaType('application', 'octet-stream'),
-    };
+    final contentType = supportMediaTypeForPath(file.path);
     http.Response? response;
     Object? lastError;
     for (final base in _bases) {
-      for (var attempt = 0; attempt < 2; attempt++) {
-        final uploadClient = http.Client();
-        try {
-          final request = http.MultipartRequest(
-            'POST',
-            Uri.parse('$base/api/auth/support/upload'),
-          )
-            ..headers.addAll(await _headers(session, json: false))
-            ..files.add(await http.MultipartFile.fromPath(
-              'file',
-              file.path,
-              contentType: contentType,
-            ));
-          final candidate = await http.Response.fromStream(
-            await uploadClient
-                .send(request)
-                .timeout(const Duration(minutes: 20)),
-          );
-          response = candidate;
-          if ((candidate.statusCode >= 200 && candidate.statusCode < 300) ||
-              const {400, 401, 403, 409, 413, 422, 429}
-                  .contains(candidate.statusCode)) {
-            break;
-          }
+      final uploadClient = http.Client();
+      try {
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse('$base/api/auth/support/upload'),
+        )
+          ..headers.addAll(await _headers(session, json: false))
+          ..files.add(await http.MultipartFile.fromPath(
+            'file',
+            file.path,
+            contentType: contentType,
+          ));
+        final candidate = await http.Response.fromStream(
+          await uploadClient.send(request).timeout(const Duration(minutes: 20)),
+        );
+        response = candidate;
+        if (!((candidate.statusCode >= 200 && candidate.statusCode < 300) ||
+            const {400, 401, 403, 409, 413, 422, 429}
+                .contains(candidate.statusCode))) {
           response = null;
-        } on Object catch (error) {
-          lastError = error;
-        } finally {
-          // Multipart retries must never reuse a half-closed Android socket.
-          // A fresh client also avoids carrying a failed HTTP/1.1 connection
-          // from the apex proxy over to the API hostname.
-          uploadClient.close();
         }
+      } on Object catch (error) {
+        lastError = error;
+      } finally {
+        uploadClient.close();
       }
       if (response != null) break;
     }

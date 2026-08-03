@@ -29,6 +29,5 @@ class Server with _$Server {
     double? score,
   }) = _Server;
 
-  factory Server.fromJson(Map<String, dynamic> json) =>
-      _$ServerFromJson(json);
+  factory Server.fromJson(Map<String, dynamic> json) => _$ServerFromJson(json);
 }

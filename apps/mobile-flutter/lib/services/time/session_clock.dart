@@ -59,8 +59,7 @@ class SessionClock {
     final wallAnchor = DateTime.now();
     while (true) {
       final wallElapsed = DateTime.now().difference(wallAnchor);
-      final elapsedMs =
-          (anchor - startElapsedMs) + wallElapsed.inMilliseconds;
+      final elapsedMs = (anchor - startElapsedMs) + wallElapsed.inMilliseconds;
       yield Duration(milliseconds: elapsedMs.clamp(0, 0x7FFFFFFF));
       await Future<void>.delayed(tick);
     }

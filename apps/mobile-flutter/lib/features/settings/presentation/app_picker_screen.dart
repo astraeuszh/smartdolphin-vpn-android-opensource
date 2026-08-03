@@ -137,6 +137,8 @@ class _AppPickerScreenState extends ConsumerState<AppPickerScreen> {
     } else {
       next.add(packageName);
     }
-    await ref.read(settingsControllerProvider.notifier).setSelectedPackages(next);
+    await ref
+        .read(settingsControllerProvider.notifier)
+        .setSelectedPackages(next);
   }
 }

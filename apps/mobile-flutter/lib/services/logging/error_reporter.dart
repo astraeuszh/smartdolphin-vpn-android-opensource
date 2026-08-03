@@ -26,7 +26,8 @@ class ErrorReporter {
       final snapshot = await logger.buildErrorFeedbackSnapshot();
       await ConsoleFeedback().submit(
         session: session,
-        errorCode: '0x${errorCode.toRadixString(16).padLeft(8, '0').toUpperCase()}',
+        errorCode:
+            '0x${errorCode.toRadixString(16).padLeft(8, '0').toUpperCase()}',
         message: message,
         logSnapshot: snapshot,
       );
@@ -36,4 +37,5 @@ class ErrorReporter {
   }
 }
 
-final errorReporterProvider = Provider<ErrorReporter>((ref) => ErrorReporter(ref));
+final errorReporterProvider =
+    Provider<ErrorReporter>((ref) => ErrorReporter(ref));

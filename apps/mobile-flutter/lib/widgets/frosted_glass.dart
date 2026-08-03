@@ -46,6 +46,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     Widget panel = AnimatedScale(
       scale: _pressed ? 0.985 : 1,
       duration: const Duration(milliseconds: 160),
@@ -55,13 +56,14 @@ class _LiquidGlassState extends State<LiquidGlass> {
           borderRadius: widget.borderRadius,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF64748B).withValues(alpha: 0.16),
+              color: (dark ? Colors.black : const Color(0xFF64748B))
+                  .withValues(alpha: dark ? 0.38 : 0.16),
               blurRadius: 34,
               offset: const Offset(0, 16),
               spreadRadius: -12,
             ),
             BoxShadow(
-              color: Colors.white.withValues(alpha: 0.72),
+              color: Colors.white.withValues(alpha: dark ? 0.03 : 0.72),
               blurRadius: 14,
               offset: const Offset(-5, -6),
               spreadRadius: -9,
@@ -86,30 +88,39 @@ class _LiquidGlassState extends State<LiquidGlass> {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: widget.borderRadius,
-                    color: Colors.white.withValues(alpha: 0.64),
+                    color: dark
+                        ? const Color(0xC82D3136)
+                        : Colors.white.withValues(alpha: 0.64),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.95),
+                      color: Colors.white.withValues(alpha: dark ? 0.10 : 0.95),
                       width: 1,
                     ),
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.92),
-                        const Color(0xFFF8FBFF).withValues(alpha: 0.66),
-                        const Color(0xFFE9F1FA).withValues(alpha: 0.42),
-                      ],
+                      colors: dark
+                          ? const [
+                              Color(0xD234383D),
+                              Color(0xC82B2F34),
+                              Color(0xBC24282D),
+                            ]
+                          : [
+                              Colors.white.withValues(alpha: 0.92),
+                              const Color(0xFFF8FBFF).withValues(alpha: 0.66),
+                              const Color(0xFFE9F1FA).withValues(alpha: 0.42),
+                            ],
                       stops: const [0, 0.46, 1],
                     ),
                   ),
                 ),
               ),
-              Positioned.fill(
-                child: CustomPaint(
-                  painter:
-                      _LiquidGlassPainter(borderRadius: widget.borderRadius),
+              if (!dark)
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter:
+                        _LiquidGlassPainter(borderRadius: widget.borderRadius),
+                  ),
                 ),
-              ),
               Padding(
                 padding: widget.padding ?? EdgeInsets.zero,
                 child: widget.child,
@@ -165,29 +176,6 @@ class _LiquidGlassPainter extends CustomPainter {
       ).createShader(rect);
     canvas.drawRRect(rrect, rim);
 
-    final specular = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round
-      ..shader = LinearGradient(
-        colors: [
-          Colors.white.withValues(alpha: 0),
-          Colors.white.withValues(alpha: 0.92),
-          Colors.white.withValues(alpha: 0),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width * 0.74, size.height));
-    final path = Path()
-      ..moveTo(size.width * 0.12, size.height * 0.18)
-      ..cubicTo(
-        size.width * 0.34,
-        size.height * 0.03,
-        size.width * 0.62,
-        size.height * 0.05,
-        size.width * 0.83,
-        size.height * 0.18,
-      );
-    canvas.drawPath(path, specular);
-
     final bottomShade = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
@@ -231,11 +219,18 @@ class FrostedGlass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final fill = surface == GlassSurface.nav
-        ? Colors.white.withValues(alpha: 0.74)
+        ? (dark
+            ? const Color(0xD12B2F34)
+            : Colors.white.withValues(alpha: 0.74))
         : surface == GlassSurface.flat
-            ? Colors.white.withValues(alpha: 0.72)
-            : Colors.white.withValues(alpha: 0.78);
+            ? (dark
+                ? const Color(0xBF292D32)
+                : Colors.white.withValues(alpha: 0.72))
+            : (dark
+                ? const Color(0xCC30343A)
+                : Colors.white.withValues(alpha: 0.78));
     final shadow = boxShadow ??
         (surface == GlassSurface.nav
             ? HiVpnGlass.shadowNav
@@ -251,44 +246,52 @@ class FrostedGlass extends StatelessWidget {
                   borderRadius: borderRadius,
                   color: fill,
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.55),
+                    color: Colors.white.withValues(alpha: dark ? 0.08 : 0.55),
                     width: 0.55,
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.84),
-                      const Color(0xFFF8FBFF).withValues(alpha: 0.56),
-                      const Color(0xFFEAF1FA).withValues(alpha: 0.34),
-                    ],
+                    colors: dark
+                        ? const [
+                            Color(0xD034383D),
+                            Color(0xC42D3136),
+                            Color(0xB824282D),
+                          ]
+                        : [
+                            Colors.white.withValues(alpha: 0.84),
+                            const Color(0xFFF8FBFF).withValues(alpha: 0.56),
+                            const Color(0xFFEAF1FA).withValues(alpha: 0.34),
+                          ],
                     stops: const [0, 0.5, 1],
                   ),
                 ),
               ),
             ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: borderRadius,
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.10),
-                      Colors.white.withValues(alpha: 0.03),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.12, 0.36],
+            if (!dark)
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: borderRadius,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withValues(alpha: 0.10),
+                        Colors.white.withValues(alpha: 0.03),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.12, 0.36],
+                    ),
                   ),
                 ),
               ),
-            ),
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _GlassRimPainter(borderRadius: borderRadius),
+            if (!dark)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _GlassRimPainter(borderRadius: borderRadius),
+                ),
               ),
-            ),
             Padding(
               padding: padding ?? EdgeInsets.zero,
               child: child,
@@ -365,6 +368,24 @@ class HiVpnGlassBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (Theme.of(context).brightness == Brightness.dark) {
+      return DecoratedBox(
+        decoration: const BoxDecoration(
+          color: Color(0xFF121518),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF171B1F),
+              Color(0xFF121518),
+              Color(0xFF101316),
+            ],
+            stops: [0, 0.52, 1],
+          ),
+        ),
+        child: child,
+      );
+    }
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: HiVpnGlass.baseCanvas,
@@ -447,10 +468,11 @@ class HiVpnSheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF8FBFF),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF292D32) : const Color(0xFFF8FBFF),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: FrostedGlass(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),

@@ -30,7 +30,9 @@ String localizedServerLocation(Server s, AppLocalizations l10n) {
     case 'smartdolphin-sg':
       return l10n.geoCitySingapore;
     default:
-      return s.cityName ?? s.regionName ?? localizedCountryName(s.countryCode, l10n);
+      return s.cityName ??
+          s.regionName ??
+          localizedCountryName(s.countryCode, l10n);
   }
 }
 
@@ -81,7 +83,8 @@ String englishServerAddress(Server s) {
       return 'Singapore';
     default:
       if (s.cityName != null && s.cityName!.isNotEmpty) return s.cityName!;
-      if (s.regionName != null && s.regionName!.isNotEmpty) return s.regionName!;
+      if (s.regionName != null && s.regionName!.isNotEmpty)
+        return s.regionName!;
       return kCountryNamesEn[s.countryCode.toUpperCase()] ?? s.countryCode;
   }
 }

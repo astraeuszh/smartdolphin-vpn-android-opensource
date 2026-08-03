@@ -101,7 +101,9 @@ class ServerRepository {
           .whereType<Server>()
           .toList(growable: false);
       final staticIds = smartDolphinStaticServers.map((s) => s.id).toSet();
-      return list.where((s) => staticIds.contains(s.id)).toList(growable: false);
+      return list
+          .where((s) => staticIds.contains(s.id))
+          .toList(growable: false);
     } catch (_) {
       return const <Server>[];
     }

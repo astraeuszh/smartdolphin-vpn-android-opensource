@@ -20,12 +20,14 @@ import android.util.Log
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.Executors
 import com.smartdolphin.libbox.CommandClient
 import com.smartdolphin.libbox.CommandClientOptions
 import com.smartdolphin.libbox.CommandClientHandler
 import com.smartdolphin.libbox.CommandServer
 import com.smartdolphin.libbox.CommandServerHandler
 import com.smartdolphin.libbox.Connections
+import com.smartdolphin.libbox.Connection
 import com.smartdolphin.libbox.Libbox
 import com.smartdolphin.libbox.LogEntry
 import com.smartdolphin.libbox.LogIterator
@@ -69,8 +71,14 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
     private var commandClient: CommandClient? = null
     private var tunPfd: ParcelFileDescriptor? = null
     private var connectivity: ConnectivityManager? = null
+    private val capturedConnectionIds = LinkedHashSet<String>()
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private val boxLock = Any()
+    // libbox start/reload/stop can wait on native socket and TUN teardown.
+    // Never run those operations on Android's service main thread: a delayed
+    // STOP arriving during a new START otherwise freezes MainActivity and
+    // triggers an input-dispatch ANR.
+    private val coreExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var defaultInterfaceListener: com.smartdolphin.libbox.InterfaceUpdateListener? = null
     @Volatile private var defaultInterfaceReady = false
@@ -78,8 +86,23 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
     private val notificationPoll = object : Runnable {
         override fun run() {
             pollAccountNotification()
-            mainHandler.postDelayed(this, 15_000L)
+            val prefs = getSharedPreferences("smartdolphin_vpn", Context.MODE_PRIVATE)
+            val interval = if (prefs.getBoolean("account_risk_fast_poll", false)) 60_000L else 300_000L
+            mainHandler.postDelayed(this, interval)
         }
+    }
+
+    fun isTunnelRunning(): Boolean = commandServer != null && tunPfd != null
+
+    fun isTunnelValidated(): Boolean {
+        val cm = connectivity ?: return false
+        return runCatching {
+            cm.allNetworks.any { network ->
+                val capabilities = cm.getNetworkCapabilities(network) ?: return@any false
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+        }.getOrDefault(false)
     }
 
     private fun persistedConfigFile(): File = File(filesDir, "dolphin_core/active-config.json")
@@ -121,7 +144,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
         when (intent?.action) {
             ACTION_STOP -> {
                 clearPersistedConfig()
-                synchronized(boxLock) { stopBox() }
+                coreExecutor.execute { synchronized(boxLock) { stopBox() } }
                 return START_NOT_STICKY
             }
             ACTION_NETWORK_CHANGED -> {
@@ -138,7 +161,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                 startForeground(NOTIF_ID, buildNotification())
                 mainHandler.removeCallbacks(notificationPoll)
                 mainHandler.post(notificationPoll)
-                Thread { synchronized(boxLock) { startBox(config) } }.start()
+                coreExecutor.execute { synchronized(boxLock) { startBox(config) } }
                 return START_STICKY
             }
             else -> {
@@ -154,7 +177,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                 startForeground(NOTIF_ID, buildNotification())
                 mainHandler.removeCallbacks(notificationPoll)
                 mainHandler.post(notificationPoll)
-                Thread {
+                coreExecutor.execute {
                     synchronized(boxLock) {
                         // A second START without STOP (reconnect / stale service) must not
                         // stack two libbox instances 鈥?that leaves a zombie tun that looks
@@ -162,7 +185,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                         teardownBox(emitDisconnected = false)
                         startBox(config)
                     }
-                }.start()
+                }
                 return START_STICKY
             }
         }
@@ -187,15 +210,18 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
             commandServer = server
             // options MUST be non-null: the Go side dereferences it directly
             // (command_server.go StartOrReloadService) 鈫?nil would SIGSEGV the core.
+            // The monitor can become ready synchronously while libbox starts.
+            // Resetting this flag afterwards used to erase that signal and made
+            // every otherwise healthy connection wait the full ten seconds.
+            defaultInterfaceReady = false
             server.startOrReloadService(config, OverrideOptions())
 
             startStatusClient()
-            defaultInterfaceReady = false
             scheduleDefaultInterfaceRefresh()
-            if (!waitForDefaultInterfaceReady(10_000)) {
-                Log.w(TAG, "Default physical NIC not ready at connect time 鈥?continuing with scheduled refresh")
-                CoreLogFile.append("startBox warning: default interface not ready yet")
+            if (!waitForDefaultInterfaceReady(1_200)) {
+                throw IllegalStateException("default physical interface unavailable")
             }
+            CoreBridge.markCoreReady()
             CoreBridge.emitStage("connected")
             CoreLogFile.append("Dolphin-Core service started")
             Log.i(TAG, "Dolphin-Core service started")
@@ -234,15 +260,17 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
     }
 
     override fun onDestroy() {
-        mainHandler.removeCallbacks(notificationPoll)
         instance = null
-        try { tunPfd?.close() } catch (_: Exception) {}
+        coreExecutor.execute {
+            synchronized(boxLock) { teardownBox(emitDisconnected = true) }
+        }
+        coreExecutor.shutdown()
         super.onDestroy()
     }
 
     override fun onRevoke() {
         // System or another VPN revoked our permission.
-        stopBox()
+        coreExecutor.execute { synchronized(boxLock) { stopBox() } }
         super.onRevoke()
     }
 
@@ -252,15 +280,34 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
         try {
             val opts = CommandClientOptions()
             opts.addCommand(Libbox.CommandStatus)
-            // Traffic counters are presentation data, not a tunnel heartbeat.
-            // A one-second cross-language callback keeps the app process and radio
-            // active in background. Ten seconds is enough for quota/UI updates.
-            opts.statusInterval = 10_000L
+            val auditMode = auditCaptureMode()
+            if (auditMode != "basic") {
+                opts.addCommand(Libbox.CommandConnections)
+                if (auditMode == "enhanced") opts.addCommand(Libbox.CommandLog)
+            }
+            // Enhanced diagnostics samples often enough to observe short-lived
+            // connections. Normal operation keeps the lower-frequency status path.
+            opts.statusInterval = if (auditMode == "enhanced") 2_000L else 5_000L
             val client = Libbox.newCommandClient(StatusHandler(), opts)
             client.connect()
             commandClient = client
         } catch (e: Exception) {
             Log.w(TAG, "status client failed: ${e.message}")
+        }
+    }
+
+    private fun auditCaptureMode(): String =
+        getSharedPreferences("smartdolphin_vpn", Context.MODE_PRIVATE)
+            .getString("audit_capture_mode", "basic") ?: "basic"
+
+    fun refreshAuditCapture() {
+        coreExecutor.execute {
+            synchronized(boxLock) {
+                runCatching { commandClient?.disconnect() }
+                commandClient = null
+                capturedConnectionIds.clear()
+                if (commandServer != null) startStatusClient()
+            }
         }
     }
 
@@ -271,7 +318,36 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
         override fun initializeClashMode(modeList: StringIterator?, currentMode: String?) {}
         override fun setDefaultLogLevel(level: Int) {}
         override fun updateClashMode(newMode: String?) {}
-        override fun writeConnections(message: Connections?) {}
+        override fun writeConnections(message: Connections?) {
+            if (message == null) return
+            val mode = auditCaptureMode()
+            if (mode == "basic") return
+            val iterator = message.iterator()
+            while (iterator.hasNext()) {
+                val connection: Connection = iterator.next() ?: continue
+                val id = connection.id?.trim().orEmpty()
+                if (id.isEmpty() || !capturedConnectionIds.add(id)) continue
+                while (capturedConnectionIds.size > 4096) {
+                    val oldest = capturedConnectionIds.iterator()
+                    if (!oldest.hasNext()) break
+                    oldest.next()
+                    oldest.remove()
+                }
+                val destination = connection.destination?.trim().orEmpty()
+                val domain = connection.domain?.trim().orEmpty()
+                val detail = buildString {
+                    append("connection destination=")
+                    append(if (destination.isEmpty()) "unknown" else destination)
+                    append(" protocol=")
+                    append(connection.protocol?.trim().orEmpty())
+                    if (mode == "enhanced" && domain.isNotEmpty()) {
+                        append(" sni=")
+                        append(domain)
+                    }
+                }
+                CoreLogFile.append(detail)
+            }
+        }
         override fun writeGroups(message: OutboundGroupIterator?) {}
         override fun writeLogs(messageList: LogIterator?) {
             if (messageList == null) return
@@ -307,11 +383,15 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
 
     override fun serviceReload() {
         val cfg = CoreBridge.pendingConfig ?: return
-        runCatching { commandServer?.startOrReloadService(cfg, OverrideOptions()) }
+        coreExecutor.execute {
+            synchronized(boxLock) {
+                runCatching { commandServer?.startOrReloadService(cfg, OverrideOptions()) }
+            }
+        }
     }
 
     override fun serviceStop() {
-        stopBox()
+        coreExecutor.execute { synchronized(boxLock) { stopBox() } }
     }
 
     override fun getSystemProxyStatus(): SystemProxyStatus = SystemProxyStatus()
@@ -388,6 +468,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
 
         val pfd = builder.establish() ?: throw IllegalStateException("VpnService.establish() returned null")
         tunPfd = pfd
+        CoreBridge.markTunEstablished()
         return pfd.fd
     }
 
@@ -470,7 +551,7 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                 pushDefaultInterface(listener)
                 if (defaultInterfaceReady) return true
             }
-            Thread.sleep(250)
+            Thread.sleep(40)
         }
         return defaultInterfaceReady
     }
@@ -608,7 +689,12 @@ class BoxService : VpnService(), PlatformInterface, CommandServerHandler {
                 val code = connection.responseCode
                 if (code == 200) {
                     val body = connection.inputStream.bufferedReader().use { it.readText() }
-                    val notification = JSONObject(body).optJSONObject("notification")
+                    val account = JSONObject(body)
+                    val fastPoll = account.optInt("violation_count", 0) > 0 ||
+                        account.optBoolean("locked", false) ||
+                        account.optBoolean("banned", false)
+                    prefs.edit().putBoolean("account_risk_fast_poll", fastPoll).apply()
+                    val notification = account.optJSONObject("notification")
                     if (notification != null) {
                         val id = notification.optInt("id", 0)
                         val last = prefs.getInt("account_notification_last", 0)

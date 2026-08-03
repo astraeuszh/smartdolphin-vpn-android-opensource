@@ -40,7 +40,8 @@ class ConnectionHistoryNotifier
   }
 }
 
-final connectionHistoryProvider = StateNotifierProvider<ConnectionHistoryNotifier,
-    AsyncValue<List<ConnectionRecord>>>((ref) {
-  return ConnectionHistoryNotifier(ref.watch(connectionHistoryRepositoryProvider));
+final connectionHistoryProvider = StateNotifierProvider<
+    ConnectionHistoryNotifier, AsyncValue<List<ConnectionRecord>>>((ref) {
+  return ConnectionHistoryNotifier(
+      ref.watch(connectionHistoryRepositoryProvider));
 });

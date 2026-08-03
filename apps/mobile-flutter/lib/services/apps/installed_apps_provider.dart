@@ -6,7 +6,8 @@ final installedAppsServiceProvider = Provider<InstalledAppsService>((ref) {
   return InstalledAppsService();
 });
 
-final installedAppsProvider = FutureProvider<List<InstalledAppInfo>>((ref) async {
+final installedAppsProvider =
+    FutureProvider<List<InstalledAppInfo>>((ref) async {
   final service = ref.watch(installedAppsServiceProvider);
   return service.fetchInstalledApps();
 });

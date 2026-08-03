@@ -84,17 +84,16 @@ class Ndt7Service {
 
   Stream<Ndt7Progress> get progressStream => _progressController.stream;
 
-  Future<LocateResult> locate({Duration timeout = const Duration(seconds: 5)}) async {
+  Future<LocateResult> locate(
+      {Duration timeout = const Duration(seconds: 5)}) async {
     try {
-      final response = await _client
-          .get(
-            _locateEndpoint,
-            headers: {
-              HttpHeaders.acceptHeader: 'application/json',
-              HttpHeaders.userAgentHeader: userAgent,
-            },
-          )
-          .timeout(timeout);
+      final response = await _client.get(
+        _locateEndpoint,
+        headers: {
+          HttpHeaders.acceptHeader: 'application/json',
+          HttpHeaders.userAgentHeader: userAgent,
+        },
+      ).timeout(timeout);
 
       if (response.statusCode == HttpStatus.noContent) {
         throw const Ndt7Exception(
@@ -191,9 +190,8 @@ class Ndt7Service {
         }
 
         final downloadMbps = _pickDownloadMbps(downloadResult);
-        final uploadMbps = uploadResult == null
-            ? 0.0
-            : _pickUploadMbps(uploadResult);
+        final uploadMbps =
+            uploadResult == null ? 0.0 : _pickUploadMbps(uploadResult);
 
         if (downloadMbps <= 0 && uploadMbps <= 0) {
           throw const Ndt7Exception(
@@ -373,173 +371,172 @@ void _measurementEntry(_MeasurementRequest request) async {
   final sendPort = request.progressPort;
   WebSocketChannel? channel;
   channel = WebSocketChannel.connect(
-      Uri.parse(request.url),
-      protocols: const ['net.measurementlab.ndt.v7'],
-    );
-    var reportedMetrics = const Ndt7ServerMetrics();
-    final stopwatch = Stopwatch()..start();
-    final warmupMicros = request.warmupMicros;
-    final measureMicros = request.measureMicros;
-    final totalMicros = warmupMicros + measureMicros;
-    var measuredBytes = 0;
-    var isWarmup = true;
+    Uri.parse(request.url),
+    protocols: const ['net.measurementlab.ndt.v7'],
+  );
+  var reportedMetrics = const Ndt7ServerMetrics();
+  final stopwatch = Stopwatch()..start();
+  final warmupMicros = request.warmupMicros;
+  final measureMicros = request.measureMicros;
+  final totalMicros = warmupMicros + measureMicros;
+  var measuredBytes = 0;
+  var isWarmup = true;
 
-    final progressStage = request.direction == _MeasurementDirection.download
-        ? 'download'
-        : 'upload';
+  final progressStage = request.direction == _MeasurementDirection.download
+      ? 'download'
+      : 'upload';
 
-    var lastReportMicros = -1000000;
-    void reportProgress({double? mbps, int? elapsedMicros, String? stage}) {
-      // Throttle to ~5 updates/sec. The upload pump used to fire a progress
-      // event for every 64KB chunk (hundreds/sec), flooding the UI isolate with
-      // setState calls and making the whole screen stutter during a test.
-      final nowMicros = stopwatch.elapsedMicroseconds;
-      if (nowMicros - lastReportMicros < 200000) return;
-      lastReportMicros = nowMicros;
-      sendPort.send({
-        'type': 'progress',
-        'phase': progressStage,
-        'mbps': mbps,
-        'elapsedMicros': elapsedMicros,
-        'stage': stage ?? (isWarmup ? 'warmup' : 'measure'),
-      });
-    }
+  var lastReportMicros = -1000000;
+  void reportProgress({double? mbps, int? elapsedMicros, String? stage}) {
+    // Throttle to ~5 updates/sec. The upload pump used to fire a progress
+    // event for every 64KB chunk (hundreds/sec), flooding the UI isolate with
+    // setState calls and making the whole screen stutter during a test.
+    final nowMicros = stopwatch.elapsedMicroseconds;
+    if (nowMicros - lastReportMicros < 200000) return;
+    lastReportMicros = nowMicros;
+    sendPort.send({
+      'type': 'progress',
+      'phase': progressStage,
+      'mbps': mbps,
+      'elapsedMicros': elapsedMicros,
+      'stage': stage ?? (isWarmup ? 'warmup' : 'measure'),
+    });
+  }
 
-    final completer = Completer<void>();
+  final completer = Completer<void>();
 
-    StreamSubscription<dynamic>? subscription;
+  StreamSubscription<dynamic>? subscription;
 
-    subscription = channel.stream.timeout(_inactivityTimeout).listen(
-      (dynamic message) {
-        final elapsed = stopwatch.elapsedMicroseconds;
-        if (elapsed >= totalMicros) {
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
-          return;
-        }
-        if (isWarmup && elapsed >= warmupMicros) {
-          isWarmup = false;
-        }
-
-        if (message is List<int>) {
-          if (!isWarmup) {
-            measuredBytes += message.length;
-            final measureElapsed = max(elapsed - warmupMicros, 1);
-            if (measureElapsed >= 500000) {
-              final mbps = computeThroughputMbps(measuredBytes, measureElapsed);
-              reportProgress(
-                mbps: mbps,
-                elapsedMicros: measureElapsed,
-                stage: 'measure',
-              );
-            }
-          } else {
-            reportProgress(elapsedMicros: elapsed, stage: 'warmup');
-          }
-        } else if (message is String) {
-          try {
-            final decoded = jsonDecode(message);
-            if (decoded is Map<String, dynamic>) {
-              final nextMetrics = Ndt7ServerMetrics.fromJson(decoded);
-              reportedMetrics = reportedMetrics.merge(nextMetrics);
-            }
-          } catch (_) {
-            // Ignore malformed JSON
-          }
-        }
-      },
-      onDone: () {
+  subscription = channel.stream.timeout(_inactivityTimeout).listen(
+    (dynamic message) {
+      final elapsed = stopwatch.elapsedMicroseconds;
+      if (elapsed >= totalMicros) {
         if (!completer.isCompleted) {
           completer.complete();
         }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
-      },
-      cancelOnError: true,
-    );
+        return;
+      }
+      if (isWarmup && elapsed >= warmupMicros) {
+        isWarmup = false;
+      }
 
-    Future<void>? uploader;
-    if (request.direction == _MeasurementDirection.upload) {
-      uploader = _pumpUpload(
-        channel,
-        stopwatch,
-        warmupMicros,
-        totalMicros,
-        onProgress: (bytes, elapsedMicros, warmup) {
-          if (!warmup) {
-            measuredBytes += bytes;
-          }
-          final measureElapsed = max(elapsedMicros - warmupMicros, 1);
-          if (!warmup && measureElapsed >= 500000) {
-            final mbps =
-                computeThroughputMbps(measuredBytes, max(measureElapsed, 1));
+      if (message is List<int>) {
+        if (!isWarmup) {
+          measuredBytes += message.length;
+          final measureElapsed = max(elapsed - warmupMicros, 1);
+          if (measureElapsed >= 500000) {
+            final mbps = computeThroughputMbps(measuredBytes, measureElapsed);
             reportProgress(
               mbps: mbps,
               elapsedMicros: measureElapsed,
               stage: 'measure',
             );
-          } else {
-            reportProgress(
-              elapsedMicros: elapsedMicros,
-              stage: warmup ? 'warmup' : 'measure',
-            );
           }
-        },
-      );
-    }
-
-    try {
-      await Future.wait([
-        completer.future,
-        if (uploader != null) uploader,
-      ]);
-
-      final elapsedMicros = max(stopwatch.elapsedMicroseconds - warmupMicros, 1);
-      // Upload client-side byte counting is inflated by WebSocket send buffering;
-      // trust the ndt7 server's MeanThroughputMbps when available.
-      final clientMbps = request.direction == _MeasurementDirection.upload
-          ? (reportedMetrics.meanThroughputMbps ??
-              computeThroughputMbps(measuredBytes, elapsedMicros))
-          : computeThroughputMbps(measuredBytes, elapsedMicros);
-
-      sendPort.send({
-        'type': 'result',
-        'direction': request.direction.name,
-        'clientMbps': clientMbps,
-        'serverMbps': reportedMetrics.meanThroughputMbps,
-        'minRttMs': reportedMetrics.minRttMs,
-        'lossRate': reportedMetrics.lossRate,
-        'durationMicros': elapsedMicros,
-      });
-    } catch (error) {
-      final descriptor = _classifyError(error);
-      sendPort.send({
-        'type': 'error',
-        'code': descriptor.code,
-        'message': descriptor.message,
-      });
-    } finally {
-      await subscription?.cancel();
-      try {
-        await channel?.sink.close(websocket_status.normalClosure);
-      } catch (_) {
-        // ignore close errors
+        } else {
+          reportProgress(elapsedMicros: elapsed, stage: 'warmup');
+        }
+      } else if (message is String) {
+        try {
+          final decoded = jsonDecode(message);
+          if (decoded is Map<String, dynamic>) {
+            final nextMetrics = Ndt7ServerMetrics.fromJson(decoded);
+            reportedMetrics = reportedMetrics.merge(nextMetrics);
+          }
+        } catch (_) {
+          // Ignore malformed JSON
+        }
       }
+    },
+    onDone: () {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    },
+    onError: (Object error, StackTrace stackTrace) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
+    },
+    cancelOnError: true,
+  );
+
+  Future<void>? uploader;
+  if (request.direction == _MeasurementDirection.upload) {
+    uploader = _pumpUpload(
+      channel,
+      stopwatch,
+      warmupMicros,
+      totalMicros,
+      onProgress: (bytes, elapsedMicros, warmup) {
+        if (!warmup) {
+          measuredBytes += bytes;
+        }
+        final measureElapsed = max(elapsedMicros - warmupMicros, 1);
+        if (!warmup && measureElapsed >= 500000) {
+          final mbps =
+              computeThroughputMbps(measuredBytes, max(measureElapsed, 1));
+          reportProgress(
+            mbps: mbps,
+            elapsedMicros: measureElapsed,
+            stage: 'measure',
+          );
+        } else {
+          reportProgress(
+            elapsedMicros: elapsedMicros,
+            stage: warmup ? 'warmup' : 'measure',
+          );
+        }
+      },
+    );
+  }
+
+  try {
+    await Future.wait([
+      completer.future,
+      if (uploader != null) uploader,
+    ]);
+
+    final elapsedMicros = max(stopwatch.elapsedMicroseconds - warmupMicros, 1);
+    // Upload client-side byte counting is inflated by WebSocket send buffering;
+    // trust the ndt7 server's MeanThroughputMbps when available.
+    final clientMbps = request.direction == _MeasurementDirection.upload
+        ? (reportedMetrics.meanThroughputMbps ??
+            computeThroughputMbps(measuredBytes, elapsedMicros))
+        : computeThroughputMbps(measuredBytes, elapsedMicros);
+
+    sendPort.send({
+      'type': 'result',
+      'direction': request.direction.name,
+      'clientMbps': clientMbps,
+      'serverMbps': reportedMetrics.meanThroughputMbps,
+      'minRttMs': reportedMetrics.minRttMs,
+      'lossRate': reportedMetrics.lossRate,
+      'durationMicros': elapsedMicros,
+    });
+  } catch (error) {
+    final descriptor = _classifyError(error);
+    sendPort.send({
+      'type': 'error',
+      'code': descriptor.code,
+      'message': descriptor.message,
+    });
+  } finally {
+    await subscription?.cancel();
+    try {
+      await channel?.sink.close(websocket_status.normalClosure);
+    } catch (_) {
+      // ignore close errors
     }
+  }
 }
 
 Future<void> _pumpUpload(
   WebSocketChannel channel,
   Stopwatch stopwatch,
   int warmupMicros,
-  int totalMicros,
-  {required void Function(int bytes, int elapsedMicros, bool warmup)
-          onProgress,}
-) async {
+  int totalMicros, {
+  required void Function(int bytes, int elapsedMicros, bool warmup) onProgress,
+}) async {
   final random = Random();
   final chunk = Uint8List(_uploadChunkSize);
   for (var i = 0; i < chunk.length; i++) {
@@ -571,7 +568,10 @@ Future<void> _pumpUpload(
   if (error is HandshakeException ||
       (error is WebSocketChannelException &&
           error.inner is HandshakeException)) {
-    return (code: 'tls_failure', message: 'TLS handshake with ndt7 server failed');
+    return (
+      code: 'tls_failure',
+      message: 'TLS handshake with ndt7 server failed'
+    );
   }
   if (error is WebSocketChannelException) {
     final inner = error.inner;

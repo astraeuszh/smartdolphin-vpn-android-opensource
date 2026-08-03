@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../core/session/session_limits.dart';
 import '../../../l10n/app_localizations.dart';
@@ -21,8 +22,9 @@ class SessionCountdown extends ConsumerStatefulWidget {
 }
 
 class _SessionCountdownState extends ConsumerState<SessionCountdown>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   Timer? _timer;
+  late final Ticker _frameTicker;
   Duration _display = Duration.zero;
   int _anchorElapsed = 0;
   DateTime _wallAnchor = DateTime.now();
@@ -32,6 +34,7 @@ class _SessionCountdownState extends ConsumerState<SessionCountdown>
   @override
   void initState() {
     super.initState();
+    _frameTicker = createTicker((_) => _tickDisplay());
     WidgetsBinding.instance.addObserver(this);
     _foreground = WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
@@ -40,6 +43,7 @@ class _SessionCountdownState extends ConsumerState<SessionCountdown>
   @override
   void dispose() {
     _timer?.cancel();
+    _frameTicker.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -50,6 +54,7 @@ class _SessionCountdownState extends ConsumerState<SessionCountdown>
     if (!_foreground) {
       _timer?.cancel();
       _timer = null;
+      _frameTicker.stop();
       return;
     }
     final start = _startElapsedMs;
@@ -71,19 +76,25 @@ class _SessionCountdownState extends ConsumerState<SessionCountdown>
     _startElapsedMs = startElapsedMs;
     _tickDisplay();
     _timer?.cancel();
+    _frameTicker.stop();
     if (_foreground) {
-      // Precise mode displays milliseconds but does not need game-loop cadence;
-      // four updates per second remains readable and sharply reduces wakeups.
-      final tick = precise
-          ? const Duration(milliseconds: 250)
-          : const Duration(seconds: 1);
-      _timer = Timer.periodic(tick, (_) => _tickDisplay());
+      if (precise) {
+        // The value comes from the monotonic clock. Rendering follows the
+        // display frame rate, which is the smoothest cadence a phone can show.
+        _frameTicker.start();
+      } else {
+        _timer = Timer.periodic(
+          const Duration(seconds: 1),
+          (_) => _tickDisplay(),
+        );
+      }
     }
   }
 
   void _stop() {
     _timer?.cancel();
     _timer = null;
+    _frameTicker.stop();
     _startElapsedMs = null;
     if (_display != Duration.zero) {
       setState(() => _display = Duration.zero);

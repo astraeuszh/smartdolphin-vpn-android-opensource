@@ -75,4 +75,3 @@ class VpnStatus {
     return 'VpnStatus(duration: $duration, byteIn: $byteIn, byteOut: $byteOut)';
   }
 }
-

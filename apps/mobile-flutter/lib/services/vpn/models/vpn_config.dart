@@ -26,4 +26,3 @@ class VpnConfig {
     return 'VpnConfig(country: $country, hasConfig: ${config.isNotEmpty})';
   }
 }
-

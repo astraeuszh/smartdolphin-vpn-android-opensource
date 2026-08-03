@@ -21,6 +21,7 @@ import '../../../services/time/session_clock.dart';
 import '../../../services/time/session_clock_provider.dart';
 import '../../../services/remote/console_traffic.dart';
 import '../../../services/remote/console_audit.dart';
+import '../../../services/remote/console_connection_metrics.dart';
 import '../../../services/logging/error_reporter.dart';
 import '../../../services/logging/vpn_logger.dart';
 import '../../../services/vpn/clash_api_client.dart';
@@ -59,7 +60,8 @@ const _dataLimitMessage =
     'Monthly data quota is exhausted. Try again next month or contact an administrator.';
 const _violationThrottleMessage =
     'This account has traffic limits due to community rule violations. Please follow the community rules.';
-const _connectionTimeoutDuration = Duration(seconds: 30);
+const _connectionWarningDuration = Duration(milliseconds: 1500);
+const _connectionTimeoutDuration = Duration(seconds: 5);
 
 class SessionController extends StateNotifier<SessionState> {
   SessionController(this._ref)
@@ -92,9 +94,12 @@ class SessionController extends StateNotifier<SessionState> {
   final SettingsController _settings;
   final SessionNotificationService _notificationService;
   final VpnLogger _vpnLogger;
+  final ConsoleConnectionMetrics _connectionMetrics =
+      ConsoleConnectionMetrics();
 
   Timer? _ticker;
   Timer? _connectionTimeoutTimer;
+  Timer? _connectionWarningTimer;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   StreamSubscription<String>? _intentSubscription;
   StreamSubscription<VPNStage>? _stageSubscription;
@@ -116,6 +121,7 @@ class SessionController extends StateNotifier<SessionState> {
   int _tunnelHealthFailures = 0;
   bool _tunnelHealthReconnectBusy = false;
   bool _reconnectInProgress = false;
+  bool _readinessCheckInProgress = false;
 
   static int _parseBytes(dynamic value) {
     if (value == null) return 0;
@@ -141,6 +147,7 @@ class SessionController extends StateNotifier<SessionState> {
       status: SessionStatus.error,
       errorMessage: err.message,
       errorCode: code,
+      connectionWarning: false,
     );
     if (wasConnected || wasConnecting || _pendingConnection != null) {
       unawaited(_reportAudit(
@@ -157,26 +164,50 @@ class SessionController extends StateNotifier<SessionState> {
 
   void _startConnectionTimeout() {
     _cancelConnectionTimeout();
-    _connectionTimeoutTimer = Timer(_connectionTimeoutDuration, () {
-      if (state.status != SessionStatus.connecting ||
-          _pendingConnection == null) {
-        return;
-      }
-      _log(
-          'Connection timed out after ${_connectionTimeoutDuration.inSeconds}s');
-      _stopConnectivityWatch();
-      final pending = _pendingConnection;
-      _pendingConnection = null;
-      _setError(ecNodeConnTimeout,
-          details: 'timeout ${_connectionTimeoutDuration.inSeconds}s');
-      unawaited(_notificationService.clear());
-      if (pending != null) {
-        unawaited(_vpnPort.disconnect());
+    _connectionWarningTimer = Timer(_connectionWarningDuration, () {
+      if (state.status == SessionStatus.connecting &&
+          _pendingConnection != null) {
+        state = state.copyWith(
+          connectionWarning: true,
+          connectionElapsedMs: _connectionWarningDuration.inMilliseconds,
+        );
+        _log('Connection exceeded 1500ms target');
       }
     });
+    _connectionTimeoutTimer = Timer(
+      _connectionTimeoutDuration,
+      () => unawaited(_handleConnectionTimeout()),
+    );
+  }
+
+  Future<void> _handleConnectionTimeout() async {
+    if (state.status != SessionStatus.connecting ||
+        _pendingConnection == null) {
+      return;
+    }
+    final pending = _pendingConnection!;
+    final nowElapsed = await _clock.elapsedRealtime();
+    final totalMs =
+        (nowElapsed - pending.startElapsedMs).clamp(0, 60000).toInt();
+    _log('Connection timed out after ${totalMs}ms');
+    _stopConnectivityWatch();
+    _pendingConnection = null;
+    _readinessCheckInProgress = false;
+    state = state.copyWith(connectionElapsedMs: totalMs);
+    _setError(ecNodeConnTimeout, details: 'timeout ${totalMs}ms');
+    unawaited(_reportConnectionMetric(
+      pending,
+      outcome: 'timeout',
+      totalMs: totalMs,
+      errorStage: 'readiness_timeout',
+    ));
+    unawaited(_notificationService.clear());
+    unawaited(_vpnPort.disconnect());
   }
 
   void _cancelConnectionTimeout() {
+    _connectionWarningTimer?.cancel();
+    _connectionWarningTimer = null;
     _connectionTimeoutTimer?.cancel();
     _connectionTimeoutTimer = null;
   }
@@ -220,13 +251,21 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   void _abortConnectionForNetworkLost() {
-    if (state.status != SessionStatus.connecting || _pendingConnection == null)
+    if (state.status != SessionStatus.connecting ||
+        _pendingConnection == null) {
       return;
+    }
     _cancelConnectionTimeout();
     _stopConnectivityWatch();
-    final pending = _pendingConnection;
+    final pending = _pendingConnection!;
     _pendingConnection = null;
     unawaited(_notificationService.clear());
+    unawaited(_reportConnectionMetric(
+      pending,
+      outcome: 'error',
+      totalMs: state.connectionElapsedMs ?? 0,
+      errorStage: 'network_lost',
+    ));
     _setError(ecLocalNetDisconnected, details: 'network lost');
     unawaited(_vpnPort.disconnect());
   }
@@ -288,7 +327,7 @@ class SessionController extends StateNotifier<SessionState> {
       return;
     }
     if (stage == VPNStage.connected) {
-      await _completePendingConnection();
+      await _verifyPendingConnectionReady();
       return;
     }
 
@@ -309,9 +348,17 @@ class SessionController extends StateNotifier<SessionState> {
       _stopConnectivityWatch();
       final pending = _pendingConnection;
       if (pending != null) {
+        final failedAt = await _clock.elapsedRealtime();
         _pendingConnection = null;
+        _readinessCheckInProgress = false;
         await _notificationService.clear();
         final code = _errorCodeForStage(stage);
+        unawaited(_reportConnectionMetric(
+          pending,
+          outcome: 'error',
+          totalMs: failedAt - pending.startElapsedMs,
+          errorStage: 'native_${stage.name}',
+        ));
         _setError(code, details: 'server=${pending.server.name}');
         return;
       }
@@ -359,33 +406,165 @@ class SessionController extends StateNotifier<SessionState> {
     }
   }
 
-  Future<void> _completePendingConnection() async {
-    _cancelConnectionTimeout();
-    _stopConnectivityWatch();
+  Future<void> _verifyPendingConnectionReady() async {
     final pending = _pendingConnection;
-    if (pending == null) {
+    if (pending == null || _readinessCheckInProgress) return;
+    _readinessCheckInProgress = true;
+    try {
+      final nativeMetrics = await _vpnPort.getConnectionMetrics();
+      while (_pendingConnection == pending &&
+          state.status == SessionStatus.connecting) {
+        final nowElapsed = await _clock.elapsedRealtime();
+        final elapsedMs = nowElapsed - pending.startElapsedMs;
+        final remainingMs =
+            _connectionTimeoutDuration.inMilliseconds - elapsedMs;
+        if (remainingMs <= 0) return;
+        try {
+          // Android validates a VPN only after real traffic succeeds through
+          // that network. This also works for sing-box WireGuard endpoints,
+          // which are not exposed as Clash outbound groups and therefore
+          // cannot be checked through /proxies/<tag>/delay.
+          if (await _vpnPort.isNetworkValidated()) {
+            final readyElapsed = await _clock.elapsedRealtime();
+            final totalMs = readyElapsed - pending.startElapsedMs;
+            final expectedEgressIp = _expectedEgressIp(pending.server);
+            _log(
+              'Tunnel validated by Android: ${pending.protocol} '
+              '${pending.server.name} egress=$expectedEgressIp',
+            );
+            await _completePendingConnection(
+              pending,
+              publicIp: expectedEgressIp,
+              totalMs: totalMs,
+              tunMs: nativeMetrics['tun_ms'],
+              coreMs: nativeMetrics['core_ms'],
+            );
+            return;
+          }
+
+          // The core's Clash delay endpoint executes an HTTP request through
+          // the selected outbound. It is independent of public IP lookup
+          // providers, which can be blocked or slow on otherwise healthy
+          // mobile routes. A positive response therefore proves the TUN,
+          // DNS and selected proxy path are usable.
+          final proxyDelay = await ClashApiClient.proxyDelayMs(
+            timeoutMs: remainingMs.clamp(200, 1200).toInt(),
+          );
+          if (proxyDelay != null) {
+            final readyElapsed = await _clock.elapsedRealtime();
+            final totalMs = readyElapsed - pending.startElapsedMs;
+            final expectedEgressIp = _expectedEgressIp(pending.server);
+            _log(
+              'Tunnel verified through proxy: ${pending.protocol} '
+              '${pending.server.name} delay=${proxyDelay}ms '
+              'egress=$expectedEgressIp',
+            );
+            await _completePendingConnection(
+              pending,
+              publicIp: expectedEgressIp,
+              totalMs: totalMs,
+              tunMs: nativeMetrics['tun_ms'],
+              coreMs: nativeMetrics['core_ms'],
+              probeMs: proxyDelay,
+            );
+            return;
+          }
+
+          final probe = await _connectionMetrics.probe(
+            timeout: Duration(
+              milliseconds: remainingMs.clamp(200, 1800).toInt(),
+            ),
+          );
+          final physicalIp = pending.initialIp?.trim();
+          final changed = physicalIp == null ||
+              physicalIp.isEmpty ||
+              probe.ip != physicalIp;
+          // A node's tunnel egress is not required to equal its inbound
+          // address (NAT, anycast and provider routing can all differ). The
+          // reliable client-side proof is that DNS/HTTPS works through the
+          // tunnel and the observed public address changed from pre-connect.
+          if (changed) {
+            final readyElapsed = await _clock.elapsedRealtime();
+            final totalMs = readyElapsed - pending.startElapsedMs;
+            await _completePendingConnection(
+              pending,
+              publicIp: probe.ip,
+              totalMs: totalMs,
+              tunMs: nativeMetrics['tun_ms'],
+              coreMs: nativeMetrics['core_ms'],
+              probeMs: probe.probeMs,
+            );
+            return;
+          }
+          _log(
+            'Readiness IP unchanged: actual=${probe.ip} physical=$physicalIp',
+          );
+        } catch (error) {
+          _log('Tunnel readiness probe pending: $error');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+      }
+    } finally {
+      _readinessCheckInProgress = false;
+    }
+  }
+
+  String _expectedEgressIp(Server server) {
+    final configuredIp = server.ip?.trim();
+    if (configuredIp != null && configuredIp.isNotEmpty) {
+      return configuredIp;
+    }
+    return nodeForHostOrCountry(server.hostName, server.countryCode).host;
+  }
+
+  Future<void> _completePendingConnection(
+    _PendingConnection pending, {
+    required String publicIp,
+    required int totalMs,
+    int? tunMs,
+    int? coreMs,
+    int? probeMs,
+  }) async {
+    if (_pendingConnection != pending ||
+        state.status != SessionStatus.connecting) {
       return;
     }
+    _cancelConnectionTimeout();
+    _stopConnectivityWatch();
     _pendingConnection = null;
     final server = pending.server;
     final start = DateTime.now().toUtc();
-    final publicIp = pending.initialIp;
+    final connectedElapsed = await _clock.elapsedRealtime();
     final meta = SessionMeta(
       serverId: server.id,
       serverName: server.name,
       countryCode: server.countryCode,
-      startElapsedMs: pending.startElapsedMs,
+      startElapsedMs: connectedElapsed,
       durationMs: sessionDuration.inMilliseconds,
       publicIp: publicIp,
     );
     _activeMeta = meta;
     _currentServer = server;
-    unawaited(_reportAudit('vpn_connect', _auditNodeMetadata(server)));
+    unawaited(_reportAudit('vpn_connect', {
+      ..._auditNodeMetadata(server),
+      'connect_ms': totalMs,
+    }));
+    unawaited(_reportConnectionMetric(
+      pending,
+      outcome: 'ready',
+      totalMs: totalMs,
+      tunMs: tunMs,
+      coreMs: coreMs,
+      probeMs: probeMs,
+      dnsOk: true,
+      ipv4Ok: publicIp.contains('.'),
+      ipv6Ok: publicIp.contains(':'),
+    ));
     state = state.copyWith(
       status: SessionStatus.connected,
       start: start,
       duration: sessionDuration,
-      startElapsedMs: pending.startElapsedMs,
+      startElapsedMs: connectedElapsed,
       serverId: server.id,
       serverName: server.name,
       countryCode: server.countryCode,
@@ -394,6 +573,8 @@ class SessionController extends StateNotifier<SessionState> {
       sessionLocked: true,
       meta: meta,
       errorMessage: null,
+      connectionWarning: false,
+      connectionElapsedMs: totalMs,
     );
     await _persistMeta(meta);
     await _ref.read(serverCatalogProvider.notifier).rememberSelection(server);
@@ -412,7 +593,7 @@ class SessionController extends StateNotifier<SessionState> {
     ));
 
     final remaining = await _clock.remaining(
-      startElapsedMs: pending.startElapsedMs,
+      startElapsedMs: connectedElapsed,
       duration: sessionDuration,
     );
     await _notificationService.showConnected(
@@ -422,28 +603,55 @@ class SessionController extends StateNotifier<SessionState> {
     );
     _startTicker();
     _startConnectivityWatch();
-    // The egress IP is only known AFTER the tunnel is up, so refresh it through
-    // the VPN (the pre-connect IP captured above is the local one).
-    unawaited(_refreshPublicIpAfterConnect());
+    _ref.invalidate(ipInfoProvider);
   }
 
-  /// Fetches the public IP through the live tunnel and updates the dashboard so
-  /// it shows the VPN exit IP (not the local pre-connect IP).
-  Future<void> _refreshPublicIpAfterConnect() async {
-    await Future<void>.delayed(const Duration(seconds: 2));
-    if (state.status != SessionStatus.connected) return;
+  Future<void> _reportConnectionMetric(
+    _PendingConnection pending, {
+    required String outcome,
+    required int totalMs,
+    int? tunMs,
+    int? coreMs,
+    int? probeMs,
+    bool dnsOk = false,
+    bool? ipv4Ok,
+    bool? ipv6Ok,
+    String errorStage = '',
+  }) async {
+    final session = _ref.read(authControllerProvider).session;
+    if (session == null) return;
+    final node = nodeForHostOrCountry(
+      pending.server.ip,
+      pending.server.countryName,
+    );
     try {
-      final info = await fetchIpInfo();
-      if (state.status != SessionStatus.connected) return;
-      final ip = info.ip;
-      if (ip != null && ip.isNotEmpty) {
-        _activeMeta = _activeMeta?.copyWith(publicIp: ip);
-        state = state.copyWith(publicIp: ip, meta: _activeMeta);
-      }
-      _ref.invalidate(ipInfoProvider);
-    } catch (_) {
-      // best-effort; dashboard keeps the last known IP
+      await _connectionMetrics.report(
+        session,
+        nodeId: node.flag,
+        protocol: pending.protocol,
+        outcome: outcome,
+        totalMs: totalMs,
+        tunMs: tunMs,
+        coreMs: coreMs,
+        probeMs: probeMs,
+        dnsOk: dnsOk,
+        ipv4Ok: ipv4Ok,
+        ipv6Ok: ipv6Ok,
+        errorStage: errorStage,
+      );
+    } catch (error) {
+      _log('Connection metric report deferred: $error');
     }
+  }
+
+  Future<String?> _capturePreTunnelPublicIp() async {
+    // Connection readiness is verified against the selected node's known
+    // egress, so a cache miss must not add a physical-network HTTP lookup to
+    // the critical path.
+    final cachedIp = _ref.read(ipInfoProvider).valueOrNull?.ip?.trim() ??
+        _ref.read(speedTestControllerProvider).ip?.trim();
+    if (cachedIp != null && cachedIp.isNotEmpty) return cachedIp;
+    return null;
   }
 
   Future<void> _handleRemoteDisconnect() async {
@@ -503,7 +711,21 @@ class SessionController extends StateNotifier<SessionState> {
 
   void _onSpeedUpdate(SpeedTestState? previous, SpeedTestState next) {
     final ip = next.ip;
-    if (state.status != SessionStatus.connected || ip == null || ip.isEmpty) {
+    final sessionStart = state.start;
+    // `speedtest_last` is restored when the app starts. That historical result
+    // belongs to the physical network and must never overwrite a live tunnel's
+    // verified exit IP. Only a completed VPN test started in this session may
+    // update the connection card.
+    final isCurrentVpnResult = next.isVpnTest &&
+        next.status == SpeedTestStatus.complete &&
+        next.lastRun != null &&
+        sessionStart != null &&
+        !next.lastRun!.isBefore(sessionStart);
+    if (state.status != SessionStatus.connected ||
+        !isCurrentVpnResult ||
+        ip == null ||
+        ip.isEmpty ||
+        !ip.contains('.')) {
       return;
     }
     if (state.publicIp == ip) {
@@ -644,6 +866,8 @@ class SessionController extends StateNotifier<SessionState> {
     state = state.copyWith(
       status: SessionStatus.connecting,
       errorMessage: null,
+      connectionWarning: false,
+      connectionElapsedMs: null,
     );
     await Future<void>.delayed(
         Duration.zero); // yield so UI paints orange immediately
@@ -675,6 +899,10 @@ class SessionController extends StateNotifier<SessionState> {
       _setError(ecVpnPermissionDenied, details: 'VPN permission required');
       return;
     }
+    // Capture the physical-network exit after any previous tunnel is fully
+    // stopped. This prevents a same-node reconnect from comparing against the
+    // cached exit IP of the old VPN session.
+    final preTunnelIpFuture = _capturePreTunnelPublicIp();
     _log('Connecting to VPN ${server.name} (${server.countryCode})');
 
     try {
@@ -701,6 +929,10 @@ class SessionController extends StateNotifier<SessionState> {
       _vpnPort.setRoutingConfig(routing);
       final coreProto = _ref.read(preferencesControllerProvider).coreProtocol;
       _vpnPort.setProtocol(sdProtocolFromName(coreProto));
+      // Managed nodes use the stable, bundled protocol credentials from
+      // node_table.dart. Do not block connection startup on a credential API
+      // request; imported profiles remain independent of this path.
+      _vpnPort.setTunnelCredential(null);
       final node = nodeForHostOrCountry(server.ip, server.countryName);
       _log(
           'Dolphin-Core: protocol=$coreProto node=${node.tag} host=${node.host}');
@@ -709,7 +941,7 @@ class SessionController extends StateNotifier<SessionState> {
         settingsState.splitTunnel.mode,
         settingsState.splitTunnel.selectedPackages.toList(),
       );
-      final initialIp = _ref.read(speedTestControllerProvider).ip;
+      final initialIp = await preTunnelIpFuture;
       final startElapsed = await _clock.elapsedRealtime();
 
       // Prefer the bundled SmartDolphin node config over cached catalog data.
@@ -752,10 +984,11 @@ class SessionController extends StateNotifier<SessionState> {
         server: server,
         startElapsedMs: startElapsed,
         initialIp: initialIp,
+        protocol: coreProto,
       );
-      await _notificationService.showConnecting(server);
       _startConnectionTimeout();
       _startConnectivityWatch();
+      unawaited(_notificationService.showConnecting(server));
 
       _log(
           'Attempting to connect to VPN server: ${vpnServer.hostName}, IP: ${vpnServer.ip}');
@@ -764,10 +997,20 @@ class SessionController extends StateNotifier<SessionState> {
       final connected = await _vpnPort.connect(vpnServer);
       _log('Dolphin-Core connect() returned $connected');
       if (!connected) {
+        final failedAt = await _clock.elapsedRealtime();
+        final pending = _pendingConnection;
         _cancelConnectionTimeout();
         _stopConnectivityWatch();
         _pendingConnection = null;
         await _notificationService.clear();
+        if (pending != null) {
+          unawaited(_reportConnectionMetric(
+            pending,
+            outcome: 'error',
+            totalMs: failedAt - pending.startElapsedMs,
+            errorStage: 'core_start',
+          ));
+        }
         _setError(ecCoreStartFailed, details: 'connect() returned false');
         return;
       }
@@ -977,8 +1220,8 @@ class SessionController extends StateNotifier<SessionState> {
     _bytesSinceTrafficReport = 0;
     _tickCounter = 0;
     // Session expiry and quota accounting do not need UI-frame cadence. A
-    // 30-second batch avoids repeatedly waking Flutter + libbox in background.
-    _ticker = Timer.periodic(const Duration(seconds: 30), (_) async {
+    // one-minute batch keeps the background isolate and storage mostly idle.
+    _ticker = Timer.periodic(const Duration(minutes: 1), (_) async {
       _tickCounter += 1;
       if (state.status != SessionStatus.connected ||
           state.startElapsedMs == null ||
@@ -1017,13 +1260,7 @@ class SessionController extends StateNotifier<SessionState> {
         _lastTickRx = rx;
         _lastTickTx = tx;
       } catch (_) {}
-      // The VPN foreground service keeps this lightweight heartbeat alive even
-      // while the Flutter UI is backgrounded. Refresh the account queue every
-      // 30 seconds so administrator notifications reach Android promptly.
-      unawaited(
-        _ref.read(authControllerProvider.notifier).refreshSession(force: true),
-      );
-      if (_tickCounter % 10 == 0 && _bytesSinceTrafficReport > 0) {
+      if (_tickCounter % 5 == 0 && _bytesSinceTrafficReport > 0) {
         final session = _ref.read(authControllerProvider).session;
         if (session != null) {
           final reportBytes = _bytesSinceTrafficReport;
@@ -1038,7 +1275,7 @@ class SessionController extends StateNotifier<SessionState> {
           }());
         }
       }
-      if (_tickCounter % 10 == 0) {
+      if (_tickCounter % 5 == 0) {
         final server = _currentServer;
         if (server != null) {
           final stats = await _vpnPort.getTunnelStats();
@@ -1073,7 +1310,7 @@ class SessionController extends StateNotifier<SessionState> {
         );
       }
       // Every ~5 minutes, check whether the local core API is still alive.
-      if (_tickCounter % 10 == 0) {
+      if (_tickCounter % 5 == 0) {
         unawaited(_evaluateTunnelHealth());
       }
     });
@@ -1382,9 +1619,11 @@ class _PendingConnection {
     required this.server,
     required this.startElapsedMs,
     required this.initialIp,
+    required this.protocol,
   });
 
   final Server server;
   final int startElapsedMs;
   final String? initialIp;
+  final String protocol;
 }

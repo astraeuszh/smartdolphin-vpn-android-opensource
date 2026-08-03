@@ -52,7 +52,9 @@ class ServerPreferencesRepository {
       final result = <String, ServerSpeedCache>{};
       for (final e in map.entries) {
         final val = e.value;
-        final cached = val is Map ? ServerSpeedCache.fromJson(Map<String, dynamic>.from(val)) : null;
+        final cached = val is Map
+            ? ServerSpeedCache.fromJson(Map<String, dynamic>.from(val))
+            : null;
         if (cached != null) result[e.key.toString()] = cached;
       }
       return result;
@@ -61,21 +63,23 @@ class ServerPreferencesRepository {
     }
   }
 
-  Future<void> saveServerSpeedCache(String serverId, ServerSpeedCache cache) async {
+  Future<void> saveServerSpeedCache(
+      String serverId, ServerSpeedCache cache) async {
     final current = loadServerSpeedCache();
     current[serverId] = cache;
-    await _prefs.setString(_speedCacheKey, json.encode(
-      current.map((k, v) => MapEntry(k, v.toJson())),
-    ));
+    await _prefs.setString(
+        _speedCacheKey,
+        json.encode(
+          current.map((k, v) => MapEntry(k, v.toJson())),
+        ));
   }
 
   Set<String> loadFavorites() {
     final raw = _prefs.getString(_favoritesKey);
     if (raw == null) return <String>{};
     try {
-      final decoded = (json.decode(raw) as List<dynamic>)
-          .map((e) => e as String)
-          .toSet();
+      final decoded =
+          (json.decode(raw) as List<dynamic>).map((e) => e as String).toSet();
       return decoded;
     } catch (_) {
       return <String>{};

@@ -24,12 +24,17 @@ class DolphinCorePort implements VpnPort {
   DolphinCorePort();
 
   static const MethodChannel _control = MethodChannel('smartdolphin/core');
-  static const EventChannel _stageEvents = EventChannel('smartdolphin/core/stage');
-  static const EventChannel _statusEvents = EventChannel('smartdolphin/core/status');
+  static const EventChannel _stageEvents =
+      EventChannel('smartdolphin/core/stage');
+  static const EventChannel _statusEvents =
+      EventChannel('smartdolphin/core/status');
 
-  final StreamController<String> _intentActionsController = StreamController<String>.broadcast();
-  final StreamController<VPNStage> _stageController = StreamController<VPNStage>.broadcast();
-  final StreamController<model.VpnStatus> _statusController = StreamController<model.VpnStatus>.broadcast();
+  final StreamController<String> _intentActionsController =
+      StreamController<String>.broadcast();
+  final StreamController<VPNStage> _stageController =
+      StreamController<VPNStage>.broadcast();
+  final StreamController<model.VpnStatus> _statusController =
+      StreamController<model.VpnStatus>.broadcast();
 
   StreamSubscription<dynamic>? _stageSub;
   StreamSubscription<dynamic>? _statusSub;
@@ -50,6 +55,7 @@ class DolphinCorePort implements VpnPort {
   String _dns = '8.8.8.8';
   bool _disableIpv6 = true;
   int _mtu = 1420;
+  SdTunnelCredential? _tunnelCredential;
 
   @override
   bool get isSupported => !kIsWeb;
@@ -64,7 +70,19 @@ class DolphinCorePort implements VpnPort {
   Stream<model.VpnStatus> get statusStream => _statusController.stream;
 
   @override
-  Future<bool> isConnected() async => _isConnected;
+  Future<bool> isConnected() async {
+    if (kIsWeb) return false;
+    try {
+      final connected = await _control.invokeMethod<bool>('isConnected');
+      if (connected != null) {
+        _isConnected = connected;
+        return connected;
+      }
+    } on PlatformException catch (error) {
+      debugPrint('[DolphinCorePort] native state unavailable: $error');
+    }
+    return _isConnected;
+  }
 
   Future<void> initialize() async {
     if (_isInitialized || kIsWeb) return;
@@ -115,14 +133,9 @@ class DolphinCorePort implements VpnPort {
         blockLocalDns: _blockLocalDns,
         includePackages: _includePackages,
         excludePackages: _excludePackages,
+        tunnelCredential: _tunnelCredential,
       );
       _stageController.add(VPNStage.connecting);
-      // Always stop any lingering native box before starting fresh (prevents zombie
-      // tun after long background / reconnect without full teardown).
-      try {
-        await _control.invokeMethod<void>('stop');
-      } catch (_) {}
-      await Future<void>.delayed(const Duration(milliseconds: 800));
       final ok = await _control.invokeMethod<bool>('start', {
         'config': config,
         'node': node.tag,
@@ -137,6 +150,27 @@ class DolphinCorePort implements VpnPort {
       debugPrint('[DolphinCorePort] connect error: $e\n$st');
       _isConnected = false;
       _stageController.add(VPNStage.error);
+      return false;
+    }
+  }
+
+  Future<Map<String, int>> getConnectionMetrics() async {
+    if (kIsWeb) return const {};
+    try {
+      final raw =
+          await _control.invokeMapMethod<String, dynamic>('connectionMetrics');
+      if (raw == null) return const {};
+      return raw.map((key, value) => MapEntry(key, (value as num).toInt()));
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  Future<bool> isNetworkValidated() async {
+    if (kIsWeb) return false;
+    try {
+      return await _control.invokeMethod<bool>('isNetworkValidated') ?? false;
+    } catch (_) {
       return false;
     }
   }
@@ -177,6 +211,10 @@ class DolphinCorePort implements VpnPort {
   /// Reality / Hysteria2 / WireGuard. Defaults to Reality (most reliable).
   void setProtocol(SdProtocol protocol) => _protocol = protocol;
 
+  void setTunnelCredential(SdTunnelCredential? credential) {
+    _tunnelCredential = credential;
+  }
+
   void setRoutingConfig(RoutingConfig config) {
     // global → all traffic through proxy; auto → built-in CN/Baidu direct split.
     _globalMode = config.mode == TrafficMode.global;
@@ -211,7 +249,9 @@ class DolphinCorePort implements VpnPort {
   }
 
   void setDnsServers(List<String> servers) {
-    final first = servers.map((s) => s.trim()).firstWhere((s) => s.isNotEmpty, orElse: () => '');
+    final first = servers
+        .map((s) => s.trim())
+        .firstWhere((s) => s.isNotEmpty, orElse: () => '');
     if (first.isNotEmpty) _dns = first;
   }
 

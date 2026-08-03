@@ -35,10 +35,13 @@ class RuleDatabase extends Equatable {
 
   final RuleSource source;
   final String customRules;
+
   /// SHA256 hash from last successful SDRL compile (`sha256:…`).
   final String compiledSourceHash;
+
   /// User-chosen file name (without .sdrl). Empty = never saved to library.
   final String savedRuleName;
+
   /// Rule changed while VPN connected — reconnect to apply.
   final bool pendingReconnect;
 
@@ -86,6 +89,11 @@ class RuleDatabase extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [source, customRules, compiledSourceHash, savedRuleName, pendingReconnect];
+  List<Object?> get props => [
+        source,
+        customRules,
+        compiledSourceHash,
+        savedRuleName,
+        pendingReconnect
+      ];
 }

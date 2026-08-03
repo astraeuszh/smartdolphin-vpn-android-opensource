@@ -26,7 +26,8 @@ class DataUsageCard extends ConsumerWidget {
     final limitGb = usage.monthlyLimitBytes != null
         ? usage.monthlyLimitBytes! / (1024 * 1024 * 1024)
         : null;
-    final progress = usage.hasLimit ? usage.utilization.clamp(0, 1).toDouble() : null;
+    final progress =
+        usage.hasLimit ? usage.utilization.clamp(0, 1).toDouble() : null;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -60,7 +61,8 @@ class DataUsageCard extends ConsumerWidget {
                   color: theme.colorScheme.primary.withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.data_usage_rounded, color: theme.colorScheme.primary),
+                child: Icon(Icons.data_usage_rounded,
+                    color: theme.colorScheme.primary),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -69,7 +71,8 @@ class DataUsageCard extends ConsumerWidget {
                   children: [
                     Text(
                       l10n.settingsUsage,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -105,7 +108,8 @@ class DataUsageCard extends ConsumerWidget {
             limitGb != null
                 ? '${usedGb.toStringAsFixed(2)} GB / ${limitGb.toStringAsFixed(2)} GB'
                 : '${usedGb.toStringAsFixed(2)} GB',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 16),
           Wrap(

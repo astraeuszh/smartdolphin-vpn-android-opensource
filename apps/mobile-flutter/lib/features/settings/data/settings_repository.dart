@@ -23,8 +23,10 @@ class SettingsRepository {
   static const _batterySaverKey = 'settings_battery_saver';
   static const _networkQualityKey = 'settings_network_quality';
   static const _preciseSessionTimerKey = 'settings_precise_session_timer';
+  static const _darkModeKey = 'settings_dark_mode';
   static const _advancedKey = 'settings_advanced';
   static const _appearanceAccentKey = 'settings_accent';
+  static const _autoUpdateChecksKey = 'settings_auto_update_checks';
 
   ProtocolConfig loadProtocol() {
     final jsonString = _prefs.getString(_protocolKey);
@@ -98,10 +100,20 @@ class SettingsRepository {
     await _prefs.setBool(_preciseSessionTimerKey, value);
   }
 
+  bool loadDarkMode() => _prefs.getBool(_darkModeKey, defaultValue: false);
+
+  Future<void> saveDarkMode(bool value) => _prefs.setBool(_darkModeKey, value);
+
   String? loadAccent() => _prefs.getString(_appearanceAccentKey);
 
   Future<void> saveAccent(String name) =>
       _prefs.setString(_appearanceAccentKey, name);
+
+  bool loadAutoUpdateChecks() =>
+      _prefs.getBool(_autoUpdateChecksKey, defaultValue: true);
+
+  Future<void> saveAutoUpdateChecks(bool value) =>
+      _prefs.setBool(_autoUpdateChecksKey, value);
 
   AdvancedSettingsConfig loadAdvanced() {
     final jsonString = _prefs.getString(_advancedKey);

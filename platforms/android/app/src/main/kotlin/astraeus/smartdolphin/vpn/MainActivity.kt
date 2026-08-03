@@ -20,6 +20,7 @@ import android.content.ContentValues
 import android.os.Environment
 import java.security.MessageDigest
 import android.app.ActivityManager
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
@@ -45,6 +46,11 @@ class MainActivity : FlutterFragmentActivity() {
     private var voiceRecordingFile: File? = null
     private var voicePlayer: MediaPlayer? = null
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        super.onCreate(savedInstanceState)
+    }
+
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -65,6 +71,7 @@ class MainActivity : FlutterFragmentActivity() {
                     if (cfg.isNullOrBlank()) {
                         result.success(false)
                     } else {
+                        CoreBridge.markStartRequested()
                         CoreBridge.pendingConfig = cfg
                         val i = Intent(this, BoxService::class.java)
                             .setAction(BoxService.ACTION_START)
@@ -77,7 +84,13 @@ class MainActivity : FlutterFragmentActivity() {
                     startService(Intent(this, BoxService::class.java).setAction(BoxService.ACTION_STOP))
                     result.success(true)
                 }
-                "isConnected" -> result.success(CoreBridge.connected)
+                "isConnected" -> result.success(
+                    CoreBridge.connected || BoxService.instance?.isTunnelRunning() == true,
+                )
+                "isNetworkValidated" -> result.success(
+                    BoxService.instance?.isTunnelValidated() == true,
+                )
+                "connectionMetrics" -> result.success(CoreBridge.connectionMetrics())
                 else -> result.notImplemented()
             }
         }
@@ -110,14 +123,16 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(messenger, "smartdolphin/update").setMethodCallHandler { call, result ->
             when (call.method) {
                 "enqueue" -> {
-                    val version = call.argument<String>("version") ?: ""
+                    val versionName = call.argument<String>("versionName") ?: ""
+                    val versionCode = call.argument<Number>("versionCode")?.toLong() ?: 0L
                     val url = call.argument<String>("url") ?: ""
-                    if (version.isBlank() || url.isBlank()) {
+                    if (versionName.isBlank() || versionCode <= 0 || url.isBlank()) {
                         result.error("INVALID_UPDATE", "Missing version or URL", null)
                     } else {
                         val id = NativeUpdateManager.enqueue(
                             applicationContext,
-                            version,
+                            versionName,
+                            versionCode,
                             url,
                             call.argument<String>("sha256") ?: "",
                             call.argument<Number>("size")?.toLong() ?: 0L,
@@ -244,6 +259,18 @@ class MainActivity : FlutterFragmentActivity() {
                         .putString("last_username", username)
                         .putString("last_device_id", deviceId)
                         .apply()
+                    result.success(null)
+                }
+                "setAuditCaptureMode" -> {
+                    val requested = call.arguments as? String ?: "basic"
+                    val mode = if (requested in setOf("basic", "security", "enhanced")) {
+                        requested
+                    } else {
+                        "basic"
+                    }
+                    getSharedPreferences(prefsName, Context.MODE_PRIVATE).edit()
+                        .putString("audit_capture_mode", mode).apply()
+                    BoxService.instance?.refreshAuditCapture()
                     result.success(null)
                 }
                 "syncAccountSession" -> {
@@ -438,16 +465,20 @@ class MainActivity : FlutterFragmentActivity() {
         }
         try {
             voicePlayer?.release()
-            voicePlayer = MediaPlayer().apply {
-                setDataSource(path)
-                playbackParams = android.media.PlaybackParams().setSpeed(speed.coerceIn(0.5, 2.0).toFloat())
-                setOnCompletionListener { player ->
-                    player.release()
-                    if (voicePlayer === player) voicePlayer = null
-                }
-                prepare()
-                start()
-            }
+              voicePlayer = MediaPlayer().apply {
+                  setDataSource(path)
+                  setOnCompletionListener { player ->
+                      player.release()
+                      if (voicePlayer === player) voicePlayer = null
+                  }
+                  prepare()
+                  // PlaybackParams is only valid after prepare(). Setting it
+                  // during the initialized state makes some Android releases
+                  // fail silently, leaving recorded messages unplayable.
+                  playbackParams = android.media.PlaybackParams()
+                      .setSpeed(speed.coerceIn(0.5, 2.0).toFloat())
+                  start()
+              }
             result.success(true)
         } catch (e: Exception) {
             voicePlayer?.release()

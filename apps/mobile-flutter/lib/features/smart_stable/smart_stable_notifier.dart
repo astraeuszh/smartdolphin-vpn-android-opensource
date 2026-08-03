@@ -8,8 +8,10 @@ import '../../services/storage/prefs.dart';
 class SmartStableState {
   const SmartStableState({
     this.tuningEnabled = false,
+
     /// 用户点「暂不需要」后，直到下一次 **用户发起的** 从断开状态连接前不再弹窗。
     this.suppressDeclineUntilNextUserConnect = false,
+
     /// 任意一次弹窗关闭后，短时间内不再弹（防 resume 连弹、重连后立即再弹）。
     this.promptCooldownUntil,
   });
@@ -26,7 +28,8 @@ class SmartStableState {
     return SmartStableState(
       tuningEnabled: tuningEnabled ?? this.tuningEnabled,
       suppressDeclineUntilNextUserConnect:
-          suppressDeclineUntilNextUserConnect ?? this.suppressDeclineUntilNextUserConnect,
+          suppressDeclineUntilNextUserConnect ??
+              this.suppressDeclineUntilNextUserConnect,
       promptCooldownUntil: promptCooldownUntil ?? this.promptCooldownUntil,
     );
   }

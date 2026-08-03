@@ -19,7 +19,8 @@ class HistoryScreen extends ConsumerWidget {
     final connectionAsync = ref.watch(connectionHistoryProvider);
     final speedAsync = ref.watch(speedTestHistoryProvider);
 
-    final isLoading = connectionAsync is AsyncLoading || speedAsync is AsyncLoading;
+    final isLoading =
+        connectionAsync is AsyncLoading || speedAsync is AsyncLoading;
     final Object? error = connectionAsync is AsyncError
         ? connectionAsync.error
         : speedAsync is AsyncError
@@ -87,7 +88,8 @@ class _HistoryList extends StatelessWidget {
     children.add(const SizedBox(height: 12));
 
     if (speedTestRecords.isEmpty) {
-      children.add(const _SectionPlaceholder(message: 'No speed tests yet. Run a test to see results here.'));
+      children.add(const _SectionPlaceholder(
+          message: 'No speed tests yet. Run a test to see results here.'));
     } else {
       for (final record in speedTestRecords) {
         children
@@ -101,10 +103,14 @@ class _HistoryList extends StatelessWidget {
     children.add(const SizedBox(height: 12));
 
     if (connectionRecords.isEmpty) {
-      children.add(const _SectionPlaceholder(message: 'No VPN sessions yet. Connect to a server to build your history.'));
+      children.add(const _SectionPlaceholder(
+          message:
+              'No VPN sessions yet. Connect to a server to build your history.'));
     } else {
-      final totalBytes = connectionRecords.fold<int>(0, (value, record) => value + record.bytesReceived + record.bytesSent);
-      final totalDurationSeconds = connectionRecords.fold<int>(0, (value, record) => value + record.durationSeconds);
+      final totalBytes = connectionRecords.fold<int>(0,
+          (value, record) => value + record.bytesReceived + record.bytesSent);
+      final totalDurationSeconds = connectionRecords.fold<int>(
+          0, (value, record) => value + record.durationSeconds);
       children
         ..add(_ConnectionSummaryCard(
           totalBytes: totalBytes,
@@ -231,7 +237,8 @@ class _SummaryMetric extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           value,
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -271,7 +278,8 @@ class _SpeedTestCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Speed Test',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               Text(
@@ -287,8 +295,12 @@ class _SpeedTestCard extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _InfoTag(label: 'Download', value: '${record.downloadMbps.toStringAsFixed(1)} Mbps'),
-              _InfoTag(label: 'Upload', value: '${record.uploadMbps.toStringAsFixed(1)} Mbps'),
+              _InfoTag(
+                  label: 'Download',
+                  value: '${record.downloadMbps.toStringAsFixed(1)} Mbps'),
+              _InfoTag(
+                  label: 'Upload',
+                  value: '${record.uploadMbps.toStringAsFixed(1)} Mbps'),
               if (record.pingMs != null)
                 _InfoTag(label: 'Ping', value: '${record.pingMs} ms'),
               if ((record.ip ?? '').isNotEmpty)
@@ -315,7 +327,9 @@ class _ConnectionRecordCard extends StatelessWidget {
     final tags = <Widget>[
       _InfoTag(label: 'Started', value: started),
       _InfoTag(label: 'Duration', value: formatHistoryDuration(duration)),
-      _InfoTag(label: 'Data', value: _formatDataVolume(record.bytesReceived + record.bytesSent)),
+      _InfoTag(
+          label: 'Data',
+          value: _formatDataVolume(record.bytesReceived + record.bytesSent)),
     ];
     if ((record.publicIp ?? '').isNotEmpty) {
       tags.add(_InfoTag(label: 'Assigned IP', value: record.publicIp!));
@@ -358,7 +372,8 @@ class _ConnectionRecordCard extends StatelessWidget {
                   children: [
                     Text(
                       record.serverName,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     if ((record.serverLocation ?? '').isNotEmpty)
                       Padding(
@@ -366,7 +381,8 @@ class _ConnectionRecordCard extends StatelessWidget {
                         child: Text(
                           record.serverLocation!,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.65),
+                            color:
+                                theme.colorScheme.onSurface.withOpacity(0.65),
                           ),
                         ),
                       ),
@@ -410,7 +426,9 @@ class _StatusChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            status == ConnectionStatus.success ? Icons.check_circle : Icons.error,
+            status == ConnectionStatus.success
+                ? Icons.check_circle
+                : Icons.error,
             size: 18,
             color: color,
           ),
@@ -456,7 +474,8 @@ class _InfoTag extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             value,
-            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -478,7 +497,8 @@ class _EmptyHistoryView extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 80),
         children: [
-          Icon(Icons.history, size: 48, color: theme.colorScheme.primary.withOpacity(0.6)),
+          Icon(Icons.history,
+              size: 48, color: theme.colorScheme.primary.withOpacity(0.6)),
           const SizedBox(height: 16),
           Text(
             'Your VPN and speed test activity will appear here.',

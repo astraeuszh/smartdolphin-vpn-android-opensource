@@ -101,7 +101,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await repo.saveBrowserLoginChallenge(id);
       final url = Uri.parse(
         '$_siteLoginBase?challenge=${Uri.encodeComponent(id)}'
-        '&client=android&action=$action&device_id=${Uri.encodeComponent(device)}',
+        '&client=android&action=$action&device_id=${Uri.encodeComponent(device)}'
+        '&redirect_uri=${Uri.encodeComponent('smartdolphin://auth')}',
       );
       final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
       if (!ok) {
@@ -219,11 +220,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     try {
       final repo = ref.read(authRepositoryProvider);
       final data = await repo.createQrLoginChallenge();
-      final qr = data['qr'] as Map<String, dynamic>? ?? {};
-      final payload = jsonEncode(qr);
+      final challengeId = data['challenge_id']?.toString().trim();
+      if (challengeId == null || challengeId.isEmpty) {
+        throw ConsoleAuthException(
+          'challenge_failed',
+          'Failed to create login request',
+        );
+      }
+      final payload = jsonEncode({'t': 'login', 'id': challengeId});
       if (!mounted) return;
       setState(() {
-        _qrChallengeId = data['challenge_id'] as String?;
+        _qrChallengeId = challengeId;
         _qrPayload = payload;
         _qrStatus = l10n.authQrWaiting;
       });
@@ -334,16 +341,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                             child: _qrPayload == null
                                 ? const SizedBox(
-                                    width: 220,
-                                    height: 220,
+                                    width: 244,
+                                    height: 244,
                                     child: Center(
                                         child: CircularProgressIndicator()),
                                   )
                                 : QrImageView(
                                     data: _qrPayload!,
                                     version: QrVersions.auto,
-                                    size: 220,
+                                    size: 244,
+                                    errorCorrectionLevel: QrErrorCorrectLevel.M,
                                     backgroundColor: Colors.white,
+                                    embeddedImage: const AssetImage(
+                                      'assets/icons/appicon.png',
+                                    ),
+                                    embeddedImageStyle:
+                                        const QrEmbeddedImageStyle(
+                                      size: Size(30, 30),
+                                    ),
                                   ),
                           ),
                         ),

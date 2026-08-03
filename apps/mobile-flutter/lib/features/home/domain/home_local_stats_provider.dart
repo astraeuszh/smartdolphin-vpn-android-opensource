@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/lifecycle/app_foreground_provider.dart';
+
 import '../../../platform/android/network_stats_channel.dart';
 import '../../../services/vpn/clash_api_client.dart';
 import '../../dashboard/domain/ip_info_provider.dart';
@@ -156,7 +158,12 @@ final homeLocalStatsProvider =
 /// is actually reachable in the 200-400ms range.
 final homeSystemLatencyProvider =
     StreamProvider.autoDispose<int?>((ref) async* {
+  if (!ref.watch(appForegroundProvider)) {
+    yield null;
+    return;
+  }
   while (true) {
+    int? measured;
     final connected =
         ref.read(sessionControllerProvider).status == SessionStatus.connected;
     if (connected) {
@@ -164,12 +171,15 @@ final homeSystemLatencyProvider =
       final nodePing = host != null
           ? await NetworkStatsChannel.pingMs(host, count: 3)
           : null;
-      yield nodePing ?? await ClashApiClient.proxyDelayMs(timeoutMs: 2500);
+      measured = nodePing ?? await ClashApiClient.proxyDelayMs(timeoutMs: 2500);
     } else {
-      yield await NetworkStatsChannel.pingMs('8.8.8.8');
+      measured = await NetworkStatsChannel.pingMs('8.8.8.8');
     }
-    // Latency is informational. Thirty seconds avoids keeping Wi-Fi/cellular
-    // active just to animate a number on the home screen.
-    await Future<void>.delayed(const Duration(seconds: 30));
+    yield measured;
+    await Future<void>.delayed(
+      measured == null
+          ? const Duration(seconds: 5)
+          : const Duration(seconds: 30),
+    );
   }
 });

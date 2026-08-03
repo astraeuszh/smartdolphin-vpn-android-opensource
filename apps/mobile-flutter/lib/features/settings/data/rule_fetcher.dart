@@ -15,9 +15,9 @@ class RuleFetcher {
     for (final url in RuleDatabase.builtInUrls) {
       try {
         final resp = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 15),
-          onTimeout: () => throw Exception('Timeout'),
-        );
+              const Duration(seconds: 15),
+              onTimeout: () => throw Exception('Timeout'),
+            );
         if (resp.statusCode != 200) continue;
         final lines = LineSplitter.split(resp.body)
             .map((s) => s.trim())

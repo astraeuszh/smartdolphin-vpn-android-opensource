@@ -27,17 +27,31 @@ class SdrlEditorPanel extends StatelessWidget {
   static CodeController createController(String text) {
     final c = CodeController(text: text, language: rust);
     c.autocompleter.setCustomWords(const [
-      'version', 'settings', 'profile', 'rule', 'match',
-      'domain.suffix', 'domain', 'ip.cidr', 'port',
-      'direct', 'proxy', 'reject', 'block', 'default',
-      'set', 'priority', 'and', 'in', 'import',
+      'version',
+      'settings',
+      'profile',
+      'rule',
+      'match',
+      'domain.suffix',
+      'domain',
+      'ip.cidr',
+      'port',
+      'direct',
+      'proxy',
+      'reject',
+      'block',
+      'default',
+      'set',
+      'priority',
+      'and',
+      'in',
+      'import',
     ]);
     return c;
   }
 
   static void syncLanguage(CodeController controller) {
-    controller.language =
-        controller.text.length > 65536 ? null : rust;
+    controller.language = controller.text.length > 65536 ? null : rust;
   }
 
   static double gutterWidthFor(String text) {

@@ -141,7 +141,8 @@ class WgConfig {
       peerPublicKey: json['peerPublicKey'] as String,
       peerAllowedIps: json['peerAllowedIps'] as String,
       peerEndpoint: json['peerEndpoint'] as String,
-      peerPersistentKeepalive: (json['peerPersistentKeepalive'] as num?)?.toInt(),
+      peerPersistentKeepalive:
+          (json['peerPersistentKeepalive'] as num?)?.toInt(),
       mtu: (json['mtu'] as num?)?.toInt(),
       protocol: json['protocol'] as String? ?? 'wireguard',
       dnsServers: dns,

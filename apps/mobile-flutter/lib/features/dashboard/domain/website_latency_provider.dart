@@ -22,7 +22,8 @@ class WebsiteTarget {
 const websiteTargets = [
   WebsiteTarget(id: 'google', name: 'Google', host: 'https://www.google.com'),
   WebsiteTarget(id: 'amazon', name: 'Amazon', host: 'https://www.amazon.com'),
-  WebsiteTarget(id: 'youtube', name: 'YouTube', host: 'https://www.youtube.com'),
+  WebsiteTarget(
+      id: 'youtube', name: 'YouTube', host: 'https://www.youtube.com'),
 ];
 
 /// 延迟测试结果：成功(ms)、超时、失败
@@ -102,7 +103,9 @@ class WebsiteLatencyNotifier extends StateNotifier<WebsiteLatencyState> {
         timeoutMs: 8000,
       );
       if (ms == null || ms <= 0) return const LatencyTimeout();
-      return ms > _timeoutMsConnected ? const LatencyTimeout() : LatencySuccess(ms);
+      return ms > _timeoutMsConnected
+          ? const LatencyTimeout()
+          : LatencySuccess(ms);
     }
 
     return _measureHttpHeadLatency(target.host);
@@ -119,7 +122,9 @@ class WebsiteLatencyNotifier extends StateNotifier<WebsiteLatencyState> {
       await response.drain<void>();
       stopwatch.stop();
       final ms = stopwatch.elapsedMilliseconds;
-      return ms > _timeoutMsDisconnected ? const LatencyTimeout() : LatencySuccess(ms);
+      return ms > _timeoutMsDisconnected
+          ? const LatencyTimeout()
+          : LatencySuccess(ms);
     } on TimeoutException {
       return const LatencyTimeout();
     } on SocketException {

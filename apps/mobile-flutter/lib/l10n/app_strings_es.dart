@@ -5,8 +5,7 @@ const Map<String, String> kAppStringsEs = {
   'accountAuditPolicyBasic': 'Registros basicos de enlace',
   'accountAuditPolicySecurity':
       'Metadatos de conexion (IP de origen, destino y saltos)',
-  'accountAuditPolicyEnhanced':
-      'Diagnostico SNI autorizado (IP, saltos y SNI)',
+  'accountAuditPolicyEnhanced': 'Diagnostico SNI autorizado (IP, saltos y SNI)',
   'accountAuditPolicySaved': 'Configuracion de auditoria guardada',
   'accountAboutUs': 'Acerca de nosotros',
   'accountChangeEmail': 'Cambiar correo',

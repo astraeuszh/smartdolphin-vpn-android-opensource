@@ -78,12 +78,14 @@ class OnboardingState {
       selectedServer: selectedServer ?? this.selectedServer,
       importedConfig: importedConfig ?? this.importedConfig,
       notificationsGranted: notificationsGranted ?? this.notificationsGranted,
-      notificationsPrompted: notificationsPrompted ?? this.notificationsPrompted,
+      notificationsPrompted:
+          notificationsPrompted ?? this.notificationsPrompted,
       connecting: connecting ?? this.connecting,
       connectionError: identical(connectionError, _sentinel)
           ? this.connectionError
           : connectionError as String?,
-      showNotificationDenied: showNotificationDenied ?? this.showNotificationDenied,
+      showNotificationDenied:
+          showNotificationDenied ?? this.showNotificationDenied,
       speedTestSummary: speedTestSummary ?? this.speedTestSummary,
     );
   }

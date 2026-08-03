@@ -10,7 +10,8 @@ class LocateResult {
   });
 
   factory LocateResult.fromJson(Map<String, dynamic> json) {
-    final urls = (json['urls'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+    final urls =
+        (json['urls'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
     final download = urls.values.cast<String?>().firstWhere(
           (value) => value != null && value.contains('/ndt/v7/download'),
           orElse: () => null,

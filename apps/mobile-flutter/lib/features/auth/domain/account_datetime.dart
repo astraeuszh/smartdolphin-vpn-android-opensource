@@ -18,7 +18,8 @@ String formatAccountDateTime(
   if (unixSec >= kPermanentExpireUnix) {
     return l10n.accountDateTimePermanent;
   }
-  final dt = DateTime.fromMillisecondsSinceEpoch(unixSec * 1000, isUtc: true).toLocal();
+  final dt = DateTime.fromMillisecondsSinceEpoch(unixSec * 1000, isUtc: true)
+      .toLocal();
   final pattern = localeTag.startsWith('zh')
       ? 'yyyy年MM月dd日 HH:mm:ss'
       : 'yyyy-MM-dd HH:mm:ss';

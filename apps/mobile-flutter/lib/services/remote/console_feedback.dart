@@ -191,8 +191,7 @@ class ConsoleFeedback {
     if (sessionToken.isEmpty) {
       throw _FeedbackRejected('Authentication expired. Please sign in again.');
     }
-    final payload = Map<String, dynamic>.from(body)
-      ..remove('_session_token');
+    final payload = Map<String, dynamic>.from(body)..remove('_session_token');
     final resp = await _client
         .post(
           uri,

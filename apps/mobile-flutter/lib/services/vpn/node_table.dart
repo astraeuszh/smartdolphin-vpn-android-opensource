@@ -2,11 +2,15 @@ import 'dart:convert';
 
 /// Canonical node table and sing-box config generation for Dolphin-Core.
 const String kVlessUuid = 'e6171791-01a9-47b9-8371-e5c8a1b84ffb';
+// sing-box expects the URL-safe Base64 form of the X25519 public key.
 const String kRealityPbk = '-vjbn6uLtRHtqFwM9GOX2tLJasW8F9fS5MsQdf9cfGo';
 const String kRealityShort = 'd4cd34b97f9631a6';
 const String kRealitySni = 'dl.google.com';
 const String kHy2Password = 'REDACTED_HYSTERIA_PASSWORD';
 const String kWgPrivateKey = 'REDACTED_WIREGUARD_PRIVATE_KEY';
+// WireGuard outbound peer_public_key is the server interface public key.
+// The corresponding client public key (derived from kWgPrivateKey) is
+// registered on the server as an allowed peer.
 const String kWgPeerPubKey = 'REDACTED_WIREGUARD_PEER_PUBLIC_KEY';
 const String kWgLocalAddr = '10.7.0.2/32';
 
@@ -18,6 +22,20 @@ const List<String> kNodeIpCidrs = [
 ];
 
 enum SdProtocol { reality, hysteria2, wireguard }
+
+class SdTunnelCredential {
+  const SdTunnelCredential({
+    required this.vlessUuid,
+    required this.hysteriaPassword,
+    required this.expiresAt,
+    required this.readyAt,
+  });
+
+  final String vlessUuid;
+  final String hysteriaPassword;
+  final int expiresAt;
+  final int readyAt;
+}
 
 SdProtocol sdProtocolFromName(String? name) {
   switch ((name ?? '').toLowerCase().trim()) {
@@ -37,6 +55,7 @@ class SdNode {
   const SdNode({
     required this.tag,
     required this.host,
+    required this.endpointHost,
     required this.h2Sni,
     required this.realityPort,
     required this.flag,
@@ -44,6 +63,10 @@ class SdNode {
 
   final String tag;
   final String host;
+
+  /// Stable IPv4 transport endpoint. Reality must not wait on an unusable AAAA
+  /// route on mobile networks; IPv6 remains available for tunneled traffic.
+  final String endpointHost;
   final String h2Sni;
   final int realityPort;
   final String flag;
@@ -53,6 +76,7 @@ const List<SdNode> kNodes = [
   SdNode(
     tag: 'Netherlands',
     host: '206.245.157.199',
+    endpointHost: '206.245.157.199',
     h2Sni: 'astraeuszhao.com',
     realityPort: 8444,
     flag: 'NL',
@@ -60,6 +84,7 @@ const List<SdNode> kNodes = [
   SdNode(
     tag: 'United States',
     host: '23.27.134.86',
+    endpointHost: '23.27.134.86',
     h2Sni: 'smartdolphinvpn.com',
     realityPort: 8444,
     flag: 'US',
@@ -67,6 +92,7 @@ const List<SdNode> kNodes = [
   SdNode(
     tag: 'Singapore',
     host: '194.87.10.236',
+    endpointHost: '194.87.10.236',
     // smartdolphin.top still resolves to an old VPS, so Let's Encrypt cannot
     // issue/renew that certificate on the Singapore node yet. The server is
     // currently configured with the shared smartdolphinvpn.com certificate.
@@ -163,14 +189,20 @@ List<Map<String, dynamic>> _dnsRules({
   return rules;
 }
 
-Map<String, dynamic> _proxyOutbound(SdNode n, SdProtocol proto) {
+Map<String, dynamic> _proxyOutbound(
+  SdNode n,
+  SdProtocol proto,
+  SdTunnelCredential? credential,
+) {
   switch (proto) {
     case SdProtocol.hysteria2:
       return {
         'type': 'hysteria2',
         'tag': 'proxy',
-        'server': n.host,
+        'server': n.endpointHost,
         'server_port': 443,
+        // Managed nodes use one stable credential. Imported profiles carry
+        // their own password and never pass through this builder.
         'password': kHy2Password,
         'tls': {
           'enabled': true,
@@ -179,22 +211,17 @@ Map<String, dynamic> _proxyOutbound(SdNode n, SdProtocol proto) {
         },
       };
     case SdProtocol.wireguard:
-      return {
-        'type': 'wireguard',
-        'tag': 'proxy',
-        'server': n.host,
-        'server_port': 51820,
-        'local_address': [kWgLocalAddr],
-        'private_key': kWgPrivateKey,
-        'peer_public_key': kWgPeerPubKey,
-        'mtu': 1408,
-      };
+      // sing-box 1.13 removed the legacy WireGuard outbound. The endpoint is
+      // attached directly to the `proxy` route tag in buildSingBoxConfig.
+      throw StateError('WireGuard is configured as an endpoint');
     case SdProtocol.reality:
       return {
         'type': 'vless',
         'tag': 'proxy',
-        'server': n.host,
+        'server': n.endpointHost,
         'server_port': n.realityPort,
+        // Managed Reality nodes use this stable bootstrap credential. Account
+        // APIs are deliberately not part of the tunnel establishment path.
         'uuid': kVlessUuid,
         'flow': 'xtls-rprx-vision',
         'multiplex': {'enabled': false},
@@ -214,6 +241,29 @@ Map<String, dynamic> _proxyOutbound(SdNode n, SdProtocol proto) {
   }
 }
 
+Map<String, dynamic> _wireGuardEndpoint(SdNode node) {
+  return {
+    'type': 'wireguard',
+    // Keep the endpoint tag aligned with every other managed protocol so
+    // routing, the Clash API delay probe, and status collection share it.
+    'tag': 'proxy',
+    'name': 'dolphin-wg',
+    'mtu': 1408,
+    'address': [kWgLocalAddr],
+    'private_key': kWgPrivateKey,
+    'peers': [
+      {
+        'address': node.endpointHost,
+        'port': 51820,
+        'public_key': kWgPeerPubKey,
+        'allowed_ips': ['0.0.0.0/0'],
+        // Keeps mobile NAT state valid without any polling work in Flutter.
+        'persistent_keepalive_interval': 25,
+      },
+    ],
+  };
+}
+
 String buildSingBoxConfig({
   required SdNode node,
   required SdProtocol protocol,
@@ -227,6 +277,7 @@ String buildSingBoxConfig({
   bool blockLocalDns = true,
   List<String> includePackages = const [],
   List<String> excludePackages = const [],
+  SdTunnelCredential? tunnelCredential,
   String logLevel = 'info',
 }) {
   final route = <String, dynamic>{
@@ -241,7 +292,8 @@ String buildSingBoxConfig({
         'domain': [
           'astraeuszhao.com',
           'smartdolphin.top',
-          'smartdolphinvpn.com'
+          'smartdolphinvpn.com',
+          'astraeus.smartdolphin.top',
         ],
         'outbound': 'direct',
       },
@@ -303,11 +355,14 @@ String buildSingBoxConfig({
       },
     ],
     'outbounds': [
-      _proxyOutbound(node, protocol),
+      if (protocol != SdProtocol.wireguard)
+        _proxyOutbound(node, protocol, tunnelCredential),
       {'type': 'direct', 'tag': 'direct'},
       {'type': 'block', 'tag': 'block'},
       {'type': 'dns', 'tag': 'dns-out'},
     ],
+    if (protocol == SdProtocol.wireguard)
+      'endpoints': [_wireGuardEndpoint(node)],
     'route': route,
     'experimental': {
       'clash_api': {

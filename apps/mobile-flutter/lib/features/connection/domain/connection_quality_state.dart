@@ -41,5 +41,6 @@ class ConnectionQualityState extends Equatable {
   }
 
   @override
-  List<Object?> get props => [quality, downloadMbps, uploadMbps, ping, lastSwitch, isSwitching];
+  List<Object?> get props =>
+      [quality, downloadMbps, uploadMbps, ping, lastSwitch, isSwitching];
 }

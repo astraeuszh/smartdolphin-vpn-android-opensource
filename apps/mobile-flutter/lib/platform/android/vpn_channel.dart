@@ -79,7 +79,8 @@ class AndroidVpnChannel implements VpnPort {
 
   @override
   Future<Map<String, dynamic>> getTunnelStats() async {
-    final result = await _channel.invokeMapMethod<String, dynamic>('getTunnelStats');
+    final result =
+        await _channel.invokeMapMethod<String, dynamic>('getTunnelStats');
     return result ?? <String, dynamic>{};
   }
 

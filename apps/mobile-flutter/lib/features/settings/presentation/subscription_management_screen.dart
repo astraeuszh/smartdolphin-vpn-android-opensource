@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/ui/top_snack.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/account_datetime.dart';
 import '../../auth/domain/auth_controller.dart';
@@ -13,7 +15,8 @@ class SubscriptionManagementScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final session = ref.watch(authControllerProvider).session;
-    final localeTag = ref.watch(preferencesControllerProvider).localeCode ?? 'en';
+    final localeTag =
+        ref.watch(preferencesControllerProvider).localeCode ?? 'en';
     final theme = Theme.of(context);
 
     if (session == null) {
@@ -23,9 +26,8 @@ class SubscriptionManagementScreen extends ConsumerWidget {
       );
     }
 
-    final subscribedAt = session.subscribedAt > 0
-        ? session.subscribedAt
-        : session.createdAt;
+    final subscribedAt =
+        session.subscribedAt > 0 ? session.subscribedAt : session.createdAt;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.accountSubscriptionTitle)),
@@ -41,7 +43,18 @@ class SubscriptionManagementScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           _InfoTile(
             label: l10n.accountSubscriptionUid,
-            value: session.publicUid.isEmpty ? '${session.uid}' : session.publicUid,
+            value: session.publicUid.isEmpty
+                ? '${session.uid}'
+                : session.publicUid,
+            onLongPress: () async {
+              final uid = session.publicUid.isEmpty
+                  ? '${session.uid}'
+                  : session.publicUid;
+              await Clipboard.setData(ClipboardData(text: uid));
+              if (context.mounted) {
+                showTopSnackBar(context, l10n.settingsLogPathCopied);
+              }
+            },
           ),
           _InfoTile(
             label: l10n.accountSubscriptionCreated,
@@ -95,10 +108,11 @@ class SubscriptionManagementScreen extends ConsumerWidget {
 }
 
 class _InfoTile extends StatelessWidget {
-  const _InfoTile({required this.label, required this.value});
+  const _InfoTile({required this.label, required this.value, this.onLongPress});
 
   final String label;
   final String value;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -115,10 +129,14 @@ class _InfoTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          SelectableText(
-            value,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
+          GestureDetector(
+            onLongPress: onLongPress,
+            behavior: HitTestBehavior.opaque,
+            child: SelectableText(
+              value,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

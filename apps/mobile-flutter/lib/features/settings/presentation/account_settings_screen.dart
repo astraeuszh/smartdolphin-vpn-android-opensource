@@ -10,7 +10,6 @@ import '../../../services/logging/vpn_core_layout.dart';
 import '../../../services/logging/vpn_logger.dart';
 import '../../../services/remote/console_auth.dart';
 import '../../../services/remote/console_feedback.dart';
-import '../../../services/remote/console_audit.dart';
 import '../../auth/domain/account_datetime.dart';
 import '../../auth/domain/auth_controller.dart';
 import '../../auth/domain/traffic_policy.dart';
@@ -34,13 +33,11 @@ class AccountSettingsScreen extends ConsumerStatefulWidget {
 class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   bool _refreshing = false;
   bool _busy = false;
-  String? _auditMode;
   Timer? _trialTimer;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_loadAuditMode());
     _trialTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       final session = ref.read(authControllerProvider).session;
       if (session?.isTrial == true && mounted) setState(() {});
@@ -51,17 +48,6 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   void dispose() {
     _trialTimer?.cancel();
     super.dispose();
-  }
-
-  Future<void> _loadAuditMode() async {
-    final session = ref.read(authControllerProvider).session;
-    if (session == null || session.sessionToken.trim().isEmpty) return;
-    try {
-      final mode = await ConsoleAudit().policy(session);
-      if (mounted && _auditMode == null) setState(() => _auditMode = mode);
-    } catch (_) {
-      // The settings page remains usable while the policy endpoint is offline.
-    }
   }
 
   Future<void> _refreshPolicy() async {
@@ -87,60 +73,6 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
         showTopSnackBar(context, context.l10n.accountOpenWebsiteFailed,
             isError: true);
       }
-    }
-  }
-
-  Future<void> _openAuditPolicy() async {
-    final session = ref.read(authControllerProvider).session;
-    if (session == null) return;
-    final l10n = context.l10n;
-    // Policy loading starts when the page opens. Never make the tap wait for
-    // the network: show the cached/default choice immediately, then only use
-    // the network when the user actually saves a different value.
-    final current = _auditMode ?? 'basic';
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: Text(l10n.accountAuditPolicy),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(ctx).pop('basic'),
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.accountAuditPolicyBasic),
-              trailing: current == 'basic' ? const Icon(Icons.check) : null,
-            ),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(ctx).pop('security'),
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.accountAuditPolicySecurity),
-              trailing: current == 'security' ? const Icon(Icons.check) : null,
-            ),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(ctx).pop('enhanced'),
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.accountAuditPolicyEnhanced),
-              trailing: current == 'enhanced' ? const Icon(Icons.check) : null,
-            ),
-          ),
-        ],
-      ),
-    );
-    if (selected == null || selected == current) return;
-    setState(() => _busy = true);
-    try {
-      final confirmed = await ConsoleAudit().updatePolicy(session, selected);
-      if (!mounted) return;
-      setState(() => _auditMode = confirmed);
-      _snack(l10n.accountAuditPolicySaved);
-    } catch (_) {
-      if (mounted) _snack(l10n.accountRefreshFailed, isError: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -263,7 +195,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final bytes =
         await ref.read(vpnLoggerProvider).estimateFeedbackSnapshotBytes();
     final sizeLabel = _formatBytes(bytes);
-    final trafficKb = (bytes / 1024).ceil().clamp(1, 9999);
+    final trafficKb = (bytes / 1024).ceil();
 
     if (!mounted) return;
     final ok = await showDialog<bool>(
@@ -350,10 +282,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
       window: VpnCoreLayout.defaultFeedbackWindow,
     );
     if (!mounted) return;
-    final estimate = bytes.clamp(10, 500 * 1024 * 1024);
-    final label = estimate < 1024 * 1024
-        ? '${(estimate / 1024).toStringAsFixed(2)} KB'
-        : '${(estimate / (1024 * 1024)).toStringAsFixed(2)} MB';
+    final label = bytes < 1024 * 1024
+        ? '${(bytes / 1024).toStringAsFixed(2)} KB'
+        : '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -586,19 +517,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                   title: l10n.accountChangeName,
                   onTap: _busy ? null : _openChangeName,
                 ),
-                _menuTile(
-                  icon: Icons.privacy_tip_outlined,
-                  title: l10n.accountAuditPolicy,
-                  subtitle: _auditMode == null
-                      ? l10n.accountAuditPolicySubtitle
-                      : switch (_auditMode) {
-                          'security' => l10n.accountAuditPolicySecurity,
-                          'enhanced' => l10n.accountAuditPolicyEnhanced,
-                          _ => l10n.accountAuditPolicyBasic,
-                        },
-                  onTap: _busy ? null : _openAuditPolicy,
-                ),
-                const Divider(height: 32),
+                const SizedBox(height: 32),
                 _menuTile(
                   icon: Icons.support_agent_outlined,
                   title: 'Contact support',
@@ -618,7 +537,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                   title: l10n.accountAboutUs,
                   onTap: _openWebsite,
                 ),
-                const Divider(height: 32),
+                const SizedBox(height: 32),
                 _menuTile(
                   icon: Icons.logout,
                   title: l10n.accountLogout,

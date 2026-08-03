@@ -18,12 +18,17 @@ class SplashCheckScreen extends ConsumerStatefulWidget {
 
 class _SplashCheckScreenState extends ConsumerState<SplashCheckScreen> {
   bool _checkDone = false;
+  bool _started = false;
 
   @override
   void initState() {
     super.initState();
     _wireLogCallback();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _runCheck());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _started) return;
+      _started = true;
+      _runCheck();
+    });
   }
 
   void _wireLogCallback() {
@@ -42,7 +47,12 @@ class _SplashCheckScreenState extends ConsumerState<SplashCheckScreen> {
   }
 
   Future<void> _runCheck() async {
-    final err = await runStartupCheckAsync(ref);
+    AppError? err;
+    try {
+      err = await runStartupCheckAsync(ref);
+    } catch (error, stack) {
+      debugPrint('[Startup] unexpected check failure: $error\n$stack');
+    }
     if (!mounted) return;
     setState(() {
       _checkDone = true;
@@ -51,7 +61,11 @@ class _SplashCheckScreenState extends ConsumerState<SplashCheckScreen> {
       await _showErrorAndWait(err);
     }
     if (mounted) {
-      await checkAndPromptForUpdate(context, automatic: true);
+      try {
+        await checkAndPromptForUpdate(context, automatic: true);
+      } catch (error, stack) {
+        debugPrint('[Startup] update check skipped: $error\n$stack');
+      }
     }
     if (!mounted) return;
     _navigateToHome();

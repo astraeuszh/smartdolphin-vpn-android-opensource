@@ -18,19 +18,21 @@ class DataUsageState extends Equatable {
       );
 
   final DateTime periodStart;
+
   /// Cumulative VPN tunnel bytes (lifetime until reset).
   final int usedBytes;
   final int? monthlyLimitBytes;
   final DateTime? lastUpdated;
+
   /// UI should show 90% quota dialog once, then clear via [clearTraffic90Dialog].
   final bool pendingTraffic90Dialog;
+
   /// Suppress repeated 90% prompts until usage drops below 90% or manual reset.
   final bool traffic90Warned;
 
   bool get hasLimit => monthlyLimitBytes != null && monthlyLimitBytes! > 0;
 
-  bool get limitExceeded =>
-      hasLimit && usedBytes >= (monthlyLimitBytes ?? 0);
+  bool get limitExceeded => hasLimit && usedBytes >= (monthlyLimitBytes ?? 0);
 
   double get utilization {
     final limit = monthlyLimitBytes;
@@ -74,17 +76,25 @@ class DataUsageState extends Equatable {
 
   factory DataUsageState.fromJson(Map<String, dynamic> json) {
     return DataUsageState(
-      periodStart: DateTime.tryParse(json['periodStart'] as String? ?? '')?.toUtc() ??
-          DateTime.now().toUtc(),
+      periodStart:
+          DateTime.tryParse(json['periodStart'] as String? ?? '')?.toUtc() ??
+              DateTime.now().toUtc(),
       usedBytes: json['usedBytes'] as int? ?? 0,
       monthlyLimitBytes: json['monthlyLimitBytes'] as int?,
-      lastUpdated: DateTime.tryParse(json['lastUpdated'] as String? ?? '')?.toUtc(),
+      lastUpdated:
+          DateTime.tryParse(json['lastUpdated'] as String? ?? '')?.toUtc(),
       pendingTraffic90Dialog: json['pendingTraffic90Dialog'] as bool? ?? false,
       traffic90Warned: json['traffic90Warned'] as bool? ?? false,
     );
   }
 
   @override
-  List<Object?> get props =>
-      [periodStart, usedBytes, monthlyLimitBytes, lastUpdated, pendingTraffic90Dialog, traffic90Warned];
+  List<Object?> get props => [
+        periodStart,
+        usedBytes,
+        monthlyLimitBytes,
+        lastUpdated,
+        pendingTraffic90Dialog,
+        traffic90Warned
+      ];
 }

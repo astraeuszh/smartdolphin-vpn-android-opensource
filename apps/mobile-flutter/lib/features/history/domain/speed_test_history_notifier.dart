@@ -40,8 +40,8 @@ class SpeedTestHistoryNotifier
   }
 }
 
-final speedTestHistoryProvider =
-    StateNotifierProvider<SpeedTestHistoryNotifier, AsyncValue<List<SpeedTestRecord>>>(
-        (ref) {
-  return SpeedTestHistoryNotifier(ref.watch(speedTestHistoryRepositoryProvider));
+final speedTestHistoryProvider = StateNotifierProvider<SpeedTestHistoryNotifier,
+    AsyncValue<List<SpeedTestRecord>>>((ref) {
+  return SpeedTestHistoryNotifier(
+      ref.watch(speedTestHistoryRepositoryProvider));
 });

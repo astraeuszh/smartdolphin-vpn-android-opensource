@@ -1,12 +1,10 @@
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../theme/colors.dart';
 
-enum ConnectButtonVisualState { idle, connecting, active }
+enum ConnectButtonVisualState { idle, connecting, warning, active, error }
 
 /// 第一版：毛玻璃内凹圆盘 + 完整渐变蓝圈（连接时旋转）
 class ConnectControl extends StatefulWidget {
@@ -62,7 +60,8 @@ class _ConnectControlState extends State<ConnectControl>
 
   void _syncRingAnimation() {
     final isConnecting =
-        widget.visualState == ConnectButtonVisualState.connecting;
+        widget.visualState == ConnectButtonVisualState.connecting ||
+            widget.visualState == ConnectButtonVisualState.warning;
     if (isConnecting) {
       if (!_rotateController.isAnimating) {
         _rotateController.repeat();
@@ -86,11 +85,18 @@ class _ConnectControlState extends State<ConnectControl>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDisabled = !widget.enabled;
-    final isConnecting = widget.visualState == ConnectButtonVisualState.connecting;
-    final isActive = widget.visualState == ConnectButtonVisualState.active;
+    final isConnecting =
+        widget.visualState == ConnectButtonVisualState.connecting ||
+            widget.visualState == ConnectButtonVisualState.warning;
     _syncRingAnimation();
 
-    final accent = isActive ? HiVpnColors.success : HiVpnColors.accent;
+    final accent = switch (widget.visualState) {
+      ConnectButtonVisualState.idle => HiVpnColors.mutedGray,
+      ConnectButtonVisualState.connecting => HiVpnColors.info,
+      ConnectButtonVisualState.warning => HiVpnColors.warning,
+      ConnectButtonVisualState.active => HiVpnColors.success,
+      ConnectButtonVisualState.error => HiVpnColors.error,
+    };
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -153,53 +159,52 @@ class _ConnectControlState extends State<ConnectControl>
           // surrounding ring repaints every frame while connecting — a live blur
           // here just burns GPU for no visible gain.
           Container(
-                width: innerSize,
-                height: innerSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.colorScheme.surface.withValues(alpha: 0.96),
-                  border: Border.all(
-                    color: accent.withValues(alpha: 0.25),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accent.withValues(
-                        alpha: isConnecting ? 0.25 : 0.1,
-                      ),
-                      blurRadius: isConnecting ? 28 : 18,
-                      spreadRadius: isConnecting ? 2 : 0,
-                    ),
-                    BoxShadow(
-                      color: theme.colorScheme.shadow.withValues(alpha: 0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: isConnecting
-                    ? SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          valueColor: AlwaysStoppedAnimation<Color>(accent),
-                        ),
-                      )
-                    : Text(
-                        widget.label,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                          color: isDisabled
-                              ? theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.4)
-                              : theme.colorScheme.onSurface,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+            width: innerSize,
+            height: innerSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: theme.colorScheme.surface.withValues(alpha: 0.96),
+              border: Border.all(
+                color: accent.withValues(alpha: 0.25),
+                width: 1.5,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(
+                    alpha: isConnecting ? 0.25 : 0.1,
+                  ),
+                  blurRadius: isConnecting ? 28 : 18,
+                  spreadRadius: isConnecting ? 2 : 0,
+                ),
+                BoxShadow(
+                  color: theme.colorScheme.shadow.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: isConnecting
+                ? SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(accent),
+                    ),
+                  )
+                : Text(
+                    widget.label,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: isDisabled
+                          ? theme.colorScheme.onSurface.withValues(alpha: 0.4)
+                          : theme.colorScheme.onSurface,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+          ),
         ],
       ),
     );

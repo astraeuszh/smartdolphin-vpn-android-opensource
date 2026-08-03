@@ -12,6 +12,7 @@ import '../../../core/platform/runtime_platform.dart';
 import '../../../app/app.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_controller.dart';
+import '../../auth/domain/account_session.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../usage/data_usage_controller.dart';
 import '../../usage/data_usage_state.dart';
@@ -25,10 +26,13 @@ import '../domain/traffic_mode.dart';
 import '../domain/rule_draft.dart';
 import '../domain/vpn_protocol.dart';
 import '../../../platform/android/vpn_system_settings.dart';
+import '../../../platform/android/audit_capture_channel.dart';
 import '../../smart_stable/smart_stable_notifier.dart';
 import 'app_picker_screen.dart';
 import 'account_settings_screen.dart';
+import 'android_vpn_features_screen.dart';
 import 'custom_dns_dialog.dart';
+import 'proxy_share_development_screen.dart';
 import 'settings_picker_sheet.dart';
 import '../../../core/ui/sdrl_icon.dart';
 import '../../../core/ui/top_snack.dart';
@@ -38,6 +42,7 @@ import '../../../services/sdrl/sdrl_rule_store.dart';
 import '../../session/domain/session_controller.dart';
 import '../../session/domain/session_status.dart';
 import '../../../services/logging/vpn_logger.dart';
+import '../../../services/remote/console_audit.dart';
 import '../../../services/remote/update_prompt.dart';
 import '../../../widgets/legal_agreement_rich_text.dart';
 import '../../../widgets/frosted_glass.dart';
@@ -56,8 +61,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final preferences = ref.watch(preferencesControllerProvider);
-    final usage = ref.watch(dataUsageControllerProvider);
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 160),
       children: [
@@ -83,16 +86,98 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _sectionGap(),
         _buildProxyShareSection(context),
         _sectionGap(),
-        _buildUsageSection(context, usage),
-        _sectionGap(),
         _buildLanguageSection(context, preferences),
         _sectionGap(),
+        _buildAppearanceSection(context),
+        _sectionGap(),
         _buildSmartStableSection(context),
+        _sectionGap(),
+        _buildBatterySection(context),
+        _sectionGap(),
+        _buildLogSection(context),
+        _sectionGap(),
+        _buildUpdateSection(context),
         _sectionGap(),
         _buildLegalSection(context),
         _sectionGap(),
         _buildInfoFooter(context),
       ],
+    );
+  }
+
+  Widget _buildAppearanceSection(BuildContext context) {
+    final l10n = context.l10n;
+    final settings = ref.watch(settingsControllerProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, l10n.settingsAppearance),
+        const SizedBox(height: 12),
+        _buildSwitchTile(
+          context,
+          value: settings.darkMode,
+          title: l10n.settingsThemeDark,
+          subtitle: l10n.settingsAppearanceSubtitle,
+          icon: Icons.dark_mode_outlined,
+          onChanged: (value) {
+            unawaited(() async {
+              await ref.read(hapticsServiceProvider).selection();
+              await ref
+                  .read(settingsControllerProvider.notifier)
+                  .setDarkMode(value);
+            }());
+          },
+        ),
+        const SizedBox(height: 8),
+        _buildAccentPicker(context, settings.accentSeed),
+      ],
+    );
+  }
+
+  Widget _buildAccentPicker(BuildContext context, String selected) {
+    const accents = <String, Color>{
+      'ocean': Color(0xFF1976D2),
+      'aqua': Color(0xFF0891B2),
+      'sunrise': Color(0xFFD97706),
+      'forest': Color(0xFF16A34A),
+      'lavender': Color(0xFF7C3AED),
+    };
+    final theme = Theme.of(context);
+    return _settingsRow(
+      theme,
+      title: _settingsText(context, 'themeColor'),
+      icon: Icons.palette_outlined,
+      trailing: Wrap(
+        spacing: 10,
+        children: accents.entries.map((entry) {
+          final active = entry.key == selected;
+          return Semantics(
+            button: true,
+            selected: active,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => unawaited(ref
+                  .read(settingsControllerProvider.notifier)
+                  .setAccentSeed(entry.key)),
+              child: Container(
+                width: 20,
+                height: 20,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: entry.value,
+                  border: Border.all(
+                    color: active
+                        ? theme.colorScheme.onSurface
+                        : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -103,7 +188,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
         final info = snapshot.data;
-        final versionLabel = info?.version ?? '-';
+        final versionLabel = info?.version.split('+').first ?? '-';
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,13 +240,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _sectionGap() {
-    return const Column(
-      children: [
-        SizedBox(height: 24),
-        Divider(),
-        SizedBox(height: 24),
-      ],
-    );
+    return const SizedBox(height: 32);
   }
 
   Widget _buildLegalSection(BuildContext context) {
@@ -171,9 +250,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       children: [
         _buildSectionTitle(context, l10n.settingsSectionLegal),
         const SizedBox(height: 12),
-        LegalAgreementRichText(
-          hintTemplate: l10n.settingsLegalAgreementHint,
-          wrapInBookTitleMarks: true,
+        Text.rich(
+          TextSpan(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+            children: [
+              const TextSpan(text: '若想阅读我们的相关法律，请前往'),
+              TextSpan(
+                text: '我们的官方网站',
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => launchUrl(Uri.parse(LegalUrls.base),
+                      mode: LaunchMode.externalApplication),
+              ),
+              const TextSpan(text: '查看法律。'),
+            ],
+          ),
         ),
       ],
     );
@@ -193,36 +286,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       {VoidCallback? onTap}) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 1),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: FrostedGlass(
-          borderRadius: BorderRadius.circular(16),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          surface: GlassSurface.flat,
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text(value,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.7))),
-                  ],
-                ),
-              ),
-              Icon(Icons.keyboard_arrow_down_rounded,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  size: 24),
-            ],
-          ),
+        child: _settingsRow(
+          theme,
+          title: title,
+          icon: _settingIcon(title),
+          trailing: _valuePill(theme, value),
         ),
       ),
     );
@@ -247,34 +318,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         padding: const EdgeInsets.only(bottom: 12),
         child: InkWell(
           onTap: _showInDevelopmentHint,
-          borderRadius: BorderRadius.circular(12),
-          child: FrostedGlass(
-            borderRadius: BorderRadius.circular(16),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            surface: GlassSurface.flat,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: theme.textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Text(value,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.7))),
-                    ],
-                  ),
-                ),
-                Icon(Icons.lock_outline,
-                    size: 18,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55)),
-              ],
-            ),
-          ),
+          child: _settingsRow(theme,
+              title: title,
+              icon: _settingIcon(title),
+              trailing: const Icon(Icons.lock_outline, size: 18)),
         ),
       ),
     );
@@ -318,8 +365,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildSectionTitle(context, l10n.settingsConnection),
         const SizedBox(height: 12),
         if (isAndroidNative) ...[
-          _buildSectionTitle(context, l10n.settingsSectionKeepAlive),
-          const SizedBox(height: 8),
           _buildSwitchTile(
             context,
             value: autoConnect.connectOnLaunch,
@@ -568,6 +613,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             }());
           },
         ),
+        const SizedBox(height: 12),
+        const AndroidVpnFeaturesScreen(
+          embeddedCategory: AndroidVpnFeatureCategory.routing,
+        ),
       ],
     );
   }
@@ -621,7 +670,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           value: advanced.forceDnsThroughTunnel,
           title: l10n.settingsForceDnsThroughTunnel,
           subtitle: l10n.settingsForceDnsThroughTunnelSubtitle,
-          icon: Icons.dns_outlined,
+          icon: Icons.policy_outlined,
           onChanged: (v) {
             unawaited(() async {
               await ref.read(hapticsServiceProvider).selection();
@@ -676,12 +725,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             }());
           },
         ),
-        // Android always tunnels via VpnService (TUN); the system-proxy mode
-        // isn't applicable, so this row is locked.
-        _lockedPickerTile(
+        _buildPickerTile(
           context,
           title: l10n.settingsTunnelMode,
-          value: l10n.settingsTunnelModeTun,
+          value: _tunnelModeLabel(advanced.tunnelMode, l10n),
+          onTap: () async {
+            await ref.read(hapticsServiceProvider).selection();
+            final result = await SettingsPickerSheet.show<String>(
+              context: context,
+              title: l10n.settingsTunnelMode,
+              options: [
+                SettingsPickerOption(
+                  value: TunnelInterfaceMode.tun.name,
+                  label: l10n.settingsTunnelModeTun,
+                ),
+                SettingsPickerOption(
+                  value: TunnelInterfaceMode.systemProxy.name,
+                  label: l10n.settingsTunnelModeSystemProxy,
+                ),
+              ],
+              currentValue: advanced.tunnelMode.name,
+              isSelected: (a, b) => a == b,
+            );
+            if (!mounted || result == null) return;
+            final mode = TunnelInterfaceMode.values.firstWhere(
+              (item) => item.name == result,
+              orElse: () => TunnelInterfaceMode.tun,
+            );
+            await ref
+                .read(settingsControllerProvider.notifier)
+                .setTunnelInterfaceMode(mode);
+            if (mounted &&
+                ref.read(sessionControllerProvider).status ==
+                    SessionStatus.connected) {
+              showTopSnackBar(context, l10n.settingsRuleEditorReconnectHint);
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        const AndroidVpnFeaturesScreen(
+          embeddedCategory: AndroidVpnFeatureCategory.securityDns,
         ),
       ],
     );
@@ -748,14 +831,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(context, 'Network protection'),
+        _buildSectionTitle(context, _networkText(context, 'title')),
         const SizedBox(height: 12),
         _buildSwitchTile(
           context,
           value: advanced.killSwitchMode == KillSwitchMode.strict,
-          title: 'Network disconnect protection',
-          subtitle:
-              'When the VPN disconnects, Android blocks network traffic until it reconnects.',
+          title: _networkText(context, 'disconnect'),
+          subtitle: _networkText(context, 'hint'),
           icon: Icons.shield_outlined,
           onChanged: (enabled) {
             unawaited(() async {
@@ -824,22 +906,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             }());
           },
         ),
+      ],
+    );
+  }
+
+  Widget _buildBatterySection(BuildContext context) {
+    final l10n = context.l10n;
+    final settings = ref.watch(settingsControllerProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, _settingsText(context, 'battery')),
+        const SizedBox(height: 12),
         _buildSwitchTile(
           context,
           value: settings.batterySaverEnabled,
           title: l10n.settingsBatterySaver,
           subtitle: l10n.settingsBatterySaverSubtitle,
           icon: Icons.battery_saver_outlined,
-          onChanged: (v) {
-            unawaited(() async {
-              await ref.read(hapticsServiceProvider).selection();
-              await ref
-                  .read(settingsControllerProvider.notifier)
-                  .setBatterySaver(v);
-            }());
-          },
+          onChanged: (v) => unawaited(
+              ref.read(settingsControllerProvider.notifier).setBatterySaver(v)),
         ),
-        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildLogSection(BuildContext context) {
+    final l10n = context.l10n;
+    final settings = ref.watch(settingsControllerProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, _settingsText(context, 'logs')),
+        const SizedBox(height: 12),
+        _buildAuditPermissionTile(context),
         _buildSwitchTile(
           context,
           value: settings.logConfig.enabled,
@@ -855,24 +955,181 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             }());
           },
         ),
-        if (settings.logConfig.enabled) ...[
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.delete_outline,
-                color: Theme.of(context).colorScheme.primary),
-            title: Text(l10n.settingsClearLogs),
-            subtitle: Text(l10n.settingsClearLogsSubtitle),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              await ref.read(hapticsServiceProvider).selection();
-              await ref.read(vpnLoggerProvider).clearUserLogs();
-              if (mounted) {
-                showTopSnackBar(context, l10n.settingsClearLogsDone);
-              }
-            },
-          ),
-          _buildLogPathTile(context),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.delete_outline,
+              color: Theme.of(context).colorScheme.primary),
+          title: Text(l10n.settingsClearLogs),
+          subtitle: Text(l10n.settingsClearLogsSubtitle),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () async {
+            await ref.read(hapticsServiceProvider).selection();
+            await ref.read(vpnLoggerProvider).clearUserLogs();
+            if (mounted) {
+              showTopSnackBar(context, l10n.settingsClearLogsDone);
+            }
+          },
+        ),
+        _buildLogPathTile(context),
+      ],
+    );
+  }
+
+  Widget _buildAuditPermissionTile(BuildContext context) {
+    final theme = Theme.of(context);
+    final session = ref.watch(authControllerProvider).session;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      enabled: session != null && session.sessionToken.trim().isNotEmpty,
+      leading:
+          Icon(Icons.privacy_tip_outlined, color: theme.colorScheme.primary),
+      title: Text(_settingsText(context, 'logPermissionTitle')),
+      subtitle: Text(_settingsText(context, 'logPermissionSubtitle')),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: session == null || session.sessionToken.trim().isEmpty
+          ? null
+          : () => unawaited(_openAuditPermissionManagement(session)),
+    );
+  }
+
+  Future<void> _openAuditPermissionManagement(AccountSession session) async {
+    String current = 'basic';
+    try {
+      current = await ConsoleAudit().policy(session);
+    } catch (_) {}
+    if (!mounted) return;
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(_settingsText(context, 'logPermissionTitle')),
+        children: [
+          _auditOption(
+              ctx, 'basic', current, 'auditBasicTitle', 'auditBasicSubtitle'),
+          _auditOption(ctx, 'security', current, 'auditSecurityTitle',
+              'auditSecuritySubtitle'),
+          _auditOption(ctx, 'enhanced', current, 'auditEnhancedTitle',
+              'auditEnhancedSubtitle'),
         ],
+      ),
+    );
+    if (selected == null || selected == current || !mounted) return;
+    if (selected != 'basic' && !await _confirmAuditConsent(selected)) return;
+    try {
+      final confirmed = await ConsoleAudit().updatePolicy(session, selected);
+      await syncNativeAuditCapture(confirmed);
+      if (mounted) {
+        showTopSnackBar(context, _settingsText(context, 'auditSaved'));
+      }
+    } catch (_) {
+      if (mounted) {
+        showTopSnackBar(context, _settingsText(context, 'auditSaveFailed'),
+            isError: true);
+      }
+    }
+  }
+
+  SimpleDialogOption _auditOption(BuildContext context, String mode,
+      String current, String titleKey, String subtitleKey) {
+    return SimpleDialogOption(
+      onPressed: () => Navigator.of(context).pop(mode),
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(_settingsText(context, titleKey)),
+        subtitle: Text(_settingsText(context, subtitleKey)),
+        trailing: current == mode ? const Icon(Icons.check) : null,
+      ),
+    );
+  }
+
+  Future<bool> _confirmAuditConsent(String mode) async {
+    var accepted = false;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final titleKey = mode == 'security'
+        ? 'auditSecurityConsentTitle'
+        : 'auditEnhancedConsentTitle';
+    final bodyKey = mode == 'security'
+        ? 'auditSecurityConsentBody'
+        : 'auditEnhancedConsentBody';
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (dialogContext, setDialogState) => AlertDialog(
+              title: Text(_settingsText(context, titleKey)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_settingsText(context, bodyKey)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        TextButton(
+                          onPressed: () => launchUrl(
+                              Uri.parse(LegalUrls.privacyPolicyFor(locale)),
+                              mode: LaunchMode.externalApplication),
+                          child: Text(_settingsText(context, 'privacyPolicy')),
+                        ),
+                        TextButton(
+                          onPressed: () => launchUrl(
+                              Uri.parse(LegalUrls.userAgreementFor(locale)),
+                              mode: LaunchMode.externalApplication),
+                          child: Text(_settingsText(context, 'userAgreement')),
+                        ),
+                        TextButton(
+                          onPressed: () => launchUrl(
+                              Uri.parse(LegalUrls.serviceTermsFor(locale)),
+                              mode: LaunchMode.externalApplication),
+                          child: Text(_settingsText(context, 'serviceTerms')),
+                        ),
+                      ],
+                    ),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: accepted,
+                      onChanged: (value) =>
+                          setDialogState(() => accepted = value == true),
+                      title: Text(_settingsText(context, 'auditConsentCheck')),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(_settingsText(context, 'cancel')),
+                ),
+                FilledButton(
+                  onPressed: accepted
+                      ? () => Navigator.of(dialogContext).pop(true)
+                      : null,
+                  child: Text(_settingsText(context, 'confirm')),
+                ),
+              ],
+            ),
+          ),
+        ) ??
+        false;
+  }
+
+  Widget _buildUpdateSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, _settingsText(context, 'updates')),
+        const SizedBox(height: 12),
+        _buildSwitchTile(
+          context,
+          value: ref.watch(settingsControllerProvider).autoUpdateChecks,
+          title: _settingsText(context, 'autoUpdate'),
+          subtitle: _settingsText(context, 'autoUpdateHint'),
+          icon: Icons.system_update_outlined,
+          onChanged: (value) => unawaited(ref
+              .read(settingsControllerProvider.notifier)
+              .setAutoUpdateChecks(value)),
+        ),
       ],
     );
   }
@@ -987,6 +1244,205 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  String _networkText(BuildContext context, String key) {
+    const translations = <String, Map<String, String>>{
+      'zh': {
+        'title': '网络保护',
+        'disconnect': '断开时阻止联网',
+        'hint': 'VPN 意外断开时阻止网络访问。',
+      },
+      'zh-Hant': {
+        'title': '網路保護',
+        'disconnect': '中斷時封鎖網路',
+        'hint': 'VPN 意外中斷時封鎖網路存取。',
+      },
+      'en': {
+        'title': 'Network protection',
+        'disconnect': 'Block connections when disconnected',
+        'hint': 'Block network access if the VPN disconnects unexpectedly.',
+      },
+      'es': {
+        'title': 'Proteccion de red',
+        'disconnect': 'Bloquear conexiones al desconectar',
+        'hint': 'Bloquea el acceso si la VPN se desconecta inesperadamente.',
+      },
+      'ja': {
+        'title': 'ネットワーク保護',
+        'disconnect': '切断時に通信をブロック',
+        'hint': 'VPN が予期せず切断された場合に通信を遮断します。',
+      },
+    };
+    return translations[_settingsLanguage(context)]?[key] ??
+        translations['en']![key]!;
+  }
+
+  String _settingsText(BuildContext context, String key) {
+    const translations = <String, Map<String, String>>{
+      'zh': {
+        'themeColor': '主题色',
+        'battery': '电量',
+        'logs': '日志',
+        'updates': '更新设置',
+        'autoUpdate': '自动检测更新',
+        'autoUpdateHint': '在应用打开时检查已发布的更新。',
+        'logPermissionTitle': '日志权限管理',
+        'logPermissionSubtitle': '选择要同步到服务端的诊断范围。',
+        'auditBasicTitle': '基础档',
+        'auditBasicSubtitle': '连接时间、节点、协议和流量汇总。',
+        'auditSecurityTitle': '安全诊断档',
+        'auditSecuritySubtitle': '增加连接来源和设备诊断信息。',
+        'auditEnhancedTitle': '增强诊断档',
+        'auditEnhancedSubtitle': '增加网络路径与受控的 SNI 诊断信息。',
+        'auditSecurityConsentTitle': '启用安全诊断',
+        'auditSecurityConsentBody': '选择后，授权范围内的诊断数据会同步到服务端，用于改进连接质量。',
+        'auditEnhancedConsentTitle': '启用增强诊断',
+        'auditEnhancedConsentBody':
+            '选择后，授权范围内的诊断数据会同步到服务端；不会采集 GPS、网页正文或完整数据包。',
+        'auditConsentCheck': '我已阅读并同意上述数据范围',
+        'privacyPolicy': '隐私政策',
+        'userAgreement': '用户协议',
+        'serviceTerms': '服务条款',
+        'cancel': '取消',
+        'confirm': '确认',
+        'auditSaved': '日志权限已同步',
+        'auditSaveFailed': '日志权限同步失败',
+      },
+      'zh-Hant': {
+        'themeColor': '主題色',
+        'battery': '電量',
+        'logs': '日誌',
+        'updates': '更新設定',
+        'autoUpdate': '自動檢查更新',
+        'autoUpdateHint': '開啟應用程式時檢查已發布的更新。',
+        'logPermissionTitle': '日誌權限管理',
+        'logPermissionSubtitle': '選擇要同步到伺服器的診斷範圍。',
+        'auditBasicTitle': '基礎檔',
+        'auditBasicSubtitle': '連線時間、節點、協定和流量摘要。',
+        'auditSecurityTitle': '安全診斷檔',
+        'auditSecuritySubtitle': '增加連線來源和裝置診斷資訊。',
+        'auditEnhancedTitle': '增強診斷檔',
+        'auditEnhancedSubtitle': '增加網路路徑與受控的 SNI 診斷資訊。',
+        'auditSecurityConsentTitle': '啟用安全診斷',
+        'auditSecurityConsentBody': '選擇後，授權範圍內的診斷資料會同步到伺服器，用於改善連線品質。',
+        'auditEnhancedConsentTitle': '啟用增強診斷',
+        'auditEnhancedConsentBody': '選擇後，授權範圍內的診斷資料會同步到伺服器；不會收集 GPS、網頁正文或完整封包。',
+        'auditConsentCheck': '我已閱讀並同意上述資料範圍',
+        'privacyPolicy': '隱私政策',
+        'userAgreement': '使用者協議',
+        'serviceTerms': '服務條款',
+        'cancel': '取消',
+        'confirm': '確認',
+        'auditSaved': '日誌權限已同步',
+        'auditSaveFailed': '日誌權限同步失敗',
+      },
+      'en': {
+        'themeColor': 'Theme color',
+        'battery': 'Battery',
+        'logs': 'Logs',
+        'updates': 'Updates',
+        'autoUpdate': 'Automatically check for updates',
+        'autoUpdateHint': 'Check for published updates when the app opens.',
+        'logPermissionTitle': 'Log permissions',
+        'logPermissionSubtitle':
+            'Choose the diagnostic scope synced to the service.',
+        'auditBasicTitle': 'Basic',
+        'auditBasicSubtitle':
+            'Connection time, node, protocol, and traffic totals.',
+        'auditSecurityTitle': 'Security diagnostics',
+        'auditSecuritySubtitle': 'Adds source and device diagnostic details.',
+        'auditEnhancedTitle': 'Enhanced diagnostics',
+        'auditEnhancedSubtitle':
+            'Adds network path and controlled SNI diagnostics.',
+        'auditSecurityConsentTitle': 'Enable security diagnostics',
+        'auditSecurityConsentBody':
+            'Authorized diagnostics will be synced to improve connection quality.',
+        'auditEnhancedConsentTitle': 'Enable enhanced diagnostics',
+        'auditEnhancedConsentBody':
+            'Authorized diagnostics will be synced; GPS, page content, and full packets are excluded.',
+        'auditConsentCheck': 'I have read and agree to this data scope',
+        'privacyPolicy': 'Privacy policy',
+        'userAgreement': 'User agreement',
+        'serviceTerms': 'Service terms',
+        'cancel': 'Cancel',
+        'confirm': 'Confirm',
+        'auditSaved': 'Log permissions synced',
+        'auditSaveFailed': 'Could not sync log permissions',
+      },
+      'es': {
+        'themeColor': 'Color del tema',
+        'battery': 'Bateria',
+        'logs': 'Registros',
+        'updates': 'Actualizaciones',
+        'autoUpdate': 'Buscar actualizaciones automaticamente',
+        'autoUpdateHint': 'Busca actualizaciones publicadas al abrir la app.',
+        'logPermissionTitle': 'Permisos de registros',
+        'logPermissionSubtitle':
+            'Elige el alcance de diagnostico que se sincroniza.',
+        'auditBasicTitle': 'Basico',
+        'auditBasicSubtitle': 'Hora, nodo, protocolo y totales de trafico.',
+        'auditSecurityTitle': 'Diagnostico de seguridad',
+        'auditSecuritySubtitle': 'Incluye datos de origen y del dispositivo.',
+        'auditEnhancedTitle': 'Diagnostico avanzado',
+        'auditEnhancedSubtitle':
+            'Incluye ruta de red y diagnostico SNI controlado.',
+        'auditSecurityConsentTitle': 'Activar diagnostico de seguridad',
+        'auditSecurityConsentBody':
+            'Los datos autorizados se sincronizaran para mejorar la conexion.',
+        'auditEnhancedConsentTitle': 'Activar diagnostico avanzado',
+        'auditEnhancedConsentBody':
+            'Se sincronizan datos autorizados; se excluyen GPS, contenido y paquetes completos.',
+        'auditConsentCheck': 'He leido y acepto este alcance de datos',
+        'privacyPolicy': 'Politica de privacidad',
+        'userAgreement': 'Acuerdo de usuario',
+        'serviceTerms': 'Terminos del servicio',
+        'cancel': 'Cancelar',
+        'confirm': 'Confirmar',
+        'auditSaved': 'Permisos sincronizados',
+        'auditSaveFailed': 'No se pudieron sincronizar los permisos',
+      },
+      'ja': {
+        'themeColor': 'テーマカラー',
+        'battery': 'バッテリー',
+        'logs': 'ログ',
+        'updates': 'アップデート',
+        'autoUpdate': '更新を自動確認',
+        'autoUpdateHint': 'アプリを開いたときに公開済みの更新を確認します。',
+        'logPermissionTitle': 'ログ権限',
+        'logPermissionSubtitle': 'サービスへ同期する診断範囲を選択します。',
+        'auditBasicTitle': '基本',
+        'auditBasicSubtitle': '接続時刻、ノード、プロトコル、通信量。',
+        'auditSecurityTitle': 'セキュリティ診断',
+        'auditSecuritySubtitle': '接続元と端末の診断情報を追加します。',
+        'auditEnhancedTitle': '拡張診断',
+        'auditEnhancedSubtitle': 'ネットワーク経路と制御された SNI 診断を追加します。',
+        'auditSecurityConsentTitle': 'セキュリティ診断を有効化',
+        'auditSecurityConsentBody': '許可された診断データを接続品質の改善に利用し、サービスへ同期します。',
+        'auditEnhancedConsentTitle': '拡張診断を有効化',
+        'auditEnhancedConsentBody':
+            '許可された診断データを同期します。GPS、ページ本文、完全なパケットは収集しません。',
+        'auditConsentCheck': '上記のデータ範囲を読み、同意します',
+        'privacyPolicy': 'プライバシーポリシー',
+        'userAgreement': 'ユーザー規約',
+        'serviceTerms': 'サービス規約',
+        'cancel': 'キャンセル',
+        'confirm': '確認',
+        'auditSaved': 'ログ権限を同期しました',
+        'auditSaveFailed': 'ログ権限を同期できませんでした',
+      },
+    };
+    return translations[_settingsLanguage(context)]?[key] ??
+        translations['en']![key]!;
+  }
+
+  String _settingsLanguage(BuildContext context) {
+    final locale = Localizations.localeOf(context);
+    if (locale.languageCode == 'zh' &&
+        (locale.scriptCode == 'Hant' || locale.countryCode == 'TW')) {
+      return 'zh-Hant';
+    }
+    return locale.languageCode;
+  }
+
   String _coreProtocolLabel(String p) => switch (p) {
         'hysteria2' => 'Hysteria2',
         'wireguard' => 'WireGuard',
@@ -1068,6 +1524,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             }
           },
         ),
+        const SizedBox(height: 12),
+        const AndroidVpnFeaturesScreen(
+          embeddedCategory: AndroidVpnFeatureCategory.tunnelAdvanced,
+        ),
       ],
     );
   }
@@ -1080,13 +1540,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       children: [
         _buildSectionTitle(context, l10n.settingsSectionProxyShare),
         const SizedBox(height: 12),
-        // VPN sharing (proxy share) stays locked / in-development per product
-        // decision: the host/guest P2P sharing flow is not production-ready, so
-        // it is shown grayed instead of exposing the half-built screen.
-        _lockedPickerTile(
+        _buildPickerTile(
           context,
           title: l10n.settingsProxyShare,
-          value: l10n.statusDisconnected,
+          value: l10n.settingsFeatureInDevelopment,
+          onTap: () async {
+            await ref.read(hapticsServiceProvider).selection();
+            if (!context.mounted) return;
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => const ProxyShareDevelopmentScreen(),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -1318,54 +1784,120 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 1),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: FrostedGlass(
-          borderRadius: BorderRadius.circular(16),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          surface: GlassSurface.flat,
-          child: Row(
-            children: [
-              Expanded(
-                child: title != null
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            title,
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            value,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color:
-                                  theme.colorScheme.onSurface.withOpacity(0.7),
-                            ),
-                          ),
-                        ],
-                      )
-                    : Text(
-                        value,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-              ),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
-                size: 24,
-              ),
-            ],
-          ),
-        ),
+        child: _settingsRow(theme,
+            title: title ?? value,
+            icon: _settingIcon(title ?? value),
+            trailing:
+                _valuePill(theme, title == null ? '' : value, arrow: true)),
       ),
     );
+  }
+
+  Widget _settingsRow(ThemeData theme,
+      {required String title,
+      required IconData icon,
+      required Widget trailing}) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 64),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Row(children: [
+        Icon(icon, size: 21, color: theme.colorScheme.primary),
+        const SizedBox(width: 12),
+        Expanded(
+            child: Text(title,
+                style: theme.textTheme.bodyLarge
+                    ?.copyWith(fontWeight: FontWeight.w600))),
+        trailing,
+      ]),
+    );
+  }
+
+  Widget _valuePill(ThemeData theme, String value, {bool arrow = false}) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Flexible(
+            child: Text(value.isEmpty ? '—' : value,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall)),
+        if (arrow) ...[
+          const SizedBox(width: 4),
+          const Icon(Icons.expand_more_rounded, size: 17),
+        ],
+      ]),
+    );
+  }
+
+  IconData _settingIcon(String title) {
+    final value = title.toLowerCase();
+    if (value.contains('select apps') ||
+        value.contains('选择应用') ||
+        value.contains('アプリを選択') ||
+        value.contains('앱 선택')) {
+      return Icons.checklist_outlined;
+    }
+    if (value.contains('traffic mode') ||
+        value.contains('流量模式') ||
+        value.contains('トラフィック') ||
+        value.contains('트래픽 모드')) {
+      return Icons.swap_vert_rounded;
+    }
+    if (value.contains('app split') ||
+        value.contains('应用分流') ||
+        value.contains('앱별 라우팅') ||
+        value.contains('アプリ別')) {
+      return Icons.apps_outlined;
+    }
+    if (value.contains('dns server') ||
+        value.contains('自定义 dns') ||
+        value.contains('dns 서버')) {
+      return Icons.dns_outlined;
+    }
+    if (value.contains('force dns') || value.contains('强制 dns')) {
+      return Icons.policy_outlined;
+    }
+    if (value.contains('tunnel') ||
+        value.contains('隧道') ||
+        value.contains('トンネル')) {
+      return Icons.alt_route_outlined;
+    }
+    if (value.contains('kill switch') ||
+        value.contains('断网') ||
+        value.contains('network protection') ||
+        value.contains('네트워크 보호')) {
+      return Icons.health_and_safety_outlined;
+    }
+    if (value.contains('proxy share') ||
+        value.contains('代理共享') ||
+        value.contains('共有') ||
+        value.contains('프록시 공유')) {
+      return Icons.share_outlined;
+    }
+    if (value.contains('language') ||
+        value.contains('语言') ||
+        value.contains('言語')) {
+      return Icons.translate_outlined;
+    }
+    if (value.contains('dns')) return Icons.dns_outlined;
+    if (value.contains('protocol') || value.contains('协议'))
+      return Icons.hub_outlined;
+    if (value.contains('split') || value.contains('分流'))
+      return Icons.alt_route_rounded;
+    if (value.contains('language') || value.contains('语言'))
+      return Icons.language_rounded;
+    if (value.contains('theme') || value.contains('主题'))
+      return Icons.dark_mode_outlined;
+    if (value.contains('port') || value.contains('端口'))
+      return Icons.settings_ethernet_rounded;
+    return Icons.tune_outlined;
   }
 
   Widget _buildSwitchTile(

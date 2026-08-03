@@ -79,8 +79,7 @@ class SdrlRuleStore {
     return name;
   }
 
-  static String tempName() =>
-      'temp_${DateTime.now().millisecondsSinceEpoch}';
+  static String tempName() => 'temp_${DateTime.now().millisecondsSinceEpoch}';
 
   static Future<List<SdrlSavedRule>> listSavedRules() async {
     final dir = await rulesDirectory();

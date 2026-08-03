@@ -13,15 +13,12 @@ class VpnCoreLayout {
 
   String logFile(String category, String name) => '$root/$category/$name';
 
-  static const defaultMaxUserFiles = 50;
-  static const defaultMaxUserMb = 500;
-
   /// Default feedback log window (not a line cap — all lines within the window are kept).
   static const defaultFeedbackWindow = Duration(minutes: 10);
   static const manualFeedbackWindow = Duration(minutes: 5);
   static const errorFeedbackWindow = Duration(minutes: 10);
 
-  static const userCategories = ['logs/user', 'logs/debug'];
+  static const userCategories = ['logs/user'];
 
   static const protectedPrefixes = [
     'data/',
@@ -45,7 +42,6 @@ class VpnCoreLayout {
     'logs/system',
     'logs/user',
     'logs/telemetry',
-    'logs/debug',
     'crash',
     'cache',
     'config',

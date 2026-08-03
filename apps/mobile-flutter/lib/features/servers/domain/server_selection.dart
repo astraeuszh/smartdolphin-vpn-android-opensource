@@ -24,9 +24,7 @@ class ServerSelectionNotifier extends StateNotifier<Server?> {
 
   void select(Server server) {
     state = server;
-    _ref
-        .read(_catalogProvider.notifier)
-        .rememberSelection(server);
+    _ref.read(_catalogProvider.notifier).rememberSelection(server);
   }
 
   Future<void> _hydrate() async {

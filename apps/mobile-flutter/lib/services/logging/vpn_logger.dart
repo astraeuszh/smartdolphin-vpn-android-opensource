@@ -9,7 +9,8 @@ import '../../features/settings/domain/log_config.dart';
 import '../../features/settings/domain/settings_controller.dart';
 import 'vpn_core_layout.dart';
 
-/// vpn-core logging: system logs protected; user/debug logs capped (default 50 files / 500MB).
+/// vpn-core logging: system logs are protected; optional local logs are bounded
+/// by the user's configured retention limits.
 class VpnLogger {
   VpnLogger(this._getLogConfig);
 
@@ -29,7 +30,7 @@ class VpnLogger {
   }
 
   /// External app-specific storage (no root required). Typical path:
-  /// /storage/emulated/0/Android/data/<pkg>/files/vpn-core
+  /// `/storage/emulated/0/Android/data/<pkg>/files/vpn-core`
   Future<VpnCoreLayout> layout() async {
     if (_layout != null) return _layout!;
     Directory base;
@@ -43,6 +44,11 @@ class VpnLogger {
     final lay = VpnCoreLayout(root.path);
     for (final rel in VpnCoreLayout.initDirs) {
       await Directory('${root.path}/$rel').create(recursive: true);
+    }
+    // Remove the obsolete high-volume debug stream from older builds.
+    final legacyDebug = Directory('${root.path}/logs/debug');
+    if (await legacyDebug.exists()) {
+      await legacyDebug.delete(recursive: true);
     }
     await File('${lay.logs}/README.txt').writeAsString(
       'Smart Dolphin VPN logs (vpn-core)\n'
@@ -79,8 +85,10 @@ class VpnLogger {
       String component, String message) async {
     final line = _formatLine(level, component, message);
     final config = _getLogConfig();
-    if (!config.enabled &&
-        (category == 'logs/user' || category == 'logs/debug')) {
+    // Logging off means privacy-minimal operation: only explicit errors and
+    // service-essential records survive. Normal connection/auth telemetry is
+    // diagnostic data and must remain opt-in.
+    if (!config.enabled && category != 'logs/system' && level != 'ERROR') {
       return;
     }
     final lay = await layout();
@@ -89,7 +97,7 @@ class VpnLogger {
       final f = File(path);
       await f.parent.create(recursive: true);
       await f.writeAsString(line, mode: FileMode.append);
-      if (category == 'logs/user' || category == 'logs/debug') {
+      if (category == 'logs/user') {
         await _enforceUserCap(lay);
       }
     } catch (e) {
@@ -131,8 +139,6 @@ class VpnLogger {
 
   void debug(String message, {String component = 'app'}) {
     debugPrint('[VpnLogger] $message');
-    if (!_getLogConfig().shouldLogDebug) return;
-    unawaited(_append('logs/debug', 'debug.log', 'DEBUG', component, message));
   }
 
   void info(String message, {String component = 'app'}) {
@@ -238,8 +244,9 @@ class VpnLogger {
         final lines = await f.readAsLines();
         for (final ln in lines) {
           if (ln.trim().isEmpty) continue;
-          if (!_withinWindow(ln, cutoff, isHeader: ln.startsWith('===')))
+          if (!_withinWindow(ln, cutoff, isHeader: ln.startsWith('==='))) {
             continue;
+          }
           buf.writeln(ln);
           lineCount++;
         }
@@ -281,6 +288,32 @@ class VpnLogger {
         if (entity is File && entity.path.endsWith('.log')) {
           await entity.delete();
         }
+      }
+    }
+    for (final cat in const [
+      'logs/network',
+      'logs/security',
+      'logs/audit',
+      'logs/telemetry',
+    ]) {
+      final dir = Directory(lay.logFile(cat, ''));
+      if (!await dir.exists()) continue;
+      await for (final entity in dir.list()) {
+        if (entity is File && entity.path.endsWith('.log')) {
+          await entity.delete();
+        }
+      }
+    }
+    final runtime = Directory(lay.logFile('logs/runtime', ''));
+    if (await runtime.exists()) {
+      await for (final entity in runtime.list()) {
+        if (entity is! File || !entity.path.endsWith('.log')) continue;
+        try {
+          final errors = (await entity.readAsLines())
+              .where((line) => line.startsWith('ERROR '))
+              .join('\n');
+          await entity.writeAsString(errors.isEmpty ? '' : '$errors\n');
+        } catch (_) {}
       }
     }
     _memoryCache.clear();

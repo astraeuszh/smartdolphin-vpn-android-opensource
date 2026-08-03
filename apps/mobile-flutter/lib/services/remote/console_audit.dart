@@ -36,7 +36,10 @@ class ConsoleAudit {
             bearerToken: session.sessionToken,
             json: true,
           ),
-          body: jsonEncode({'mode': mode}),
+          body: jsonEncode({
+            'mode': mode,
+            'consent': mode != 'basic',
+          }),
         )
         .timeout(const Duration(seconds: 12));
     final body = jsonDecode(response.body) as Map<String, dynamic>;

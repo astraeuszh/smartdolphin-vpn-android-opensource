@@ -60,8 +60,9 @@ class SettingsController extends StateNotifier<SettingsState> {
     final batterySaver = _repository!.loadBatterySaver();
     final networkQuality = _repository!.loadNetworkQuality();
     final preciseSessionTimer = _repository!.loadPreciseSessionTimer();
+    final darkMode = _repository!.loadDarkMode();
     final storedAccent = _repository!.loadAccent() ?? 'ocean';
-    final accent = storedAccent == 'lavender' ? 'ocean' : storedAccent;
+    final autoUpdateChecks = _repository!.loadAutoUpdateChecks();
     state = state.copyWith(
       protocol: protocol,
       splitTunnel: splitTunnel,
@@ -72,7 +73,9 @@ class SettingsController extends StateNotifier<SettingsState> {
       batterySaverEnabled: batterySaver,
       networkQualityMonitoring: networkQuality,
       preciseSessionTimer: preciseSessionTimer,
-      accentSeed: accent,
+      darkMode: darkMode,
+      accentSeed: storedAccent,
+      autoUpdateChecks: autoUpdateChecks,
     );
     _ref.read(ruleDraftProvider.notifier).syncFromPersisted(
           text: routing.ruleDb.customRules,
@@ -82,7 +85,8 @@ class SettingsController extends StateNotifier<SettingsState> {
       unawaited(setWakeOnBootEnabled(
         autoConnect.connectOnLaunch || autoConnect.connectOnBoot,
       ));
-      unawaited(setReconnectOnNetworkChange(autoConnect.reconnectOnNetworkChange));
+      unawaited(
+          setReconnectOnNetworkChange(autoConnect.reconnectOnNetworkChange));
     }
     await _applyAndroidTunnelProfileMigration();
   }
@@ -108,7 +112,8 @@ class SettingsController extends StateNotifier<SettingsState> {
     _completeProfileMigrationReady();
   }
 
-  static Future<RoutingConfig> _routingWithDiskRules(RoutingConfig routing) async {
+  static Future<RoutingConfig> _routingWithDiskRules(
+      RoutingConfig routing) async {
     try {
       final fromDisk = await SdrlRuleStore.loadActiveSource();
       if (fromDisk == null || fromDisk.isEmpty) return routing;
@@ -170,7 +175,8 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   Future<void> setDisableIpv6WhenConnected(bool value) async {
-    await updateAdvanced(state.advanced.copyWith(disableIpv6WhenConnected: value));
+    await updateAdvanced(
+        state.advanced.copyWith(disableIpv6WhenConnected: value));
   }
 
   Future<void> setTransportProtocol(TransportProtocol protocol) async {
@@ -290,9 +296,8 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   Future<void> toggleSplitTunnel(bool enabled) async {
-    final mode = enabled
-        ? SplitTunnelMode.includeApps
-        : SplitTunnelMode.allTraffic;
+    final mode =
+        enabled ? SplitTunnelMode.includeApps : SplitTunnelMode.allTraffic;
     await updateSplitTunnel(state.splitTunnel.copyWith(mode: mode));
   }
 
@@ -344,9 +349,19 @@ class SettingsController extends StateNotifier<SettingsState> {
     await _repository?.savePreciseSessionTimer(value);
   }
 
+  Future<void> setDarkMode(bool value) async {
+    state = state.copyWith(darkMode: value);
+    await _repository?.saveDarkMode(value);
+  }
+
   Future<void> setAccentSeed(String seed) async {
     state = state.copyWith(accentSeed: seed);
     await _repository?.saveAccent(seed);
+  }
+
+  Future<void> setAutoUpdateChecks(bool value) async {
+    state = state.copyWith(autoUpdateChecks: value);
+    await _repository?.saveAutoUpdateChecks(value);
   }
 
   Future<void> recordSessionEnd(SessionState session,
@@ -359,9 +374,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     final bytesTx = (stats['txBytes'] as num?)?.toInt() ?? 0;
     final duration = session.duration ?? endedAt.difference(startedAt);
     final locationParts = <String>[
-      if (server.cityName != null && server.cityName!.isNotEmpty) server.cityName!,
-      if (server.regionName != null && server.regionName!.isNotEmpty) server.regionName!,
-      if (server.countryName != null && server.countryName!.isNotEmpty) server.countryName!,
+      if (server.cityName != null && server.cityName!.isNotEmpty)
+        server.cityName!,
+      if (server.regionName != null && server.regionName!.isNotEmpty)
+        server.regionName!,
+      if (server.countryName != null && server.countryName!.isNotEmpty)
+        server.countryName!,
     ];
     final location = locationParts.isEmpty ? null : locationParts.join(', ');
 

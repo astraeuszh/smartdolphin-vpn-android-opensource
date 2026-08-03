@@ -2,6 +2,7 @@
 
 import android.content.Context
 import java.io.File
+import java.time.Instant
 
 /// Persists Dolphin-Core (libbox) log lines under the same vpn-core tree as Flutter.
 object CoreLogFile {
@@ -22,7 +23,7 @@ object CoreLogFile {
                 f.copyTo(backup, overwrite = true)
                 f.writeText("")
             }
-            f.appendText("${System.currentTimeMillis()} $message\n")
+            f.appendText("${Instant.now()} $message\n")
         } catch (_: Exception) {
         }
     }

@@ -14,7 +14,8 @@ class InstalledAppsService {
   final MethodChannel _channel;
 
   Future<List<InstalledAppInfo>> fetchInstalledApps() async {
-    final result = await _channel.invokeMethod<List<dynamic>>('getInstalledApps');
+    final result =
+        await _channel.invokeMethod<List<dynamic>>('getInstalledApps');
     if (result == null) {
       return const [];
     }

@@ -4,8 +4,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import org.json.JSONObject
@@ -29,6 +33,7 @@ object NativeUpdateManager {
     private const val MAX_MANIFEST_BYTES = 2L * 1024L * 1024L
     private const val MAX_CHUNK_BYTES = 64L * 1024L * 1024L
     private const val MAX_CHUNKS = 16_384
+    private const val PROGRESS_PERSIST_STEP = 1024L * 1024L
     private val executor = Executors.newSingleThreadExecutor()
 
     @Volatile
@@ -51,7 +56,8 @@ object NativeUpdateManager {
 
     fun enqueue(
         context: Context,
-        version: String,
+        versionName: String,
+        versionCode: Long,
         apkUrl: String,
         sha256: String,
         size: Long,
@@ -59,7 +65,8 @@ object NativeUpdateManager {
         downloadUrls: List<String>,
     ): Long {
         require(size in 0..MAX_APK_BYTES) { "invalid APK size" }
-        require(version.matches(Regex("[A-Za-z0-9._+-]+"))) { "invalid version" }
+        require(versionName.matches(Regex("[A-Za-z0-9._+-]+"))) { "invalid version" }
+        require(versionCode > 0) { "invalid version code" }
         require(apkUrl.startsWith("https://")) { "invalid APK URL" }
         require(
             chunkManifestUrl.isBlank() || chunkManifestUrl.startsWith("https://"),
@@ -67,7 +74,8 @@ object NativeUpdateManager {
         val preferences = prefs(context)
         val normalizedSha256 = sha256.lowercase()
         val sameRelease =
-            preferences.getString("version", "") == version &&
+            preferences.getString("version_name", "") == versionName &&
+            preferences.getLong("version_code", 0) == versionCode &&
             preferences.getString("sha256", "") == normalizedSha256 &&
             preferences.getLong("size", -1) == size &&
             preferences.getString("apk_url", "") == apkUrl &&
@@ -76,16 +84,18 @@ object NativeUpdateManager {
         if (sameRelease && currentStatus == "successful") {
             return 1L
         }
-        if (running && sameRelease && currentStatus in setOf("pending", "running")) {
+        if (running && sameRelease && currentStatus in setOf("pending", "running", "retrying")) {
             return 1L
         }
         val target = File(
             context.getExternalFilesDir(null),
-            "updates/SmartDolphinVPN-$version.apk",
+            "updates/SmartDolphinVPN-$versionName.apk",
         )
         target.parentFile?.mkdirs()
         preferences.edit()
-            .putString("version", version)
+            .putString("version", versionName)
+            .putString("version_name", versionName)
+            .putLong("version_code", versionCode)
             .putString("sha256", normalizedSha256)
             .putLong("size", size)
             .putString("path", target.absolutePath)
@@ -113,34 +123,47 @@ object NativeUpdateManager {
     private fun download(context: Context) {
         running = true
         val preferences = prefs(context)
-        preferences.edit().putString("status", "running").apply()
+        var lastError: Throwable? = null
         try {
-            val manifestUrl = preferences.getString("manifest_url", "") ?: ""
-            if (manifestUrl.isNotBlank()) {
-                try {
-                    downloadChunks(context, manifestUrl)
-                } catch (_: Throwable) {
-                    // A flaky chunk or a process-resume race must not strand a
-                    // mandatory update. Fall back to the verified whole APK.
-                    preferences.edit().putLong("received", 0).apply()
+          for (attempt in 0 until 5) {
+            try {
+                preferences.edit().putString("status", if (attempt == 0) "running" else "retrying").apply()
+                val manifestUrl = preferences.getString("manifest_url", "") ?: ""
+                if (manifestUrl.isNotBlank()) {
+                    try {
+                        downloadChunks(context, manifestUrl)
+                    } catch (_: Throwable) {
+                        // Keep verified chunks and the whole-package .tmp file;
+                        // the fallback and the next attempt resume them.
+                        downloadWhole(context)
+                    }
+                } else {
                     downloadWhole(context)
                 }
-            } else {
-                downloadWhole(context)
+                val target = File(preferences.getString("path", "") ?: error("missing target"))
+                val expectedSize = preferences.getLong("size", 0)
+                val expectedSha = preferences.getString("sha256", "") ?: ""
+                check(target.isFile && target.length() <= MAX_APK_BYTES)
+                check(expectedSize <= 0 || target.length() == expectedSize)
+                check(expectedSha.isBlank() || sha256(target).equals(expectedSha, true))
+                check(verifyDownloadedApk(context, target)) { "APK identity or signer mismatch" }
+                preferences.edit()
+                    .putString("status", "successful")
+                    .putLong("received", target.length())
+                    .apply()
+                verifyAndNotify(context)
+                lastError = null
+                break
+            } catch (error: Throwable) {
+                lastError = error
+                if (attempt < 4) {
+                    Thread.sleep(1_000L * (attempt + 1))
+                }
             }
-            val target = File(preferences.getString("path", "") ?: error("missing target"))
-            val expectedSize = preferences.getLong("size", 0)
-            val expectedSha = preferences.getString("sha256", "") ?: ""
-            check(target.isFile && target.length() <= MAX_APK_BYTES)
-            check(expectedSize <= 0 || target.length() == expectedSize)
-            check(expectedSha.isBlank() || sha256(target).equals(expectedSha, true))
-            preferences.edit()
-                .putString("status", "successful")
-                .putLong("received", target.length())
-                .apply()
-            verifyAndNotify(context)
-        } catch (_: Throwable) {
-            preferences.edit().putString("status", "failed").apply()
+          }
+          if (lastError != null) {
+              preferences.edit().putString("status", "failed").apply()
+          }
         } finally {
             running = false
         }
@@ -212,7 +235,8 @@ object NativeUpdateManager {
             },
         )
         preferences.edit().putLong("received", received.get()).apply()
-        val workerCount = minOf(mirrors.size, 4)
+        val persistedProgressBucket = AtomicLong(received.get() / PROGRESS_PERSIST_STEP)
+        val workerCount = minOf(mirrors.size, 2)
         val pool = Executors.newFixedThreadPool(workerCount)
         try {
             val futures = (0 until workerCount).map { worker ->
@@ -235,9 +259,13 @@ object NativeUpdateManager {
                                     onProgress = { chunkBytes ->
                                         val delta = chunkBytes - reportedBytes
                                         reportedBytes = chunkBytes
-                                        preferences.edit()
-                                            .putLong("received", received.addAndGet(delta))
-                                            .apply()
+                                        val total = received.addAndGet(delta)
+                                        val bucket = total / PROGRESS_PERSIST_STEP
+                                        val previous = persistedProgressBucket.get()
+                                        if (bucket > previous &&
+                                            persistedProgressBucket.compareAndSet(previous, bucket)) {
+                                            preferences.edit().putLong("received", total).apply()
+                                        }
                                     },
                                 )
                                 check(sha256(temporary).equals(chunk.sha256, true)) {
@@ -254,7 +282,8 @@ object NativeUpdateManager {
                                         .putLong("received", received.addAndGet(-reportedBytes))
                                         .apply()
                                 }
-                                temporary.delete()
+                                // Keep a partial chunk. streamDownload resumes it with
+                                // HTTP Range after a timeout or mirror switch.
                             }
                         }
                         check(downloaded) { "chunk failed" }
@@ -292,6 +321,11 @@ object NativeUpdateManager {
         val expectedSize = preferences.getLong("size", 0)
         val maximumBytes = if (expectedSize > 0) expectedSize else MAX_APK_BYTES
         var lastError: Throwable? = null
+        var lastPersisted = if (temporaryFileLength(target) > 0L) {
+            temporaryFileLength(target)
+        } else {
+            0L
+        }
         for (url in urls) {
             val temporary = File(target.parentFile, ".${target.name}.tmp")
             try {
@@ -302,14 +336,16 @@ object NativeUpdateManager {
                     maximumBytes = maximumBytes,
                     expectedBytes = expectedSize.takeIf { it > 0 },
                     onProgress = { bytes ->
-                        preferences.edit().putLong("received", bytes).apply()
+                        if (bytes - lastPersisted >= PROGRESS_PERSIST_STEP) {
+                            lastPersisted = bytes
+                            preferences.edit().putLong("received", bytes).apply()
+                        }
                     },
                 )
                 replaceFile(temporary, target)
                 preferences.edit().putLong("received", received).apply()
                 return
             } catch (error: Throwable) {
-                temporary.delete()
                 lastError = error
             }
         }
@@ -326,13 +362,22 @@ object NativeUpdateManager {
     ): Long {
         check(rawUrl.startsWith("https://")) { "HTTPS is required" }
         check(maximumBytes > 0) { "invalid download limit" }
+        val existing = if (target.isFile) target.length() else 0L
         val connection = URL(rawUrl).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = true
             connection.connectTimeout = 8_000
             connection.readTimeout = timeout
             connection.setRequestProperty("Accept-Encoding", "identity")
+            if (existing > 0L) connection.setRequestProperty("Range", "bytes=$existing-")
+            var resumeAt = existing
             check(connection.responseCode in 200..299) { "HTTP ${connection.responseCode}" }
+            if (existing > 0L && connection.responseCode != HttpURLConnection.HTTP_PARTIAL) {
+                // The mirror does not support ranges; restart this one request.
+                connection.disconnect()
+                target.delete()
+                return streamDownload(rawUrl, target, timeout, maximumBytes, expectedBytes, onProgress)
+            }
             val contentLength = connection.contentLengthLong
             check(contentLength < 0 || contentLength <= maximumBytes) {
                 "download exceeds limit"
@@ -341,12 +386,16 @@ object NativeUpdateManager {
                 expectedBytes == null ||
                     expectedBytes <= 0 ||
                     contentLength < 0 ||
-                    contentLength == expectedBytes
+                    contentLength + resumeAt == expectedBytes
             ) { "unexpected content length" }
             target.parentFile?.mkdirs()
-            var received = 0L
+            var received = resumeAt
+            onProgress?.invoke(received)
             BufferedInputStream(connection.inputStream, BUFFER_SIZE).use { input ->
-                BufferedOutputStream(FileOutputStream(target), BUFFER_SIZE).use { output ->
+                BufferedOutputStream(
+                    FileOutputStream(target, existing > 0L),
+                    BUFFER_SIZE,
+                ).use { output ->
                     val buffer = ByteArray(BUFFER_SIZE)
                     while (true) {
                         val count = input.read(buffer)
@@ -364,7 +413,8 @@ object NativeUpdateManager {
             }
             return received
         } catch (error: Throwable) {
-            target.delete()
+            // Preserve the partial target for a later retry. Callers remove it
+            // only after a definitive checksum or size mismatch.
             throw error
         } finally {
             connection.disconnect()
@@ -413,7 +463,7 @@ object NativeUpdateManager {
     fun verifyAndNotify(context: Context): Boolean {
         val preferences = prefs(context)
         val file = File(preferences.getString("path", "") ?: return false)
-        if (!file.isFile) return false
+        if (!file.isFile || !verifyDownloadedApk(context, file)) return false
         ensureChannel(context)
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -436,7 +486,18 @@ object NativeUpdateManager {
 
     fun openInstaller(context: Context): Boolean {
         val file = File(prefs(context).getString("path", "") ?: return false)
-        if (!file.isFile) return false
+        if (!file.isFile || !verifyDownloadedApk(context, file)) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}"),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            return true
+        }
         context.startActivity(installIntent(context, file))
         return true
     }
@@ -445,14 +506,68 @@ object NativeUpdateManager {
         // Flutter startup performs the authoritative forced check.
     }
 
-    private fun installIntent(context: Context, file: File) =
-        Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(
-                FileProvider.getUriForFile(context, "${context.packageName}.files", file),
-                "application/vnd.android.package-archive",
-            )
+    private fun installIntent(context: Context, file: File): Intent {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+        return Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            data = uri
+            clipData = ClipData.newRawUri("SmartDolphin VPN update", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+    }
+
+    private fun temporaryFileLength(target: File): Long {
+        val temporary = File(target.parentFile, ".${target.name}.tmp")
+        return if (temporary.isFile) temporary.length() else 0L
+    }
+
+    @Suppress("DEPRECATION")
+    private fun verifyDownloadedApk(context: Context, file: File): Boolean = runCatching {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            PackageManager.GET_SIGNATURES
+        }
+        val archive = context.packageManager.getPackageArchiveInfo(file.absolutePath, flags)
+            ?: return@runCatching false
+        val installed = context.packageManager.getPackageInfo(context.packageName, flags)
+        if (archive.packageName != context.packageName) return@runCatching false
+        val preferences = prefs(context)
+        val expectedVersionName = preferences.getString("version_name", "").orEmpty()
+        if (expectedVersionName.isNotEmpty() && archive.versionName != expectedVersionName) {
+            return@runCatching false
+        }
+        val expectedVersionCode = preferences.getLong("version_code", 0)
+        val archiveVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            archive.longVersionCode
+        } else {
+            archive.versionCode.toLong()
+        }
+        if (expectedVersionCode > 0 && archiveVersionCode != expectedVersionCode) {
+            return@runCatching false
+        }
+        val archiveDigests = signingDigests(archive)
+        val installedDigests = signingDigests(installed)
+        archiveDigests.isNotEmpty() && archiveDigests.any(installedDigests::contains)
+    }.getOrDefault(false)
+
+    @Suppress("DEPRECATION")
+    private fun signingDigests(info: android.content.pm.PackageInfo): Set<String> {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = info.signingInfo ?: return emptySet()
+            if (signingInfo.hasMultipleSigners()) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo.signingCertificateHistory
+            }
+        } else {
+            info.signatures
+        }
+        return signatures.orEmpty().mapTo(mutableSetOf()) { signature ->
+            MessageDigest.getInstance("SHA-256")
+                .digest(signature.toByteArray())
+                .joinToString("") { "%02x".format(it) }
+        }
+    }
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

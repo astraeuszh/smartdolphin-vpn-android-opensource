@@ -21,6 +21,8 @@ class UpdateCheckResult {
     required this.packageSize,
     required this.downloadUrls,
     required this.chunkManifestUrl,
+    required this.minimumSupportedVersion,
+    required this.minimumSupportedBuild,
   });
 
   final String versionName;
@@ -33,8 +35,10 @@ class UpdateCheckResult {
   final int packageSize;
   final List<String> downloadUrls;
   final String chunkManifestUrl;
+  final String minimumSupportedVersion;
+  final int minimumSupportedBuild;
 
-  String get minimumVersion => versionName;
+  String get minimumVersion => minimumSupportedVersion;
 
   bool isNewerThan({
     required String currentVersion,
@@ -73,7 +77,8 @@ class ConsoleUpdate {
 
   Future<void> enqueueBackground(UpdateCheckResult update) async {
     await _native.invokeMethod<int>('enqueue', {
-      'version': '${update.versionName}+${update.versionCode}',
+      'versionName': update.versionName,
+      'versionCode': update.versionCode,
       'url': update.apkUrl,
       'sha256': update.sha256,
       'size': update.packageSize,
@@ -107,13 +112,22 @@ class ConsoleUpdate {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     if (body['ok'] != true) throw StateError('Invalid update response');
+    final installedBuild = int.tryParse(build.trim()) ?? 0;
+    final minimumSupportedBuild =
+        (body['minimum_supported_build'] as num?)?.toInt() ?? 0;
+    final belowMandatoryFloor = minimumSupportedBuild > 0 &&
+        installedBuild > 0 &&
+        installedBuild < minimumSupportedBuild;
     return UpdateCheckResult(
       versionName: (body['version_name'] as String?)?.trim() ?? version,
       versionCode:
           (body['version_code'] as num?)?.toInt() ?? (int.tryParse(build) ?? 0),
       releaseNotes: (body['release_notes'] as String?)?.trim() ?? '',
       apkUrl: (body['apk_url'] as String?)?.trim() ?? '',
-      forceUpdate: body['force_update'] == true,
+      // A release can be optional for supported clients while remaining
+      // mandatory for clients below the service floor. Do not bind those two
+      // independent policies to the latest release's force_update flag.
+      forceUpdate: body['force_update'] == true || belowMandatoryFloor,
       published: body['published'] == true,
       sha256: (body['sha256'] as String?)?.trim().toLowerCase() ?? '',
       packageSize: (body['package_size'] as num?)?.toInt() ?? 0,
@@ -123,6 +137,9 @@ class ConsoleUpdate {
               .toList() ??
           const [],
       chunkManifestUrl: (body['chunk_manifest_url'] as String?)?.trim() ?? '',
+      minimumSupportedVersion:
+          (body['minimum_supported_version'] as String?)?.trim() ?? '',
+      minimumSupportedBuild: minimumSupportedBuild,
     );
   }
 

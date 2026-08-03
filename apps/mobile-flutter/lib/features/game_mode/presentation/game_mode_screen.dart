@@ -51,7 +51,9 @@ class GameModeScreen extends ConsumerWidget {
         ? ConnectButtonVisualState.active
         : isAttemptCancelable
             ? ConnectButtonVisualState.connecting
-            : ConnectButtonVisualState.idle;
+            : session.status == SessionStatus.error
+                ? ConnectButtonVisualState.error
+                : ConnectButtonVisualState.idle;
 
     final drawerW = math.max(200.0, mq.size.width * 0.5);
 
@@ -75,10 +77,10 @@ class GameModeScreen extends ConsumerWidget {
             backgroundColor: Colors.transparent,
             drawer: Drawer(
               width: drawerW,
-              backgroundColor: const Color(0xFFF8FBFF),
+              backgroundColor: cs.surface,
               elevation: 0,
               child: ColoredBox(
-                color: const Color(0xFFF8FBFF),
+                color: cs.surface,
                 child: SafeArea(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -95,7 +95,9 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
     }
 
     try {
-      await ref.read(authControllerProvider.notifier).approveQrLogin(challengeId);
+      await ref
+          .read(authControllerProvider.notifier)
+          .approveQrLogin(challengeId);
       if (!mounted) return;
       unawaited(SystemSound.play(SystemSoundType.alert));
       showTopSnackBar(context, l10n.authQrApproveOk);
@@ -151,12 +153,14 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
                       children: [
                         CustomPaint(
                           size: const Size(_frameSize, _frameSize),
-                          painter: _ScanFramePainter(color: theme.colorScheme.primary),
+                          painter: _ScanFramePainter(
+                              color: theme.colorScheme.primary),
                         ),
                         AnimatedBuilder(
                           animation: _lineController,
                           builder: (context, _) {
-                            final y = 12 + (_frameSize - 24) * _lineController.value;
+                            final y =
+                                12 + (_frameSize - 24) * _lineController.value;
                             return Positioned(
                               left: 16,
                               right: 16,
@@ -167,13 +171,15 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
                                   gradient: LinearGradient(
                                     colors: [
                                       Colors.transparent,
-                                      theme.colorScheme.primary.withValues(alpha: 0.95),
+                                      theme.colorScheme.primary
+                                          .withValues(alpha: 0.95),
                                       Colors.transparent,
                                     ],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: theme.colorScheme.primary.withValues(alpha: 0.55),
+                                      color: theme.colorScheme.primary
+                                          .withValues(alpha: 0.55),
                                       blurRadius: 8,
                                     ),
                                   ],

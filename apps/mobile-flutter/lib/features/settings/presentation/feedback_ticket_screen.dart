@@ -181,7 +181,8 @@ class _FeedbackTicketScreenState extends ConsumerState<FeedbackTicketScreen> {
     if (result != null) setState(() => _type = result);
   }
 
-  Future<void> _pickSeverity(BuildContext context, AppLocalizations l10n) async {
+  Future<void> _pickSeverity(
+      BuildContext context, AppLocalizations l10n) async {
     final result = await SettingsPickerSheet.show<String>(
       context: context,
       title: l10n.ticketSeverityLabel,

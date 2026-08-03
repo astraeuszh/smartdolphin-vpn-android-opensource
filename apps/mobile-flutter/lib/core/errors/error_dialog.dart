@@ -28,7 +28,9 @@ class ErrorDialog extends StatelessWidget {
         children: [
           Icon(Icons.error_outline, color: theme.colorScheme.error, size: 28),
           const SizedBox(width: 12),
-          Text(title, style: TextStyle(color: theme.colorScheme.error, fontWeight: FontWeight.bold)),
+          Text(title,
+              style: TextStyle(
+                  color: theme.colorScheme.error, fontWeight: FontWeight.bold)),
         ],
       ),
       content: Column(

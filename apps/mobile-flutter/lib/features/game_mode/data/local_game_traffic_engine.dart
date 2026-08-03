@@ -6,7 +6,8 @@ import '../domain/game_traffic_engine.dart';
 
 /// Android：偏好写入 + [syncGameModeOverlay] 时启停本机 [GameModeLocalService]（不经 VPN）。
 class LocalGameTrafficEngine implements GameTrafficEngine {
-  static const _channel = MethodChannel('astraeus.smartdolphin.vpn/game_traffic');
+  static const _channel =
+      MethodChannel('astraeus.smartdolphin.vpn/game_traffic');
 
   @override
   Future<void> applyMode(GameModeSpeed mode) async {

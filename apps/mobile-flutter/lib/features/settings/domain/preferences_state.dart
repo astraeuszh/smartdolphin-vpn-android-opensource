@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 class PreferencesState extends Equatable {
   static const Object _sentinel = Object();
   static const defaultLocaleCode = 'en';
+
   /// Persisted when user picks "follow system" in settings.
   static const systemLocaleCode = '__system__';
 
@@ -22,6 +23,7 @@ class PreferencesState extends Equatable {
   final bool privacyPolicyAccepted;
   final bool onboardingCompleted;
   final bool autoReconnect;
+
   /// Dolphin-Core transport: 'reality' | 'hysteria2' | 'wireguard'.
   final String coreProtocol;
 
@@ -37,9 +39,11 @@ class PreferencesState extends Equatable {
     return PreferencesState(
       autoServerSwitch: autoServerSwitch ?? this.autoServerSwitch,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
-      localeCode:
-          identical(localeCode, _sentinel) ? this.localeCode : localeCode as String?,
-      privacyPolicyAccepted: privacyPolicyAccepted ?? this.privacyPolicyAccepted,
+      localeCode: identical(localeCode, _sentinel)
+          ? this.localeCode
+          : localeCode as String?,
+      privacyPolicyAccepted:
+          privacyPolicyAccepted ?? this.privacyPolicyAccepted,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       coreProtocol: coreProtocol ?? this.coreProtocol,

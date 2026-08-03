@@ -89,14 +89,11 @@ class _$ServerCopyWithImpl<$Res> implements $ServerCopyWith<$Res> {
     return _then(_value.copyWith(
       id: id == freezed ? _value.id : id as String,
       name: name == freezed ? _value.name : name as String,
-      countryCode: countryCode == freezed
-          ? _value.countryCode
-          : countryCode as String,
-      countryName: countryName == freezed
-          ? _value.countryName
-          : countryName as String?,
-      publicKey:
-          publicKey == freezed ? _value.publicKey : publicKey as String,
+      countryCode:
+          countryCode == freezed ? _value.countryCode : countryCode as String,
+      countryName:
+          countryName == freezed ? _value.countryName : countryName as String?,
+      publicKey: publicKey == freezed ? _value.publicKey : publicKey as String,
       endpoint: endpoint == freezed ? _value.endpoint : endpoint as String,
       allowedIps:
           allowedIps == freezed ? _value.allowedIps : allowedIps as String,
@@ -107,22 +104,19 @@ class _$ServerCopyWithImpl<$Res> implements $ServerCopyWith<$Res> {
       hostName: hostName == freezed ? _value.hostName : hostName as String?,
       ip: ip == freezed ? _value.ip : ip as String?,
       pingMs: pingMs == freezed ? _value.pingMs : pingMs as int?,
-      bandwidth:
-          bandwidth == freezed ? _value.bandwidth : bandwidth as int?,
+      bandwidth: bandwidth == freezed ? _value.bandwidth : bandwidth as int?,
       downloadSpeed: downloadSpeed == freezed
           ? _value.downloadSpeed
           : downloadSpeed as int?,
-      uploadSpeed: uploadSpeed == freezed
-          ? _value.uploadSpeed
-          : uploadSpeed as int?,
+      uploadSpeed:
+          uploadSpeed == freezed ? _value.uploadSpeed : uploadSpeed as int?,
       sessions: sessions == freezed ? _value.sessions : sessions as int?,
       openVpnConfigDataBase64: openVpnConfigDataBase64 == freezed
           ? _value.openVpnConfigDataBase64
           : openVpnConfigDataBase64 as String?,
       regionName:
           regionName == freezed ? _value.regionName : regionName as String?,
-      cityName:
-          cityName == freezed ? _value.cityName : cityName as String?,
+      cityName: cityName == freezed ? _value.cityName : cityName as String?,
       score: score == freezed ? _value.score : score as double?,
     ));
   }
@@ -156,8 +150,7 @@ abstract class _$$_ServerCopyWith<$Res> implements $ServerCopyWith<$Res> {
   });
 }
 
-class __$$_ServerCopyWithImpl<$Res>
-    extends _$ServerCopyWithImpl<$Res>
+class __$$_ServerCopyWithImpl<$Res> extends _$ServerCopyWithImpl<$Res>
     implements _$$_ServerCopyWith<$Res> {
   __$$_ServerCopyWithImpl(_$_Server _value, $Res Function(_$_Server) _then)
       : super(_value, (v) => _then(v as _$_Server));
@@ -191,14 +184,11 @@ class __$$_ServerCopyWithImpl<$Res>
     return _then(_$_Server(
       id: id == freezed ? _value.id : id as String,
       name: name == freezed ? _value.name : name as String,
-      countryCode: countryCode == freezed
-          ? _value.countryCode
-          : countryCode as String,
-      countryName: countryName == freezed
-          ? _value.countryName
-          : countryName as String?,
-      publicKey:
-          publicKey == freezed ? _value.publicKey : publicKey as String,
+      countryCode:
+          countryCode == freezed ? _value.countryCode : countryCode as String,
+      countryName:
+          countryName == freezed ? _value.countryName : countryName as String?,
+      publicKey: publicKey == freezed ? _value.publicKey : publicKey as String,
       endpoint: endpoint == freezed ? _value.endpoint : endpoint as String,
       allowedIps:
           allowedIps == freezed ? _value.allowedIps : allowedIps as String,
@@ -209,22 +199,19 @@ class __$$_ServerCopyWithImpl<$Res>
       hostName: hostName == freezed ? _value.hostName : hostName as String?,
       ip: ip == freezed ? _value.ip : ip as String?,
       pingMs: pingMs == freezed ? _value.pingMs : pingMs as int?,
-      bandwidth:
-          bandwidth == freezed ? _value.bandwidth : bandwidth as int?,
+      bandwidth: bandwidth == freezed ? _value.bandwidth : bandwidth as int?,
       downloadSpeed: downloadSpeed == freezed
           ? _value.downloadSpeed
           : downloadSpeed as int?,
-      uploadSpeed: uploadSpeed == freezed
-          ? _value.uploadSpeed
-          : uploadSpeed as int?,
+      uploadSpeed:
+          uploadSpeed == freezed ? _value.uploadSpeed : uploadSpeed as int?,
       sessions: sessions == freezed ? _value.sessions : sessions as int?,
       openVpnConfigDataBase64: openVpnConfigDataBase64 == freezed
           ? _value.openVpnConfigDataBase64
           : openVpnConfigDataBase64 as String?,
       regionName:
           regionName == freezed ? _value.regionName : regionName as String?,
-      cityName:
-          cityName == freezed ? _value.cityName : cityName as String?,
+      cityName: cityName == freezed ? _value.cityName : cityName as String?,
       score: score == freezed ? _value.score : score as double?,
     ));
   }

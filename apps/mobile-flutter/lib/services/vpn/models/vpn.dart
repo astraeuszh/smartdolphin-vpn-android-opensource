@@ -93,4 +93,3 @@ class Vpn {
     return 'Vpn(hostName: $hostName, ip: $ip, country: $countryLong, ping: $ping ms)';
   }
 }
-

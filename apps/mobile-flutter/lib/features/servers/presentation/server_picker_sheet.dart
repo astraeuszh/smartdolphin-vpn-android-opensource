@@ -86,7 +86,7 @@ class _ServerPickerSheetState extends ConsumerState<ServerPickerSheet> {
             child: Row(
               children: [
                 Expanded(
-                  child:                 Text(
+                  child: Text(
                     '${l10n.locations} (${catalog.countryCards.length})',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
@@ -150,18 +150,26 @@ class _ServerPickerSheetState extends ConsumerState<ServerPickerSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.showingLocations(filteredCards.length, catalog.countryCards.length),
+                  l10n.showingLocations(
+                      filteredCards.length, catalog.countryCards.length),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withOpacity(0.6),
                       ),
                 ),
-                if (catalog.error != null && catalog.countryCards.length <= 2) ...[
+                if (catalog.error != null &&
+                    catalog.countryCards.length <= 2) ...[
                   const SizedBox(height: 8),
                   Text(
                     l10n.serverListHintConnectFirst,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
-                    ),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.9),
+                        ),
                   ),
                 ],
               ],
@@ -206,17 +214,24 @@ class _ServerPickerSheetState extends ConsumerState<ServerPickerSheet> {
                         cachedUploadMbps: cache?.uploadMbps,
                         onTap: card.isConnectable
                             ? () {
-                                unawaited(ref.read(hapticsServiceProvider).selection());
+                                unawaited(ref
+                                    .read(hapticsServiceProvider)
+                                    .selection());
                                 if (isConnected) {
                                   if (selected) {
                                     Navigator.of(context).pop();
                                   } else {
                                     Navigator.of(context).pop();
-                                    unawaited(ref.read(sessionControllerProvider.notifier)
-                                        .switchToServerAndConnect(context: context, server: server));
+                                    unawaited(ref
+                                        .read(
+                                            sessionControllerProvider.notifier)
+                                        .switchToServerAndConnect(
+                                            context: context, server: server));
                                   }
                                 } else {
-                                  ref.read(selectedServerProvider.notifier).select(server);
+                                  ref
+                                      .read(selectedServerProvider.notifier)
+                                      .select(server);
                                   Navigator.of(context).pop();
                                 }
                               }

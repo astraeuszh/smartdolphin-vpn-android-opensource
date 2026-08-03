@@ -12,6 +12,7 @@ class RoutingConfig extends Equatable {
   });
 
   final TrafficMode mode;
+
   /// When true, route all system traffic through VPN (redirect-gateway).
   /// When false, remove redirect-gateway so only explicit routes go through VPN.
   final bool autoRouteSystem;

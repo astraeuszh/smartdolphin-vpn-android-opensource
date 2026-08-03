@@ -77,8 +77,10 @@ class HomeStatusWidget extends ConsumerWidget {
     }
     final end = state.start!.add(state.duration!);
     final remaining = end.difference(DateTime.now());
-    final minutes = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final minutes =
+        remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds =
+        remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '${remaining.inHours}:$minutes:$seconds';
   }
 }

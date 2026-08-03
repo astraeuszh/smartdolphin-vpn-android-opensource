@@ -62,7 +62,8 @@ class _ProxyShareScreenState extends ConsumerState<ProxyShareScreen>
     return List.generate(12, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
-  int _portFor(ProxyShareMode mode) => mode == ProxyShareMode.socks5 ? 1080 : 8080;
+  int _portFor(ProxyShareMode mode) =>
+      mode == ProxyShareMode.socks5 ? 1080 : 8080;
 
   String _mockHostIp() => '192.168.1.100';
 
@@ -117,12 +118,16 @@ class _ProxyShareScreenState extends ConsumerState<ProxyShareScreen>
                   port: port,
                   qrData: _qrPayload(ip, port),
                   onEnabledChanged: (v) async {
-                    await ref.read(settingsControllerProvider.notifier).setProxyShareEnabled(v);
+                    await ref
+                        .read(settingsControllerProvider.notifier)
+                        .setProxyShareEnabled(v);
                   },
                   onLanScopeChanged: (v) {
                     setState(() {
                       _hostLanScope = v;
-                      ref.read(settingsControllerProvider.notifier).setProxyShareMode(
+                      ref
+                          .read(settingsControllerProvider.notifier)
+                          .setProxyShareMode(
                             v ? ProxyShareMode.lan : _protocol,
                           );
                     });
@@ -130,12 +135,15 @@ class _ProxyShareScreenState extends ConsumerState<ProxyShareScreen>
                   onProtocolChanged: (mode) {
                     setState(() {
                       _protocol = mode;
-                      ref.read(settingsControllerProvider.notifier).setProxyShareMode(
+                      ref
+                          .read(settingsControllerProvider.notifier)
+                          .setProxyShareMode(
                             _hostLanScope ? ProxyShareMode.lan : mode,
                           );
                     });
                   },
-                  onRegenerateKey: () => setState(() => _shareKey = _generateShareKey()),
+                  onRegenerateKey: () =>
+                      setState(() => _shareKey = _generateShareKey()),
                   onCopy: (text) => _copy(context, text, l10n.proxyShareCopied),
                 ),
                 _ClientTab(
@@ -148,12 +156,16 @@ class _ProxyShareScreenState extends ConsumerState<ProxyShareScreen>
                   keyCtrl: _keyCtrl,
                   onHasApp: (yes) {
                     setState(() {
-                      _clientStep = yes ? _ClientStep.scanQr : _ClientStep.sameLanQuestion;
+                      _clientStep = yes
+                          ? _ClientStep.scanQr
+                          : _ClientStep.sameLanQuestion;
                     });
                   },
                   onSameLan: (yes) {
                     setState(() {
-                      _clientStep = yes ? _ClientStep.manualConnect : _ClientStep.p2pAttempt;
+                      _clientStep = yes
+                          ? _ClientStep.manualConnect
+                          : _ClientStep.p2pAttempt;
                       if (yes) {
                         _portCtrl.text = '${_portFor(_protocol)}';
                       }
@@ -163,8 +175,10 @@ class _ProxyShareScreenState extends ConsumerState<ProxyShareScreen>
                     setState(() {
                       _clientStep = switch (_clientStep) {
                         _ClientStep.scanQr => _ClientStep.hasAppQuestion,
-                        _ClientStep.sameLanQuestion => _ClientStep.hasAppQuestion,
-                        _ClientStep.manualConnect => _ClientStep.sameLanQuestion,
+                        _ClientStep.sameLanQuestion =>
+                          _ClientStep.hasAppQuestion,
+                        _ClientStep.manualConnect =>
+                          _ClientStep.sameLanQuestion,
                         _ClientStep.p2pAttempt ||
                         _ClientStep.p2pSuccess ||
                         _ClientStep.p2pFailed =>
@@ -269,7 +283,9 @@ class _HostTab extends StatelessWidget {
           onChanged: vpnConnected ? onEnabledChanged : null,
           title: Text(l10n.settingsProxyShare),
           subtitle: Text(
-            vpnConnected ? l10n.proxyShareHostEnableHint : l10n.proxyShareVpnRequired,
+            vpnConnected
+                ? l10n.proxyShareHostEnableHint
+                : l10n.proxyShareVpnRequired,
           ),
         ),
         if (!vpnConnected)
@@ -277,7 +293,8 @@ class _HostTab extends StatelessWidget {
             padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
             child: Text(
               l10n.proxyShareVpnRequired,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.error),
             ),
           ),
         if (enabled && vpnConnected) ...[
@@ -287,7 +304,8 @@ class _HostTab extends StatelessWidget {
           SegmentedButton<bool>(
             segments: [
               ButtonSegment(value: true, label: Text(l10n.proxyShareScopeLan)),
-              ButtonSegment(value: false, label: Text(l10n.proxyShareScopeRemote)),
+              ButtonSegment(
+                  value: false, label: Text(l10n.proxyShareScopeRemote)),
             ],
             selected: {lanScope},
             onSelectionChanged: (s) => onLanScopeChanged(s.first),
@@ -310,7 +328,10 @@ class _HostTab extends StatelessWidget {
             onSelectionChanged: (s) => onProtocolChanged(s.first),
           ),
           const SizedBox(height: 20),
-          _InfoRow(label: l10n.proxyShareHostIp, value: ip, onCopy: () => onCopy(ip)),
+          _InfoRow(
+              label: l10n.proxyShareHostIp,
+              value: ip,
+              onCopy: () => onCopy(ip)),
           _InfoRow(
             label: l10n.proxyShareHostPort,
             value: '$port',
@@ -408,9 +429,11 @@ class _ClientTab extends StatelessWidget {
           _ClientStep.scanQr => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(l10n.proxyShareScanQrTitle, style: theme.textTheme.titleMedium),
+                Text(l10n.proxyShareScanQrTitle,
+                    style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
-                Text(l10n.proxyShareScanQrHint, style: theme.textTheme.bodyMedium),
+                Text(l10n.proxyShareScanQrHint,
+                    style: theme.textTheme.bodyMedium),
                 const SizedBox(height: 16),
                 OutlinedButton.icon(
                   onPressed: () {
@@ -433,7 +456,8 @@ class _ClientTab extends StatelessWidget {
           _ClientStep.manualConnect => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(l10n.proxyShareManualTitle, style: theme.textTheme.titleMedium),
+                Text(l10n.proxyShareManualTitle,
+                    style: theme.textTheme.titleMedium),
                 const SizedBox(height: 12),
                 TextField(
                   controller: ipCtrl,
@@ -470,14 +494,17 @@ class _ClientTab extends StatelessWidget {
             ),
           _ClientStep.p2pAttempt => Column(
               children: [
-                Text(l10n.proxyShareP2pTitle, style: theme.textTheme.titleMedium),
+                Text(l10n.proxyShareP2pTitle,
+                    style: theme.textTheme.titleMedium),
                 const SizedBox(height: 16),
                 if (p2pBusy) ...[
                   const CircularProgressIndicator(),
                   const SizedBox(height: 16),
                   Text(l10n.proxyShareP2pTrying, textAlign: TextAlign.center),
                 ] else
-                  FilledButton(onPressed: onStartP2p, child: Text(l10n.proxyShareP2pStart)),
+                  FilledButton(
+                      onPressed: onStartP2p,
+                      child: Text(l10n.proxyShareP2pStart)),
                 const SizedBox(height: 12),
                 TextButton(onPressed: onBack, child: Text(l10n.cancel)),
               ],
@@ -556,11 +583,13 @@ class _ResultCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Icon(success ? Icons.check_circle_outline : Icons.error_outline, color: color, size: 48),
+            Icon(success ? Icons.check_circle_outline : Icons.error_outline,
+                color: color, size: 48),
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            TextButton(onPressed: onReset, child: Text(l10n.proxyShareClientRestart)),
+            TextButton(
+                onPressed: onReset, child: Text(l10n.proxyShareClientRestart)),
           ],
         ),
       ),
@@ -586,7 +615,8 @@ class _InfoRow extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(label, style: Theme.of(context).textTheme.bodySmall),
-      subtitle: SelectableText(value, style: Theme.of(context).textTheme.titleMedium),
+      subtitle:
+          SelectableText(value, style: Theme.of(context).textTheme.titleMedium),
       trailing: trailing ??
           IconButton(
             icon: const Icon(Icons.copy_outlined),
@@ -606,7 +636,10 @@ class _UnstableDisclaimer extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+      color: Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.6),
       child: Text(
         text,
         textAlign: TextAlign.center,

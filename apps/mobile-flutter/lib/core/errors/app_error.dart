@@ -19,7 +19,8 @@ class AppError implements Exception {
   String get formattedCode => formatErrorCode(code);
 
   @override
-  String toString() => 'AppError($formattedCode: $message${details.isNotEmpty ? ' | $details' : ''})';
+  String toString() =>
+      'AppError($formattedCode: $message${details.isNotEmpty ? ' | $details' : ''})';
 }
 
 /// Callback for logging. Set by app to wire VpnLogger.
@@ -33,7 +34,8 @@ void setAppErrorLogCallback(void Function(String level, String message)? cb) {
 void logAppError(AppError err, String className) {
   final detail = err.details.isNotEmpty ? ' | ${err.details}' : '';
   final cause = err.cause != null ? ' | cause=${err.cause}' : '';
-  final entry = 'ERROR_CODE=${err.formattedCode} | $className | ${err.message}$detail$cause';
+  final entry =
+      'ERROR_CODE=${err.formattedCode} | $className | ${err.message}$detail$cause';
   debugPrint('[AppError] $entry');
   _logCallback?.call('error', entry);
 }

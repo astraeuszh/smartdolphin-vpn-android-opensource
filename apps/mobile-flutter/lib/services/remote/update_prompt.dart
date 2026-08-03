@@ -150,7 +150,7 @@ Future<void> checkAndPromptForUpdate(
                                       : ratio.clamp(0.0, 1.0);
                                   downloading = current.status == 'pending' ||
                                       current.status == 'running' ||
-                                      current.status == 'paused';
+                                      current.status == 'retrying';
                                   status = current.status == 'successful'
                                       ? l10n.updateInstallerOpen
                                       : current.status == 'failed'

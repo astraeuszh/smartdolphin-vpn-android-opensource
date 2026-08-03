@@ -43,6 +43,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final ipAsync = ref.watch(ipInfoProvider);
 
     return Scaffold(
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF0B0D0F)
+          : null,
       appBar: HiVpnPageAppBar(title: l10n.navDashboard),
       body: SafeArea(
         child: ListView(
@@ -335,7 +338,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               height: 72,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.55),
+                color: theme.brightness == Brightness.dark
+                    ? const Color(0xFF111518)
+                    : Colors.white.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: hasData
@@ -361,7 +366,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: theme.brightness == Brightness.dark
+                  ? const Color(0xFF15191C)
+                  : Colors.white.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -377,7 +384,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Container(
                     width: 1,
                     height: 32,
-                    color: Colors.white.withValues(alpha: 0.45)),
+                    color: theme.brightness == Brightness.dark
+                        ? const Color(0xFF282E33)
+                        : Colors.white.withValues(alpha: 0.45)),
                 Expanded(
                   child: _CompactStat(
                     icon: Icons.arrow_downward_rounded,
@@ -389,7 +398,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Container(
                     width: 1,
                     height: 32,
-                    color: Colors.white.withValues(alpha: 0.45)),
+                    color: theme.brightness == Brightness.dark
+                        ? const Color(0xFF282E33)
+                        : Colors.white.withValues(alpha: 0.45)),
                 Expanded(
                   child: _CompactStat(
                     icon: Icons.memory_rounded,
@@ -630,8 +641,15 @@ class _WebsiteTestCard extends StatelessWidget {
       width: 88,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.6),
+        color: theme.brightness == Brightness.dark
+            ? const Color(0xFF15191C)
+            : Colors.white.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.brightness == Brightness.dark
+              ? const Color(0xFF282E33)
+              : theme.colorScheme.outlineVariant.withValues(alpha: .55),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

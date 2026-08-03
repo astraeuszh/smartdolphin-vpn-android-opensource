@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -17,6 +19,20 @@ android {
     // (failed) install missing build/cmake/android.toolchain.cmake. The plugin
     // "wants NDK 27" message is just a warning — NDK is backward compatible.
     ndkVersion = "26.1.10909125"
+
+    val signingProperties = Properties().apply {
+        val file = rootProject.file("key.properties")
+        if (file.exists()) file.inputStream().use { load(it) }
+    }
+    val releaseStoreFile = signingProperties.getProperty("storeFile")
+    val releaseSigning = if (!releaseStoreFile.isNullOrBlank()) {
+        signingConfigs.create("smartDolphinRelease") {
+            storeFile = rootProject.file(releaseStoreFile)
+            storePassword = signingProperties.getProperty("storePassword")
+            keyAlias = signingProperties.getProperty("keyAlias")
+            keyPassword = signingProperties.getProperty("keyPassword")
+        }
+    } else null
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -43,7 +59,8 @@ android {
             isMinifyEnabled = true
             versionNameSuffix = ""
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = releaseSigning
+                ?: error("Release signing requires platforms/android/key.properties")
             // Avoid llvm-strip/llvm-objcopy on Windows when NDK tools fail to launch (e.g. network drive).
             ndk {
                 debugSymbolLevel = "NONE"
@@ -66,10 +83,8 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-            // Do NOT disable stripReleaseDebugSymbols via Gradle — that can break the pipeline so
-            // zero .so files end up in the APK (~2MB broken build). Keeping debug symbols skips strip
-            // without breaking merge/package (see AGP jniLibs.keepDebugSymbols).
-            keepDebugSymbols.add("**/*.so")
+            // Release libraries are stripped by AGP/NDK. Keeping debug symbols
+            // here made the universal APK exceed 170 MB and the arm64 APK 74 MB.
         }
     }
 }
@@ -99,9 +114,10 @@ dependencies {
 // Flutter applies generated metadata late in this shared Android project.
 // Preserve the version passed by `flutter build` instead of hardcoding it.
 androidComponents {
+    val bridgeVersionName = providers.gradleProperty("bridgeVersionName").orNull
     onVariants(selector().withBuildType("release")) { variant ->
         variant.outputs.forEach { output ->
-            output.versionName.set(flutter.versionName ?: "1.0.0")
+            output.versionName.set(bridgeVersionName ?: flutter.versionName ?: "1.0.0")
             output.versionCode.set(flutter.versionCode?.toInt() ?: 1)
         }
     }

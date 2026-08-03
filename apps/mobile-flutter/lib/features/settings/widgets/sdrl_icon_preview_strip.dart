@@ -17,7 +17,8 @@ class SdrlIconPreviewStrip extends StatelessWidget {
           const SizedBox(width: 12),
           _chip(context, label: '.sdrb', caption: context.l10n.sdrlIconBinary),
           const SizedBox(width: 12),
-          _chip(context, label: 'sdrlc', caption: context.l10n.sdrlIconCompiled),
+          _chip(context,
+              label: 'sdrlc', caption: context.l10n.sdrlIconCompiled),
         ],
       ),
     );

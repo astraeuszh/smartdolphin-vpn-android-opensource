@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/startup/splash_check_screen.dart';
+import '../core/lifecycle/app_foreground_provider.dart';
 import '../features/auth/domain/auth_controller.dart';
 import '../features/smart_stable/smart_stable_lifecycle.dart';
 import '../features/settings/domain/preferences_controller.dart';
@@ -26,13 +27,18 @@ class SmartDolphinApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(preferencesReadyProvider);
     final preferences = ref.watch(preferencesControllerProvider);
-    final accentSeed = ref.watch(settingsControllerProvider).accentSeed;
+    final settings = ref.watch(settingsControllerProvider);
+    final accentSeed = settings.accentSeed;
     final localeTag = preferences.localeCode ?? _defaultLocaleCode;
 
     return MaterialApp(
       onGenerateTitle: (context) => context.l10n.appTitle,
       theme: buildHiVpnTheme(accentSeed: accentSeed),
-      themeMode: ThemeMode.light,
+      darkTheme: buildHiVpnTheme(
+        accentSeed: accentSeed,
+        brightness: Brightness.dark,
+      ),
+      themeMode: settings.darkMode ? ThemeMode.dark : ThemeMode.light,
       debugShowCheckedModeBanner: false,
       themeAnimationDuration: Duration.zero,
       themeAnimationCurve: Curves.linear,
@@ -97,6 +103,7 @@ class _ForegroundPresenceHeartbeatState
     extends ConsumerState<_ForegroundPresenceHeartbeat>
     with WidgetsBindingObserver {
   Timer? _timer;
+  int _minutesSinceAccountRefresh = 0;
 
   @override
   void initState() {
@@ -130,19 +137,24 @@ class _ForegroundPresenceHeartbeatState
 
   void _start() {
     _timer?.cancel();
-    unawaited(_refreshPresence());
+    _minutesSinceAccountRefresh = 0;
+    unawaited(_refreshPresence(refreshAccount: true));
     // The server TTL is 90 seconds. Sixty seconds avoids status flicker while
     // leaving retry margin and using far fewer foreground radio wakeups.
     _timer = Timer.periodic(const Duration(seconds: 60), (_) {
-      unawaited(_refreshPresence());
+      final session = ref.read(authControllerProvider).session;
+      final risk = session?.trafficPolicy.risk.totalStrikes ?? 0;
+      final refreshEveryMinutes = risk > 0 ? 1 : 5;
+      _minutesSinceAccountRefresh += 1;
+      final refreshAccount = _minutesSinceAccountRefresh >= refreshEveryMinutes;
+      if (refreshAccount) _minutesSinceAccountRefresh = 0;
+      unawaited(_refreshPresence(refreshAccount: refreshAccount));
     });
   }
 
-  Future<void> _refreshPresence() async {
+  Future<void> _refreshPresence({required bool refreshAccount}) async {
     final auth = ref.read(authControllerProvider.notifier);
-    // Account status is the authoritative deletion/ban gate. Presence itself
-    // intentionally has a cheap Redis-only path and cannot detect deletion.
-    await auth.refreshSession();
+    if (refreshAccount) await auth.refreshSession(force: true);
     if (ref.read(authControllerProvider).session != null) {
       await auth.setForegroundPresence(true);
     }
@@ -154,16 +166,16 @@ class _ForegroundPresenceHeartbeatState
 
 /// Stops all Flutter tickers while the app is not visible and explicitly
 /// requests a fresh frame after Android recreates the rendering surface.
-class _AppLifecycleGate extends StatefulWidget {
+class _AppLifecycleGate extends ConsumerStatefulWidget {
   const _AppLifecycleGate({required this.child});
 
   final Widget child;
 
   @override
-  State<_AppLifecycleGate> createState() => _AppLifecycleGateState();
+  ConsumerState<_AppLifecycleGate> createState() => _AppLifecycleGateState();
 }
 
-class _AppLifecycleGateState extends State<_AppLifecycleGate>
+class _AppLifecycleGateState extends ConsumerState<_AppLifecycleGate>
     with WidgetsBindingObserver {
   bool _foreground = true;
 
@@ -184,6 +196,7 @@ class _AppLifecycleGateState extends State<_AppLifecycleGate>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final foreground = state == AppLifecycleState.resumed;
+    ref.read(appForegroundProvider.notifier).state = foreground;
     if (_foreground != foreground && mounted) {
       setState(() => _foreground = foreground);
     }

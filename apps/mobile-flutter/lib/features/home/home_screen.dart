@@ -87,11 +87,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _policyRefreshTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+    _policyRefreshTimer = Timer.periodic(const Duration(minutes: 30), (_) {
       if (!mounted) return;
-      unawaited(ref
-          .read(authControllerProvider.notifier)
-          .refreshSession());
       unawaited(_maybeShowAnnouncement());
     });
   }
@@ -109,11 +106,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _policyRefreshTimer = null;
     }
     if (state == AppLifecycleState.resumed) {
-      _policyRefreshTimer ??= Timer.periodic(const Duration(minutes: 2), (_) {
+      _policyRefreshTimer ??= Timer.periodic(const Duration(minutes: 30), (_) {
         if (!mounted) return;
-        unawaited(ref
-            .read(authControllerProvider.notifier)
-            .refreshSession());
         unawaited(_maybeShowAnnouncement());
       });
       // 长时间后台后 Flutter semantics 树可能卡住；预热一帧并延迟刷新账户状态。
@@ -724,8 +718,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final buttonState = isConnected
         ? ConnectButtonVisualState.active
         : isAttemptCancelable || _connectTapInFlight
-            ? ConnectButtonVisualState.connecting
-            : ConnectButtonVisualState.idle;
+            ? session.connectionWarning
+                ? ConnectButtonVisualState.warning
+                : ConnectButtonVisualState.connecting
+            : session.status == SessionStatus.error
+                ? ConnectButtonVisualState.error
+                : ConnectButtonVisualState.idle;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1061,8 +1059,6 @@ class _HomeConnectionStats extends ConsumerWidget {
     final systemLatency = ref.watch(homeSystemLatencyProvider).valueOrNull;
     final ipInfo = ref.watch(ipInfoProvider).valueOrNull;
     final cached = server != null ? speedCache[server!.id] : null;
-    final useLive = isConnected && server != null;
-
     String downloadText = '--';
     String uploadText = '--';
     String _fmtMbps(double? v) {
@@ -1072,16 +1068,19 @@ class _HomeConnectionStats extends ConsumerWidget {
     }
 
     if (isConnected) {
-      if (useLive) {
-        downloadText = _fmtMbps(liveThroughput.downloadMbps);
-        uploadText = _fmtMbps(liveThroughput.uploadMbps);
-      } else if (cached != null) {
+      // These two cards describe the selected route's tested/capacity speed.
+      // Instantaneous tunnel traffic naturally sits around 0.x while idle and
+      // belongs on the live dashboard chart, not in the route speed cards.
+      if (cached != null) {
         downloadText = '${cached.downloadMbps.toStringAsFixed(1)} Mbps';
         uploadText = '${cached.uploadMbps.toStringAsFixed(1)} Mbps';
       } else if (server != null) {
         downloadText =
             _formatBandwidth(server!.downloadSpeed ?? server!.bandwidth);
-        uploadText = _formatBandwidth(server!.uploadSpeed);
+        uploadText = _formatBandwidth(server!.uploadSpeed ?? server!.bandwidth);
+      } else {
+        downloadText = _fmtMbps(liveThroughput.downloadMbps);
+        uploadText = _fmtMbps(liveThroughput.uploadMbps);
       }
     } else if (localStats != null) {
       if (localStats.downloadMbps != null && localStats.downloadMbps! > 0) {
@@ -1101,6 +1100,10 @@ class _HomeConnectionStats extends ConsumerWidget {
     final latencyMs = systemLatency;
     final latencyText =
         latencyMs != null && latencyMs > 0 ? '$latencyMs ms' : '--';
+    final liveUploadLabel =
+        l10n.locale.languageCode == 'zh' ? '实时上传' : 'Live upload';
+    final liveDownloadLabel =
+        l10n.locale.languageCode == 'zh' ? '实时下载' : 'Live download';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1110,7 +1113,7 @@ class _HomeConnectionStats extends ConsumerWidget {
             children: [
               Expanded(
                 child: _HomeStatCard(
-                  label: l10n.serverUploadLabel,
+                  label: isConnected ? liveUploadLabel : l10n.serverUploadLabel,
                   value: uploadText,
                   theme: theme,
                 ),
@@ -1118,7 +1121,9 @@ class _HomeConnectionStats extends ConsumerWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _HomeStatCard(
-                  label: l10n.serverDownloadLabel,
+                  label: isConnected
+                      ? liveDownloadLabel
+                      : l10n.serverDownloadLabel,
                   value: downloadText,
                   theme: theme,
                 ),

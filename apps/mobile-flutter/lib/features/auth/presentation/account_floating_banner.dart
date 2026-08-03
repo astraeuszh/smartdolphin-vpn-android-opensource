@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/legal_urls.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../services/storage/prefs.dart';
+import '../../../services/remote/console_feedback.dart';
 import '../domain/account_datetime.dart';
 import '../domain/account_session.dart';
 import '../domain/auth_controller.dart';
@@ -161,6 +162,78 @@ class _AccountFloatingBannerState extends ConsumerState<AccountFloatingBanner>
     return result == true;
   }
 
+  Future<void> _requestReview(
+      AccountSession session, _AccountNotice notice) async {
+    final copy = _copy(context);
+    final controller = TextEditingController();
+    var accepted = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(copy.reviewTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(copy.reviewBody),
+              const SizedBox(height: 12),
+              _RestrictionLegalLinks(copy: copy),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: accepted,
+                onChanged: (value) =>
+                    setDialogState(() => accepted = value ?? false),
+                title: Text(copy.promise),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: copy.typePrompt,
+                  hintText: copy.reviewPhrase,
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(copy.cancel),
+            ),
+            FilledButton(
+              onPressed: accepted && controller.text.trim() == copy.reviewPhrase
+                  ? () => Navigator.pop(dialogContext, true)
+                  : null,
+              child: Text(copy.submitReview),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (confirmed != true || !mounted) return;
+    try {
+      await ConsoleFeedback().submit(
+        session: session,
+        errorCode: 'ACCOUNT_RESTRICTION_REVIEW',
+        message: '${notice.id}: ${notice.text}',
+        logSnapshot: '',
+        kind: 'unblock_request',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(copy.reviewSent)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(copy.reviewFailed)));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
@@ -195,6 +268,9 @@ class _AccountFloatingBannerState extends ConsumerState<AccountFloatingBanner>
                     padding: const EdgeInsets.only(bottom: 6),
                     child: _NoticeBar(
                       notice: notice,
+                      onTap: notice.severity == _Severity.red
+                          ? () => unawaited(_requestReview(session, notice))
+                          : null,
                       onClose: notice.dismissible
                           ? () => unawaited(_dismiss(userKey, notice))
                           : null,
@@ -258,6 +334,33 @@ List<_AccountNotice> _notices(
       severity: _Severity.orange,
     ));
   }
+  if (policy.risk.lightCount > 0) {
+    notices.add(_AccountNotice(
+      id: 'light-violation',
+      signature: 'light:${policy.risk.lightCount}',
+      text: copy.lightViolation(policy.risk.lightCount),
+      severity: _Severity.green,
+    ));
+  }
+  if (policy.risk.mediumCount > 0) {
+    notices.add(_AccountNotice(
+      id: 'medium-violation',
+      signature: 'medium:${policy.risk.mediumCount}',
+      text: copy.mediumViolation(policy.risk.mediumCount),
+      severity: _Severity.orange,
+    ));
+  }
+  if (policy.risk.severeCount > 0 &&
+      !session.locked &&
+      !policy.isAccountLocked) {
+    notices.add(_AccountNotice(
+      id: 'severe-violation',
+      signature: 'severe:${policy.risk.severeCount}',
+      text: copy.severeViolation(policy.risk.severeCount),
+      severity: _Severity.red,
+      dismissible: false,
+    ));
+  }
   if (session.isMuted) {
     notices.add(_AccountNotice(
       id: 'muted',
@@ -272,6 +375,7 @@ List<_AccountNotice> _notices(
       signature: 'locked:${policy.risk.violationCount}',
       text: copy.locked(policy.risk.violationCount),
       severity: _Severity.red,
+      dismissible: false,
       requireTypedConfirmation: true,
     ));
   }
@@ -281,6 +385,7 @@ List<_AccountNotice> _notices(
       signature: 'banned:${session.banReason}',
       text: copy.banned(session.banReason),
       severity: _Severity.red,
+      dismissible: false,
       requireTypedConfirmation: true,
     ));
   }
@@ -288,9 +393,10 @@ List<_AccountNotice> _notices(
 }
 
 class _NoticeBar extends StatelessWidget {
-  const _NoticeBar({required this.notice, this.onClose});
+  const _NoticeBar({required this.notice, this.onClose, this.onTap});
   final _AccountNotice notice;
   final VoidCallback? onClose;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -300,7 +406,7 @@ class _NoticeBar extends StatelessWidget {
       _Severity.orange => (const Color(0xfffff0dc), const Color(0xffa54b00)),
       _Severity.red => (const Color(0xffffe7e7), const Color(0xffb42318)),
     };
-    return Container(
+    final bar = Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: colors.$1.withValues(alpha: 0.97),
@@ -335,6 +441,15 @@ class _NoticeBar extends StatelessWidget {
               icon: Icon(Icons.close_rounded, size: 19, color: colors.$2),
             ),
         ],
+      ),
+    );
+    if (onTap == null) return bar;
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: bar,
       ),
     );
   }
@@ -445,6 +560,15 @@ class _StatusCopy {
   String banned(String reason) => _zh || _hant
       ? '账户已被封禁${reason.trim().isEmpty ? '。' : '：$reason'}'
       : 'The account is banned${reason.trim().isEmpty ? '.' : ': $reason'}';
+  String lightViolation(int count) => _zh || _hant
+      ? '检测到 $count 次轻度违规，请注意后续使用行为。'
+      : '$count minor rule violation(s) detected. Please review your usage.';
+  String mediumViolation(int count) => _zh || _hant
+      ? '检测到 $count 次中度违规。关闭前需确认已阅读社区规则。'
+      : '$count medium rule violation(s) detected. Review the community rules before dismissing.';
+  String severeViolation(int count) => _zh || _hant
+      ? '检测到 $count 次严重违规。点此向管理员申请复核。'
+      : '$count severe rule violation(s) detected. Tap to request administrator review.';
   String get acknowledgeTitle => _zh
       ? '确认已知晓'
       : _hant
@@ -500,6 +624,17 @@ class _StatusCopy {
           : 'I UNDERSTAND';
   String get cancel => _zh ? '取消' : 'Cancel';
   String get confirm => _zh ? '确认' : 'Confirm';
+  String get reviewTitle => _zh ? '申请解除限制' : 'Request restriction review';
+  String get reviewBody => _zh
+      ? '提交后管理员会复核当前限制。申请不会自动解除处罚，也不会重复加速处理。'
+      : 'An administrator will review the restriction. Submission does not remove it automatically.';
+  String get reviewPhrase =>
+      _zh ? '我已知晓并承诺不再违规' : 'I UNDERSTAND AND WILL FOLLOW THE RULES';
+  String get submitReview => _zh ? '提交申请' : 'Submit request';
+  String get reviewSent =>
+      _zh ? '申请已提交，请等待管理员复核。' : 'Review request submitted.';
+  String get reviewFailed =>
+      _zh ? '申请提交失败，请稍后重试。' : 'Request failed. Please retry.';
 }
 
 _StatusCopy _copy(BuildContext context) {

@@ -47,7 +47,6 @@ Duration _capSessionDuration(Duration raw) {
   return raw > cap ? cap : raw;
 }
 
-
 String formatNotificationDuration(Duration duration) {
   final safe = duration.isNegative ? Duration.zero : duration;
   final totalSeconds = safe.inSeconds;

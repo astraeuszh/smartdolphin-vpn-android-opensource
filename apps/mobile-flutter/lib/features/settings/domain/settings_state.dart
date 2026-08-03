@@ -18,7 +18,9 @@ class SettingsState extends Equatable {
     this.batterySaverEnabled = false,
     this.networkQualityMonitoring = true,
     this.preciseSessionTimer = false,
+    this.darkMode = false,
     this.accentSeed = 'ocean',
+    this.autoUpdateChecks = true,
   });
 
   final ProtocolConfig protocol;
@@ -30,7 +32,9 @@ class SettingsState extends Equatable {
   final bool batterySaverEnabled;
   final bool networkQualityMonitoring;
   final bool preciseSessionTimer;
+  final bool darkMode;
   final String accentSeed;
+  final bool autoUpdateChecks;
 
   SettingsState copyWith({
     ProtocolConfig? protocol,
@@ -42,7 +46,9 @@ class SettingsState extends Equatable {
     bool? batterySaverEnabled,
     bool? networkQualityMonitoring,
     bool? preciseSessionTimer,
+    bool? darkMode,
     String? accentSeed,
+    bool? autoUpdateChecks,
   }) {
     return SettingsState(
       protocol: protocol ?? this.protocol,
@@ -55,7 +61,9 @@ class SettingsState extends Equatable {
       networkQualityMonitoring:
           networkQualityMonitoring ?? this.networkQualityMonitoring,
       preciseSessionTimer: preciseSessionTimer ?? this.preciseSessionTimer,
+      darkMode: darkMode ?? this.darkMode,
       accentSeed: accentSeed ?? this.accentSeed,
+      autoUpdateChecks: autoUpdateChecks ?? this.autoUpdateChecks,
     );
   }
 
@@ -70,6 +78,8 @@ class SettingsState extends Equatable {
         batterySaverEnabled,
         networkQualityMonitoring,
         preciseSessionTimer,
+        darkMode,
         accentSeed,
+        autoUpdateChecks,
       ];
 }

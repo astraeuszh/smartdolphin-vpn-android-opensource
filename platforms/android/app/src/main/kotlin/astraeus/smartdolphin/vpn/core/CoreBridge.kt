@@ -2,6 +2,7 @@
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import io.flutter.plugin.common.EventChannel
 
 /// Bridges the Go-backed [BoxService] (a separate Service) with the Flutter
@@ -18,6 +19,36 @@ object CoreBridge {
 
     /// Last config requested from Flutter (consumed by BoxService on start).
     @Volatile var pendingConfig: String? = null
+
+    @Volatile private var startRequestedAtMs: Long = 0
+    @Volatile private var tunEstablishedAtMs: Long = 0
+    @Volatile private var coreReadyAtMs: Long = 0
+
+    fun markStartRequested() {
+        startRequestedAtMs = SystemClock.elapsedRealtime()
+        tunEstablishedAtMs = 0
+        coreReadyAtMs = 0
+    }
+
+    fun markTunEstablished() {
+        if (tunEstablishedAtMs == 0L) {
+            tunEstablishedAtMs = SystemClock.elapsedRealtime()
+        }
+    }
+
+    fun markCoreReady() {
+        coreReadyAtMs = SystemClock.elapsedRealtime()
+    }
+
+    fun connectionMetrics(): Map<String, Long> {
+        val start = startRequestedAtMs
+        val tun = tunEstablishedAtMs
+        val ready = coreReadyAtMs
+        return mapOf(
+            "tun_ms" to if (start > 0 && tun >= start) tun - start else -1,
+            "core_ms" to if (start > 0 && ready >= start) ready - start else -1,
+        )
+    }
 
     fun emitStage(stage: String) {
         connected = stage == "connected"

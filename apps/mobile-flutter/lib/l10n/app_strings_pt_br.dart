@@ -13,7 +13,8 @@ const Map<String, String> kAppStringsPtBr = {
   'accountCurrentName': 'Current display name',
   'accountEmail': 'Email',
   'accountFeedbackAdmin': 'Report to administrator',
-  'accountFeedbackAdminBody': 'We will upload recent VPN runtime diagnostics to help investigate connection issues. Logs exclude passwords, payment data, and other sensitive personal information. Only technical events related to VPN operation are included.',
+  'accountFeedbackAdminBody':
+      'We will upload recent VPN runtime diagnostics to help investigate connection issues. Logs exclude passwords, payment data, and other sensitive personal information. Only technical events related to VPN operation are included.',
   'accountFeedbackConfirm': 'Send feedback',
   'accountFeedbackDataUsage': 'Upload may use about {kb} KB of mobile data.',
   'accountFeedbackDecline': 'Not now',
@@ -33,13 +34,15 @@ const Map<String, String> kAppStringsPtBr = {
   'accountOpenWebsiteFailed': 'Could not open website',
   'accountPasswordMismatch': 'Passwords do not match',
   'accountPasswordTooShort': 'Password must be at least 6 characters',
-  'accountQuotaSummary': 'Monthly cap {quotaGb} GB · used {usedGb} GB ({percent}%)',
+  'accountQuotaSummary':
+      'Monthly cap {quotaGb} GB · used {usedGb} GB ({percent}%)',
   'accountQuotaTitle': 'Server data quota',
   'accountRefreshFailed': 'Could not refresh account info',
   'accountResendIn': 'Resend in {seconds}s',
   'accountSave': 'Save',
   'accountSendCode': 'Send code',
-  'accountThrottledHint': 'Your account is rate-limited. VPN still works; please follow usage guidelines.',
+  'accountThrottledHint':
+      'Your account is rate-limited. VPN still works; please follow usage guidelines.',
   'accountUpdateSuccess': 'Updated successfully',
   'accountVerificationCode': 'Verification code',
   'accountVerifyPassword': 'Verify password',
@@ -56,7 +59,8 @@ const Map<String, String> kAppStringsPtBr = {
   'authEnterVerificationCode': 'Enter the 6-digit verification code',
   'authErrorCodeCooldown': 'Wait {seconds}s before requesting a new code',
   'authErrorEmailTaken': 'This email is already registered',
-  'authErrorEmailUnreachable': 'Email domain cannot be resolved. Use a real address',
+  'authErrorEmailUnreachable':
+      'Email domain cannot be resolved. Use a real address',
   'authErrorIllegalChar': 'Name or password contains invalid characters',
   'authErrorInvalidEmail': 'Invalid email format',
   'authErrorInvalidVerificationCode': 'Enter a 6-digit verification code',
@@ -69,14 +73,17 @@ const Map<String, String> kAppStringsPtBr = {
   'authFieldVerificationCode': 'Email verification code',
   'authGetCode': 'Get code',
   'authHaveAccount': 'Already have an account? Sign in',
-  'authLegalAgreementHint': 'By continuing to log in or register, you confirm that you have read and agreed to {agreements}.',
+  'authLegalAgreementHint':
+      'By continuing to log in or register, you confirm that you have read and agreed to {agreements}.',
   'authLegalAgreementSeparator': ', ',
   'authLoginSubtitle': 'Sign in to use VPN',
   'authNoAccount': 'No account? Sign up',
   'authPasswordMismatch': 'Passwords do not match',
-  'authPasswordRule': 'Password must be at least 8 characters with letters and numbers',
+  'authPasswordRule':
+      'Password must be at least 8 characters with letters and numbers',
   'authQrApproveConfirm': 'Allow',
-  'authQrApproveMessage': 'Another device is requesting to sign in with your account. Allow this login?',
+  'authQrApproveMessage':
+      'Another device is requesting to sign in with your account. Allow this login?',
   'authQrApproveOk': 'Sign-in authorized',
   'authQrApproveTitle': 'Authorize sign-in?',
   'authQrRefresh': 'Refresh QR code',
@@ -139,28 +146,38 @@ const Map<String, String> kAppStringsPtBr = {
   'dashboardUsedYear': 'Usado este ano',
   'dashboardWebsiteTest': 'Teste de site',
   'disconnect': 'Desconectar',
-  'disconnectedWatchAd': 'Desconectado. Assista a outro anúncio para se reconectar.',
+  'disconnectedWatchAd':
+      'Desconectado. Assista a outro anúncio para se reconectar.',
   'dnsCheckingConnectivity': 'Verificando a conectividade do servidor DNS…',
   'dnsCheckingIpRange': 'Verificando a conformidade com IP…',
   'dnsEnterFullIpv4': 'Insira um endereço IPv4 completo.',
-  'dnsHint': 'Apenas dígitos; pressione Enter para passar para a próxima caixa (não são necessários pontos).',
-  'dnsSetFailed': 'Falha ao definir DNS personalizado: formato IP inválido ou nenhum serviço DNS no servidor.',
+  'dnsHint':
+      'Apenas dígitos; pressione Enter para passar para a próxima caixa (não são necessários pontos).',
+  'dnsSetFailed':
+      'Falha ao definir DNS personalizado: formato IP inválido ou nenhum serviço DNS no servidor.',
   'dnsSetSuccess': 'Definido com sucesso.',
   'dnsTitle': 'DNS personalizado',
   'failedToLoadServers': 'Falha ao carregar servidores',
-  'gameDecelHintDrawer': 'Escolha Decel e conecte a VPN para limitar por nível; depois de mudar de nível, desconecte e reconecte.',
-  'gameDecelHintSettings': 'No modo de jogo, escolha Decel enquanto estiver conectado para moldar a saída do túnel. Se já estiver conectado, desconecte e reconecte após mudar de nível.',
-  'gameDecelInfoHighBody': 'Muito lento; ~500ms+; as habilidades podem parecer lentas; elástico possível.',
+  'gameDecelHintDrawer':
+      'Escolha Decel e conecte a VPN para limitar por nível; depois de mudar de nível, desconecte e reconecte.',
+  'gameDecelHintSettings':
+      'No modo de jogo, escolha Decel enquanto estiver conectado para moldar a saída do túnel. Se já estiver conectado, desconecte e reconecte após mudar de nível.',
+  'gameDecelInfoHighBody':
+      'Muito lento; ~500ms+; as habilidades podem parecer lentas; elástico possível.',
   'gameDecelInfoHighTitle': 'Alto',
-  'gameDecelInfoLowBody': 'Modelagem leve; latência um pouco maior que o normal, aproximadamente baixa em centenas de ms (varia de acordo com a rede).',
+  'gameDecelInfoLowBody':
+      'Modelagem leve; latência um pouco maior que o normal, aproximadamente baixa em centenas de ms (varia de acordo com a rede).',
   'gameDecelInfoLowTitle': 'Baixo',
-  'gameDecelInfoMediumBody': 'Claramente mais lento; aproximadamente centenas de ms, mais gagueira.',
+  'gameDecelInfoMediumBody':
+      'Claramente mais lento; aproximadamente centenas de ms, mais gagueira.',
   'gameDecelInfoMediumTitle': 'Médio',
   'gameDecelInfoOk': 'OK',
-  'gameDecelInfoUltraBody': 'Saída de túnel muito baixa; rede quase inutilizável – apenas para testes de novidades.',
+  'gameDecelInfoUltraBody':
+      'Saída de túnel muito baixa; rede quase inutilizável – apenas para testes de novidades.',
   'gameDecelInfoUltraTitle': 'Ultra',
   'gameDecelSectionTitle': 'Níveis de velocidade de desaceleração',
-  'gameDecelSnackbarTierSaved': 'Camada salva. Desconecte e reconecte a VPN para aplicar o novo modelador.',
+  'gameDecelSnackbarTierSaved':
+      'Camada salva. Desconecte e reconecte a VPN para aplicar o novo modelador.',
   'gameDecelTierHigh': 'Alto',
   'gameDecelTierLow': 'Baixo',
   'gameDecelTierMedium': 'Médio',
@@ -171,8 +188,10 @@ const Map<String, String> kAppStringsPtBr = {
   'gameModeDecelMode': 'Modo de desaceleração',
   'gameModeMenuTooltip': 'Menu',
   'gameModeSettingsTitle': 'Configurações do jogo',
-  'gameModeSnackbarAccelSaved': 'Aceleração salva. Entra em vigor na próxima conexão VPN.',
-  'gameModeSnackbarDecelSaved': 'Desaceleração salva. Desconecte e reconecte a VPN para que o túnel fique lento (a reconexão automática pode atingir o tempo limite).',
+  'gameModeSnackbarAccelSaved':
+      'Aceleração salva. Entra em vigor na próxima conexão VPN.',
+  'gameModeSnackbarDecelSaved':
+      'Desaceleração salva. Desconecte e reconecte a VPN para que o túnel fique lento (a reconexão automática pode atingir o tempo limite).',
   'geoCityHongKong': 'Hong Kong',
   'geoCityLosAngeles': 'Los Angeles',
   'geoCitySingapore': 'Singapore',
@@ -180,11 +199,13 @@ const Map<String, String> kAppStringsPtBr = {
   'homeNoNodesAvailable': 'No servers',
   'homeNoticeTitle': 'Notice',
   'homeServerTimeoutLabel': 'Timeout',
-  'homeTrafficUsageLowMessage': 'Less than 10% data remaining. Reset your allowance or stop using VPN.',
+  'homeTrafficUsageLowMessage':
+      'Less than 10% data remaining. Reset your allowance or stop using VPN.',
   'homeTrafficUsageTitle': 'Data usage',
   'homeWidgetTitle': 'Estado inicial',
   'latencyLabel': 'Latência',
-  'legalBody': 'O uso de VPN pode ser regulamentado em seu país. Certifique-se de compreender as leis locais antes de conectar.',
+  'legalBody':
+      'O uso de VPN pode ser regulamentado em seu país. Certifique-se de compreender as leis locais antes de conectar.',
   'legalDisclaimer': 'Isenção de responsabilidade',
   'legalDocsTitle': 'Termos e documentos legais',
   'legalNotice': 'Aviso Legal',
@@ -206,93 +227,148 @@ const Map<String, String> kAppStringsPtBr = {
   'packetLossLabel': 'Packet loss',
   'pleaseSelectServer': 'Selecione um servidor primeiro.',
   'privacyPolicyAgreeButton': 'Concordo',
-  'privacyPolicyAgreementRequired': 'Você precisa aceitar a política de privacidade para continuar usando o SmartDolphinVPN.',
-  'privacyPolicyAvailableInSettings': 'Você pode revisitar esta política a qualquer momento em Configurações > Política de Privacidade.',
-  'privacyPolicyCheckboxLabel': 'Li e concordo com a Política de Privacidade do SmartDolphinVPN.',
-  'privacyPolicyCheckboxReady': 'Obrigado por avaliar! Agora você pode marcar a caixa para continuar.',
+  'privacyPolicyAgreementRequired':
+      'Você precisa aceitar a política de privacidade para continuar usando o SmartDolphinVPN.',
+  'privacyPolicyAvailableInSettings':
+      'Você pode revisitar esta política a qualquer momento em Configurações > Política de Privacidade.',
+  'privacyPolicyCheckboxLabel':
+      'Li e concordo com a Política de Privacidade do SmartDolphinVPN.',
+  'privacyPolicyCheckboxReady':
+      'Obrigado por avaliar! Agora você pode marcar a caixa para continuar.',
   'privacyPolicyDialogTitle': 'política de Privacidade',
   'privacyPolicyFooter': 'Última atualização: março de 2025.',
-  'privacyPolicyScrollHint': 'Role até o final do documento para ativar a caixa de seleção do contrato.',
+  'privacyPolicyScrollHint':
+      'Role até o final do documento para ativar a caixa de seleção do contrato.',
   'privacyPolicyScrollHintAction': 'Precisa de uma dica?',
-  'privacyPolicyScrollWarning': 'Por favor, leia até o final antes de confirmar seu acordo.',
-  'privacyPolicySectionContactBody': 'Envie um e-mail para privacy@smartdolphin.top para perguntas sobre privacidade. Responderemos dentro de 30 dias.',
+  'privacyPolicyScrollWarning':
+      'Por favor, leia até o final antes de confirmar seu acordo.',
+  'privacyPolicySectionContactBody':
+      'Envie um e-mail para privacy@smartdolphin.top para perguntas sobre privacidade. Responderemos dentro de 30 dias.',
   'privacyPolicySectionContactTitle': 'Contate-nos',
-  'privacyPolicySectionDataIntro': 'O SmartDolphinVPN processa apenas os dados necessários para fornecer conectividade VPN e insights de desempenho. Alguns dados permanecem no seu dispositivo e outros são transmitidos quando você inicia um teste de velocidade.',
-  'privacyPolicySectionDataLocal': 'Dados de aplicativos locais (processados ​​no seu dispositivo)',
-  'privacyPolicySectionDataLocalItem1': 'Status da conexão VPN, temporizadores e contadores de largura de banda que orientam a interface.',
-  'privacyPolicySectionDataLocalItem2': 'Telemetria temporária, como taxa de transferência, latência e perda de pacotes enquanto uma sessão ou teste está em execução.',
-  'privacyPolicySectionDataLocalItem3': 'Sua preferência de idioma, alternância tátil e outras configurações salvas em armazenamento local seguro.',
-  'privacyPolicySectionDataMLab': 'Dados enviados ao Laboratório de Medição (M-Lab) durante testes de velocidade',
-  'privacyPolicySectionDataMLabItem1': 'Seu endereço IP público e a localização geral inferida desse IP.',
-  'privacyPolicySectionDataMLabItem2': 'Métricas de desempenho de teste de velocidade, incluindo taxa de transferência, latência (RTT), jitter e perda de pacotes.',
-  'privacyPolicySectionDataMLabItem3': 'Informações de seleção de servidor, como site do M-Lab, carimbos de data/hora e metadados de protocolo.',
-  'privacyPolicySectionDataMLabItem4': 'Diagnóstico de nível WebSocket necessário para concluir o teste ndt7.',
-  'privacyPolicySectionDataOptional': 'Diagnósticos opcionais que você pode compartilhar conosco',
-  'privacyPolicySectionDataOptionalItem1': 'Relatórios de falhas ou erros que você escolhe enviar quando algo quebra.',
-  'privacyPolicySectionDataOptionalItem2': 'Tickets de suporte ou e-mails que você inicia, que podem incluir detalhes de contato.',
+  'privacyPolicySectionDataIntro':
+      'O SmartDolphinVPN processa apenas os dados necessários para fornecer conectividade VPN e insights de desempenho. Alguns dados permanecem no seu dispositivo e outros são transmitidos quando você inicia um teste de velocidade.',
+  'privacyPolicySectionDataLocal':
+      'Dados de aplicativos locais (processados ​​no seu dispositivo)',
+  'privacyPolicySectionDataLocalItem1':
+      'Status da conexão VPN, temporizadores e contadores de largura de banda que orientam a interface.',
+  'privacyPolicySectionDataLocalItem2':
+      'Telemetria temporária, como taxa de transferência, latência e perda de pacotes enquanto uma sessão ou teste está em execução.',
+  'privacyPolicySectionDataLocalItem3':
+      'Sua preferência de idioma, alternância tátil e outras configurações salvas em armazenamento local seguro.',
+  'privacyPolicySectionDataMLab':
+      'Dados enviados ao Laboratório de Medição (M-Lab) durante testes de velocidade',
+  'privacyPolicySectionDataMLabItem1':
+      'Seu endereço IP público e a localização geral inferida desse IP.',
+  'privacyPolicySectionDataMLabItem2':
+      'Métricas de desempenho de teste de velocidade, incluindo taxa de transferência, latência (RTT), jitter e perda de pacotes.',
+  'privacyPolicySectionDataMLabItem3':
+      'Informações de seleção de servidor, como site do M-Lab, carimbos de data/hora e metadados de protocolo.',
+  'privacyPolicySectionDataMLabItem4':
+      'Diagnóstico de nível WebSocket necessário para concluir o teste ndt7.',
+  'privacyPolicySectionDataOptional':
+      'Diagnósticos opcionais que você pode compartilhar conosco',
+  'privacyPolicySectionDataOptionalItem1':
+      'Relatórios de falhas ou erros que você escolhe enviar quando algo quebra.',
+  'privacyPolicySectionDataOptionalItem2':
+      'Tickets de suporte ou e-mails que você inicia, que podem incluir detalhes de contato.',
   'privacyPolicySectionDataTitle': 'Quais dados o aplicativo processa',
-  'privacyPolicySectionPermissionsItem1': 'Acesso à rede: necessário para estabelecer túneis VPN e executar testes de velocidade.',
-  'privacyPolicySectionPermissionsItem2': 'Estado do Wi-Fi (opcional): usado localmente para mostrar a qual rede você está conectado.',
-  'privacyPolicySectionPermissionsItem3': 'Notificações (opcional): se ativadas, poderemos lembrá-lo quando uma sessão estiver prestes a expirar.',
+  'privacyPolicySectionPermissionsItem1':
+      'Acesso à rede: necessário para estabelecer túneis VPN e executar testes de velocidade.',
+  'privacyPolicySectionPermissionsItem2':
+      'Estado do Wi-Fi (opcional): usado localmente para mostrar a qual rede você está conectado.',
+  'privacyPolicySectionPermissionsItem3':
+      'Notificações (opcional): se ativadas, poderemos lembrá-lo quando uma sessão estiver prestes a expirar.',
   'privacyPolicySectionPermissionsTitle': 'Permissões do dispositivo',
-  'privacyPolicySectionPurposeIntro': 'Processamos os dados coletados para operar o SmartDolphinVPN de maneira responsável e para ajudá-lo a entender a qualidade da sua rede.',
-  'privacyPolicySectionPurposeItem1': 'Fornece e mantém sessões VPN seguras e seleção automática de servidores.',
-  'privacyPolicySectionPurposeItem2': 'Exiba métricas de desempenho e temporizadores de sessão em tempo real no aplicativo.',
-  'privacyPolicySectionPurposeItem3': 'Combine você com o servidor M-Lab disponível mais próximo para diagnósticos precisos.',
-  'privacyPolicySectionPurposeItem4': 'Investigue problemas de confiabilidade, evite abusos e melhore versões futuras.',
+  'privacyPolicySectionPurposeIntro':
+      'Processamos os dados coletados para operar o SmartDolphinVPN de maneira responsável e para ajudá-lo a entender a qualidade da sua rede.',
+  'privacyPolicySectionPurposeItem1':
+      'Fornece e mantém sessões VPN seguras e seleção automática de servidores.',
+  'privacyPolicySectionPurposeItem2':
+      'Exiba métricas de desempenho e temporizadores de sessão em tempo real no aplicativo.',
+  'privacyPolicySectionPurposeItem3':
+      'Combine você com o servidor M-Lab disponível mais próximo para diagnósticos precisos.',
+  'privacyPolicySectionPurposeItem4':
+      'Investigue problemas de confiabilidade, evite abusos e melhore versões futuras.',
   'privacyPolicySectionPurposeTitle': 'Como usamos esses dados',
-  'privacyPolicySectionRetentionBody': 'O SmartDolphinVPN mantém registros mínimos no seu dispositivo por até 7 dias para solucionar problemas de desempenho, a menos que você os exclua antes.',
+  'privacyPolicySectionRetentionBody':
+      'O SmartDolphinVPN mantém registros mínimos no seu dispositivo por até 7 dias para solucionar problemas de desempenho, a menos que você os exclua antes.',
   'privacyPolicySectionRetentionTitle': 'Retenção de dados',
   'privacyPolicySectionRightsCalifornia': 'Califórnia (CCPA/CPRA)',
-  'privacyPolicySectionRightsCaliforniaBody': 'Os residentes da Califórnia podem solicitar conhecer, acessar ou excluir informações pessoais que mantemos, excluindo os conjuntos de dados de pesquisa imutáveis ​​do M-Lab. Não vendemos nem compartilhamos informações pessoais para publicidade comportamental em vários contextos.',
+  'privacyPolicySectionRightsCaliforniaBody':
+      'Os residentes da Califórnia podem solicitar conhecer, acessar ou excluir informações pessoais que mantemos, excluindo os conjuntos de dados de pesquisa imutáveis ​​do M-Lab. Não vendemos nem compartilhamos informações pessoais para publicidade comportamental em vários contextos.',
   'privacyPolicySectionRightsChildren': 'Crianças',
-  'privacyPolicySectionRightsChildrenBody': 'O SmartDolphinVPN não é direcionado a crianças menores de 13 anos e não coletamos informações delas intencionalmente. Se você acredita que uma criança usou o SmartDolphinVPN, entre em contato conosco para que possamos excluir suas informações.',
-  'privacyPolicySectionRightsGDPR': 'Espaço Económico Europeu e Reino Unido (GDPR)',
-  'privacyPolicySectionRightsGDPRBody': 'O processamento é baseado no seu consentimento (GDPR Art. 6(1)(a)). Você pode solicitar acesso, correção, restrição, objeção ou portabilidade enviando um e-mail para privacy@smartdolphin.top. Você também pode apresentar uma reclamação à autoridade supervisora ​​​​local.',
-  'privacyPolicySectionRightsGlobal': 'Direitos globais disponíveis para todos os usuários',
-  'privacyPolicySectionRightsGlobalItem1': 'Solicite uma cópia das preferências ou diagnósticos que o SmartDolphinVPN armazena em seu dispositivo.',
-  'privacyPolicySectionRightsGlobalItem2': 'Exclua os registros armazenados localmente e redefina o aplicativo na tela Configurações.',
-  'privacyPolicySectionRightsGlobalItem3': 'Retire o consentimento evitando futuros testes de velocidade ou desinstalando o aplicativo.',
-  'privacyPolicySectionRightsGlobalItem4': 'Nomeie um representante para entrar em contato conosco em seu nome.',
-  'privacyPolicySectionRightsGlobalItem5': 'Contate-nos com dúvidas ou reclamações em privacidade@smartdolphin.top.',
+  'privacyPolicySectionRightsChildrenBody':
+      'O SmartDolphinVPN não é direcionado a crianças menores de 13 anos e não coletamos informações delas intencionalmente. Se você acredita que uma criança usou o SmartDolphinVPN, entre em contato conosco para que possamos excluir suas informações.',
+  'privacyPolicySectionRightsGDPR':
+      'Espaço Económico Europeu e Reino Unido (GDPR)',
+  'privacyPolicySectionRightsGDPRBody':
+      'O processamento é baseado no seu consentimento (GDPR Art. 6(1)(a)). Você pode solicitar acesso, correção, restrição, objeção ou portabilidade enviando um e-mail para privacy@smartdolphin.top. Você também pode apresentar uma reclamação à autoridade supervisora ​​​​local.',
+  'privacyPolicySectionRightsGlobal':
+      'Direitos globais disponíveis para todos os usuários',
+  'privacyPolicySectionRightsGlobalItem1':
+      'Solicite uma cópia das preferências ou diagnósticos que o SmartDolphinVPN armazena em seu dispositivo.',
+  'privacyPolicySectionRightsGlobalItem2':
+      'Exclua os registros armazenados localmente e redefina o aplicativo na tela Configurações.',
+  'privacyPolicySectionRightsGlobalItem3':
+      'Retire o consentimento evitando futuros testes de velocidade ou desinstalando o aplicativo.',
+  'privacyPolicySectionRightsGlobalItem4':
+      'Nomeie um representante para entrar em contato conosco em seu nome.',
+  'privacyPolicySectionRightsGlobalItem5':
+      'Contate-nos com dúvidas ou reclamações em privacidade@smartdolphin.top.',
   'privacyPolicySectionRightsIndia': 'Índia (DPDP 2023)',
-  'privacyPolicySectionRightsIndiaBody': 'Você pode retirar o consentimento a qualquer momento, solicitar a correção ou exclusão dos dados que armazenamos localmente e nomear um nomeado para exercer os direitos se estiver incapacitado. Entre em contato com nosso oficial de reclamações em grievance@smartdolphin.top.',
-  'privacyPolicySectionRightsIntro': 'Seus direitos de privacidade dependem de onde você mora, mas pretendemos apoiá-los sempre que possível.',
+  'privacyPolicySectionRightsIndiaBody':
+      'Você pode retirar o consentimento a qualquer momento, solicitar a correção ou exclusão dos dados que armazenamos localmente e nomear um nomeado para exercer os direitos se estiver incapacitado. Entre em contato com nosso oficial de reclamações em grievance@smartdolphin.top.',
+  'privacyPolicySectionRightsIntro':
+      'Seus direitos de privacidade dependem de onde você mora, mas pretendemos apoiá-los sempre que possível.',
   'privacyPolicySectionRightsTitle': 'Seus controles e direitos',
-  'privacyPolicySectionSecurityBody': 'SmartDolphinVPN criptografa todo o tráfego VPN e de teste de velocidade com TLS, armazena segredos com segurança e limita o acesso dos funcionários. Revisamos regularmente as salvaguardas e corrigimos vulnerabilidades.',
+  'privacyPolicySectionSecurityBody':
+      'SmartDolphinVPN criptografa todo o tráfego VPN e de teste de velocidade com TLS, armazena segredos com segurança e limita o acesso dos funcionários. Revisamos regularmente as salvaguardas e corrigimos vulnerabilidades.',
   'privacyPolicySectionSecurityTitle': 'Práticas de segurança',
-  'privacyPolicySectionSharingIntro': 'Não vendemos nem alugamos dados pessoais. O compartilhamento é limitado aos provedores de serviços que nos ajudam a executar o SmartDolphinVPN.',
+  'privacyPolicySectionSharingIntro':
+      'Não vendemos nem alugamos dados pessoais. O compartilhamento é limitado aos provedores de serviços que nos ajudam a executar o SmartDolphinVPN.',
   'privacyPolicySectionSharingMLab': 'Com Laboratório de Medição (M-Lab)',
-  'privacyPolicySectionSharingMLabBody': 'Quando você inicia um teste de velocidade, os dados listados acima são enviados diretamente para o M-Lab. Eles publicam todos os resultados dos testes, incluindo endereços IP, como parte de conjuntos de dados públicos de pesquisa que não podem ser removidos retroativamente.',
+  'privacyPolicySectionSharingMLabBody':
+      'Quando você inicia um teste de velocidade, os dados listados acima são enviados diretamente para o M-Lab. Eles publicam todos os resultados dos testes, incluindo endereços IP, como parte de conjuntos de dados públicos de pesquisa que não podem ser removidos retroativamente.',
   'privacyPolicySectionSharingTitle': 'Como compartilhamos informações',
   'privacyPolicySectionSharingVendors': 'Com fornecedores confiáveis',
-  'privacyPolicySectionSharingVendorsBody': 'Se você optar por relatar falhas ou entrar em contato com o suporte, poderemos usar processadores que estejam contratualmente obrigados a proteger essas informações e usá-las apenas para nos ajudar.',
-  'privacyPolicySectionTransfersBody': 'M-Lab opera servidores em todo o mundo. A execução de um teste pode encaminhar seus dados para outro país. Para transferências do EEE, do Reino Unido ou da Suíça, contamos com Cláusulas Contratuais Padrão ou salvaguardas equivalentes.',
+  'privacyPolicySectionSharingVendorsBody':
+      'Se você optar por relatar falhas ou entrar em contato com o suporte, poderemos usar processadores que estejam contratualmente obrigados a proteger essas informações e usá-las apenas para nos ajudar.',
+  'privacyPolicySectionTransfersBody':
+      'M-Lab opera servidores em todo o mundo. A execução de um teste pode encaminhar seus dados para outro país. Para transferências do EEE, do Reino Unido ou da Suíça, contamos com Cláusulas Contratuais Padrão ou salvaguardas equivalentes.',
   'privacyPolicySectionTransfersTitle': 'Transferências internacionais',
-  'privacyPolicySectionWhoWeAreBody': 'SmartDolphinVPN é desenvolvido por SmartDolphin Labs. Esta política explica como coletamos, usamos e compartilhamos informações quando você usa o aplicativo móvel SmartDolphinVPN no Android ou iOS, incluindo diagnósticos opcionais, como testes de velocidade.',
+  'privacyPolicySectionWhoWeAreBody':
+      'SmartDolphinVPN é desenvolvido por SmartDolphin Labs. Esta política explica como coletamos, usamos e compartilhamos informações quando você usa o aplicativo móvel SmartDolphinVPN no Android ou iOS, incluindo diagnósticos opcionais, como testes de velocidade.',
   'privacyPolicySectionWhoWeAreTitle': 'Quem somos e o que esta política cobre',
-  'privacyPolicySummaryBody': 'SmartDolphinVPN oferece sessões VPN seguras e testes de velocidade opcionais. Não exigimos contas nem armazenamos identificadores persistentes além do necessário para operar o aplicativo.',
+  'privacyPolicySummaryBody':
+      'SmartDolphinVPN oferece sessões VPN seguras e testes de velocidade opcionais. Não exigimos contas nem armazenamos identificadores persistentes além do necessário para operar o aplicativo.',
   'privacyPolicySummaryTitle': 'Resumo',
   'riskBanCount': 'Contagem de banimentos',
-  'riskExplain': 'Quando os banimentos e limites de taxa atingirem 30 no total, a conta ficará visivelmente lenta ou inutilizável por 3 dias.',
-  'riskExplainBan': '• Banimento: cada banimento manual do administrador conta como 1.',
-  'riskExplainLimit': '• Tarifa-limite: conta uma vez por mês enquanto limitado.',
+  'riskExplain':
+      'Quando os banimentos e limites de taxa atingirem 30 no total, a conta ficará visivelmente lenta ou inutilizável por 3 dias.',
+  'riskExplainBan':
+      '• Banimento: cada banimento manual do administrador conta como 1.',
+  'riskExplainLimit':
+      '• Tarifa-limite: conta uma vez por mês enquanto limitado.',
   'riskLimitCount': 'Contagem de limite de taxa',
-  'riskPenaltyActive': 'Você está em um período de penalidade de controle de risco. Siga as regras e tente novamente mais tarde.',
+  'riskPenaltyActive':
+      'Você está em um período de penalidade de controle de risco. Siga as regras e tente novamente mais tarde.',
   'riskReportButton': 'Solicitar desbloqueio',
   'riskReportFailed': 'Falha no relatório: {error}',
   'riskReported': 'Relatado. Aguardando revisão do administrador.',
   'riskReporting': 'Relatório…',
   'riskTitle': 'Controle de risco da conta',
   'riskTotalCount': 'Contagem total',
-  'riskUnblockMessage': 'Solicitação de desbloqueio: {violations} banimentos / {limits} limites de taxa. Por favor, revise.',
-  'runSpeedTest': 'Execute o teste de velocidade para avaliar a latência do túnel.',
+  'riskUnblockMessage':
+      'Solicitação de desbloqueio: {violations} banimentos / {limits} limites de taxa. Por favor, revise.',
+  'runSpeedTest':
+      'Execute o teste de velocidade para avaliar a latência do túnel.',
   'searchLocations': 'Pesquisar locais',
   'selectServerToBegin': 'Selecione um servidor para começar',
   'serverDownloadLabel': 'Download',
   'serverLatencyNoNodes': 'Sem nós',
   'serverLatencyTimeout': 'Tempo esgotado',
-  'serverListHintConnectFirst': 'Conecte-se primeiro a um servidor e depois toque em atualizar para carregar mais.',
+  'serverListHintConnectFirst':
+      'Conecte-se primeiro a um servidor e depois toque em atualizar para carregar mais.',
   'serverNoNodes': 'No nodes available',
   'serverPinnedHk': 'Hong Kong • SmartDolphin',
   'serverPinnedSg': 'Singapura • SmartDolphin',
@@ -308,7 +384,8 @@ const Map<String, String> kAppStringsPtBr = {
   'serverUploadLabel': 'Carregar',
   'session': 'Sessão',
   'sessionElapsedLabel': 'Running {duration}',
-  'sessionExpiredBody': 'Sua sessão de 60 minutos acabou. Assista a outro anúncio para se reconectar.',
+  'sessionExpiredBody':
+      'Sua sessão de 60 minutos acabou. Assista a outro anúncio para se reconectar.',
   'sessionExpiredTitle': 'Sessão expirada',
   'sessionRemaining': 'Sessão restante',
   'sessionUnitDay': '{n}d',
@@ -333,29 +410,35 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsAppearance': 'Aparência',
   'settingsAppearanceSubtitle': 'Modo claro ou escuro',
   'settingsAutoConnectOnLaunch': 'Conecte-se quando o aplicativo abrir',
-  'settingsAutoConnectOnLaunchSubtitle': 'Conecte-se automaticamente ao último servidor na inicialização',
+  'settingsAutoConnectOnLaunchSubtitle':
+      'Conecte-se automaticamente ao último servidor na inicialização',
   'settingsAutoRoute': 'Rotear automaticamente o tráfego do sistema',
   'settingsAutoRouteSubtitle': 'Roteie o tráfego do sistema por meio de VPN',
   'settingsAutoSwitch': 'Troca automática de servidor',
-  'settingsAutoSwitchSubtitle': 'Mude para o próximo local quando a qualidade cair.',
+  'settingsAutoSwitchSubtitle':
+      'Mude para o próximo local quando a qualidade cair.',
   'settingsBackup': 'Backup e restauração',
   'settingsBatteryExemption': 'Não mate em segundo plano',
   'settingsBatteryExemptionAlready': 'Já isento',
   'settingsBatteryExemptionSet': 'Definir',
-  'settingsBatteryExemptionSubtitle': 'Impede que o sistema feche a VPN quando a tela está desligada',
+  'settingsBatteryExemptionSubtitle':
+      'Impede que o sistema feche a VPN quando a tela está desligada',
   'settingsBatterySaver': 'Battery saver',
-  'settingsBatterySaverSubtitle': 'Reduce background polling; connection unaffected',
+  'settingsBatterySaverSubtitle':
+      'Reduce background polling; connection unaffected',
   'settingsBlockIpv6Dns': 'Block IPv6 DNS leaks',
   'settingsBlockIpv6DnsSubtitle': 'Stop IPv6 DNS requests outside the tunnel',
   'settingsBlockLocalDns': 'Block local DNS',
-  'settingsBlockLocalDnsSubtitle': 'Prevent system DNS from bypassing the tunnel',
+  'settingsBlockLocalDnsSubtitle':
+      'Prevent system DNS from bypassing the tunnel',
   'settingsBypassLan': 'Ignorar LAN',
   'settingsBypassLanSubtitle': 'O tráfego da LAN não passa pela VPN',
   'settingsClearLogs': 'Limpar registros',
   'settingsClearLogsDone': 'Registros apagados',
   'settingsClearLogsSubtitle': 'Exclua todos os arquivos de log',
   'settingsConnectOnBoot': 'Reconectar após reiniciar o dispositivo',
-  'settingsConnectOnBootSubtitle': 'Inicie e reconecte quando o telefone inicializar',
+  'settingsConnectOnBootSubtitle':
+      'Inicie e reconecte quando o telefone inicializar',
   'settingsConnection': 'Conexão',
   'settingsCreateBackup': 'Criar backup',
   'settingsDisableIpv6': 'Disable IPv6 while connected',
@@ -374,7 +457,8 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsForceDnsMapping': 'Forçar mapeamento de DNS',
   'settingsForceDnsMappingSubtitle': 'Forçar regras de mapeamento de DNS',
   'settingsForceDnsThroughTunnel': 'Force DNS through tunnel',
-  'settingsForceDnsThroughTunnelSubtitle': 'Route all DNS queries through the VPN tunnel',
+  'settingsForceDnsThroughTunnelSubtitle':
+      'Route all DNS queries through the VPN tunnel',
   'settingsForceResolve': 'Forçar a resolução de domínios',
   'settingsForceResolveSubtitle': 'Forçar a resolução de todos os domínios',
   'settingsH3Priority': 'Prioridade H3',
@@ -390,10 +474,13 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsLanguageSystem': 'Sistema',
   'settingsLegal': 'Jurídico e privacidade',
   'settingsLegalAgreementHint': 'Tap here to view this app\'s {agreements}.',
-  'settingsLegalLinkText': 'Veja os termos, a política de privacidade, as licenças de código aberto e o contrato do usuário',
+  'settingsLegalLinkText':
+      'Veja os termos, a política de privacidade, as licenças de código aberto e o contrato do usuário',
   'settingsLimitErrorEmpty': 'Por favor insira um valor maior que 0',
-  'settingsLimitErrorExceedsMax': 'Exceeds limit; choose a lower value (max 10000 GB)',
-  'settingsLimitErrorExceedsServer': 'Exceeds server allocation; choose a lower value',
+  'settingsLimitErrorExceedsMax':
+      'Exceeds limit; choose a lower value (max 10000 GB)',
+  'settingsLimitErrorExceedsServer':
+      'Exceeds server allocation; choose a lower value',
   'settingsLimitErrorInvalid': 'Número inválido',
   'settingsLimitErrorMinMb': 'Cannot be less than 1 MB',
   'settingsLimitHelper': 'Insira o limite mensal de dados em gigabytes.',
@@ -408,19 +495,24 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsLogPathCopied': 'Caminho copiado para a área de transferência',
   'settingsLogPathLoading': 'Carregando…',
   'settingsLogPathOpened': 'Abrindo o gerenciador de arquivos',
-  'settingsLogRetentionNote': 'System/error/account-sensitive logs are not controlled by this switch. When off, regular logs stay in memory only and clear when the app is killed. Logs near connection errors are uploaded automatically.',
+  'settingsLogRetentionNote':
+      'System/error/account-sensitive logs are not controlled by this switch. When off, regular logs stay in memory only and clear when the app is killed. Logs near connection errors are uploaded automatically.',
   'settingsLogSizeLimit': 'Limite de tamanho de registro',
-  'settingsLoginSubtitle': 'Sign in with your Smart Dolphin account to connect VPN',
+  'settingsLoginSubtitle':
+      'Sign in with your Smart Dolphin account to connect VPN',
   'settingsLoginTitle': 'Sign in',
   'settingsLogoutTitle': 'Sign out',
   'settingsNameServerPolicy': 'Política de servidor de nomes',
   'settingsNetworkQuality': 'Connection quality monitor',
-  'settingsNetworkQualitySubtitle': 'Suggest SmartStable tuning on weak networks (foreground only)',
+  'settingsNetworkQualitySubtitle':
+      'Suggest SmartStable tuning on weak networks (foreground only)',
   'settingsPendingVpnApproval': 'Registered — waiting for admin VPN access',
   'settingsPreciseSessionTimer': 'Show precise session time',
-  'settingsPreciseSessionTimerSubtitle': 'Display days, hours, minutes, seconds, and milliseconds',
+  'settingsPreciseSessionTimerSubtitle':
+      'Display days, hours, minutes, seconds, and milliseconds',
   'settingsPrivacyPolicy': 'política de Privacidade',
-  'settingsPrivacyPolicySubtitle': 'Entenda como o SmartDolphinVPN lida com diagnósticos e dados de rede.',
+  'settingsPrivacyPolicySubtitle':
+      'Entenda como o SmartDolphinVPN lida com diagnósticos e dados de rede.',
   'settingsProtocolComingSoon': 'Coming soon',
   'settingsProtocolHysteria2': 'Hysteria2',
   'settingsProtocolOpenVpn': 'OpenVPN',
@@ -435,11 +527,13 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsProxyShareSubtitle': 'Expose VPN as HTTP/SOCKS5 for other devices',
   'settingsRechargeTraffic': 'Add data quota',
   'settingsReconnectOnNetworkChange': 'Reconecte-se na mudança de rede',
-  'settingsReconnectOnNetworkChangeSubtitle': 'Reconectar automaticamente quando o WiFi/móvel muda',
+  'settingsReconnectOnNetworkChangeSubtitle':
+      'Reconectar automaticamente quando o WiFi/móvel muda',
   'settingsReferral': 'Programa de referência',
   'settingsReferralHint': 'Código de amigo',
   'settingsReferralSubtitle': 'Compartilhe seu código para ganhar tempo extra.',
-  'settingsRegisterSubtitle': 'Usernames are case-sensitive; passwords use ASCII letters and digits',
+  'settingsRegisterSubtitle':
+      'Usernames are case-sensitive; passwords use ASCII letters and digits',
   'settingsRegisterTitle': 'Sign up',
   'settingsRemoveLimit': 'Remover limite',
   'settingsResetUsage': 'Redefinir uso',
@@ -451,20 +545,27 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsRuleDomainsSubtitle': 'Os domínios nesta lista ignoram a VPN',
   'settingsRuleEditor': 'Editar regras',
   'settingsRuleEditorActiveRule': 'Active rule: {name}',
-  'settingsRuleEditorCompileErrorHint': 'Compile error. See the technical documentation and try again.',
+  'settingsRuleEditorCompileErrorHint':
+      'Compile error. See the technical documentation and try again.',
   'settingsRuleEditorCompiling': 'Compiling, please wait…',
-  'settingsRuleEditorEmptyHint': 'Rule mode requires at least one rule, or VPN cannot connect.',
+  'settingsRuleEditorEmptyHint':
+      'Rule mode requires at least one rule, or VPN cannot connect.',
   'settingsRuleEditorErrorClose': 'OK',
   'settingsRuleEditorErrorTitle': 'Compile error',
-  'settingsRuleEditorHint': 'Uma regra por linha. CIDR (1.0.1.0/24) ou domínio (baidu.com). As linhas que começam com # são comentários.',
+  'settingsRuleEditorHint':
+      'Uma regra por linha. CIDR (1.0.1.0/24) ou domínio (baidu.com). As linhas que começam com # são comentários.',
   'settingsRuleEditorHintBody': 'Write split-routing rules in SDRL. See the ',
   'settingsRuleEditorHintSuffix': ' if you need help.',
-  'settingsRuleEditorInputLimit': 'Input limit reached (1 MB). Compiled .sdrb must still be ≤ 128 KiB.',
+  'settingsRuleEditorInputLimit':
+      'Input limit reached (1 MB). Compiled .sdrb must still be ≤ 128 KiB.',
   'settingsRuleEditorInvalid': 'Invalid SDRL — fix errors before saving.',
-  'settingsRuleEditorLargeFileHint': 'Large input — full compile check runs on save.',
+  'settingsRuleEditorLargeFileHint':
+      'Large input — full compile check runs on save.',
   'settingsRuleEditorNoActiveRule': 'No saved rule yet (built-in default)',
-  'settingsRuleEditorPlaceholder': 'version 1.0;\\n\\nsettings { default: proxy; }\\n\\nprofile default {\\n  rule match domain.suffix "baidu.com" => reject;\\n  rule match ip.cidr 203.208.40.0/24 => reject;\\n  rule match domain.suffix "example.com" and port 443 => reject;\\n}',
-  'settingsRuleEditorReconnectHint': 'Rules updated. Disconnect and reconnect VPN to apply.',
+  'settingsRuleEditorPlaceholder':
+      'version 1.0;\\n\\nsettings { default: proxy; }\\n\\nprofile default {\\n  rule match domain.suffix "baidu.com" => reject;\\n  rule match ip.cidr 203.208.40.0/24 => reject;\\n  rule match domain.suffix "example.com" and port 443 => reject;\\n}',
+  'settingsRuleEditorReconnectHint':
+      'Rules updated. Disconnect and reconnect VPN to apply.',
   'settingsRuleEditorRuleCount': '{count} rules',
   'settingsRuleEditorSave': 'Save',
   'settingsRuleEditorSaveAsHint': 'e.g. baidu_block',
@@ -472,7 +573,8 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsRuleEditorSaveAsTitle': 'Save rule',
   'settingsRuleEditorSdrlHintLink': 'user manual',
   'settingsRuleEditorSdrlHintPrefix': 'Write rules in SDRL. See ',
-  'settingsRuleEditorUnsavedBody': 'Your rules are not saved. Switching mode will discard them.',
+  'settingsRuleEditorUnsavedBody':
+      'Your rules are not saved. Switching mode will discard them.',
   'settingsRuleEditorUnsavedDiscard': 'Discard',
   'settingsRuleEditorUnsavedStay': 'Keep editing',
   'settingsRuleEditorUnsavedTitle': 'Unsaved rules',
@@ -482,7 +584,8 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsRulePickerEmpty': 'No saved rules yet',
   'settingsRuleSource': 'Fonte da regra',
   'settingsRuleSourceBuiltIn': 'Integrado (direto da China)',
-  'settingsRuleSourceBuiltInSubtitle': 'IPs da China do GitHub, descanso via VPN',
+  'settingsRuleSourceBuiltInSubtitle':
+      'IPs da China do GitHub, descanso via VPN',
   'settingsRuleSourceCustom': 'Regras personalizadas',
   'settingsRuleSourceCustomSubtitle': 'Edite suas próprias regras',
   'settingsSectionAdvanced': 'Avançado',
@@ -519,11 +622,13 @@ const Map<String, String> kAppStringsPtBr = {
   'settingsTlsSniffOverrideSubtitle': 'Substituir alvo de detecção TLS',
   'settingsTrafficMode': 'Modo de trânsito',
   'settingsTrafficModeAuto': 'Smart split',
-  'settingsTrafficModeAutoHint': 'Built-in split: Baidu-related domains go direct; other traffic uses VPN (no extra virtual NIC).',
+  'settingsTrafficModeAutoHint':
+      'Built-in split: Baidu-related domains go direct; other traffic uses VPN (no extra virtual NIC).',
   'settingsTrafficModeGlobal': 'Global',
   'settingsTrafficModeGlobalSubtitle': 'Todo o tráfego através de VPN',
   'settingsTrafficModeRule': 'Baseado em regras',
-  'settingsTrafficModeRuleSubtitle': 'Domínios de banco de dados de regras vão direto, outros através de VPN',
+  'settingsTrafficModeRuleSubtitle':
+      'Domínios de banco de dados de regras vão direto, outros através de VPN',
   'settingsTransportProtocol': 'Transport protocol',
   'settingsTunnelMode': 'Tunnel mode',
   'settingsTunnelModeSystemProxy': 'System proxy — selected apps only',
@@ -537,12 +642,14 @@ const Map<String, String> kAppStringsPtBr = {
   'snackbarLimitSaved': 'Limite mensal atualizado.',
   'snackbarReferralAdded': 'Referência registrada! Recompensa adicionada.',
   'snackbarRestoreComplete': 'Preferências restauradas com sucesso.',
-  'snackbarRestoreFailed': 'Falha na restauração. Por favor, verifique o código.',
+  'snackbarRestoreFailed':
+      'Falha na restauração. Por favor, verifique o código.',
   'speedTestBenchmarking': 'Comparando seu túnel seguro…',
   'speedTestBenchmarkingLocal': 'Testando rede local (WiFi/celular)…',
   'speedTestCardComplete': 'Teste concluído',
   'speedTestCardDownloadLabel': 'Download',
-  'speedTestCardDownloadMeasure': 'Medindo a taxa de transferência de download…',
+  'speedTestCardDownloadMeasure':
+      'Medindo a taxa de transferência de download…',
   'speedTestCardDownloadWarmup': 'Aquecendo download…',
   'speedTestCardError': 'Falha no teste',
   'speedTestCardLatencyLabel': 'Latência',
@@ -561,35 +668,51 @@ const Map<String, String> kAppStringsPtBr = {
   'speedTestCompleted': 'Concluído',
   'speedTestCouldBeBetter': 'Poderia ser melhor',
   'speedTestDetecting': 'Detecção…',
-  'speedTestErrorGeneric': 'Não conseguimos terminar o teste. Por favor, tente novamente.',
-  'speedTestErrorIntro': 'Encontramos um obstáculo durante o teste. Revise os detalhes abaixo e tente novamente.',
+  'speedTestErrorGeneric':
+      'Não conseguimos terminar o teste. Por favor, tente novamente.',
+  'speedTestErrorIntro':
+      'Encontramos um obstáculo durante o teste. Revise os detalhes abaixo e tente novamente.',
   'speedTestErrorNoResult': 'Nenhum dado de medição foi retornado.',
-  'speedTestErrorTimeout': 'Tempo limite esgotado durante a medição. Por favor, tente novamente.',
+  'speedTestErrorTimeout':
+      'Tempo limite esgotado durante a medição. Por favor, tente novamente.',
   'speedTestErrorTls': 'A conexão segura falhou. Verifique sua rede.',
   'speedTestErrorToken': 'O token expirou. Por favor, tente o teste novamente.',
-  'speedTestIdleIntro': 'Meça download, upload e latência. Testa VPN quando conectado ou rede local quando não está.',
-  'speedTestInsightDownloadExcellent': 'A velocidade de download é excelente para streaming de ultra-alta definição.',
-  'speedTestInsightDownloadHd': 'A velocidade de download está pronta para streaming e navegação em HD suaves.',
-  'speedTestInsightDownloadStruggle': 'A velocidade de download pode ser difícil com streaming em HD e downloads grandes.',
+  'speedTestIdleIntro':
+      'Meça download, upload e latência. Testa VPN quando conectado ou rede local quando não está.',
+  'speedTestInsightDownloadExcellent':
+      'A velocidade de download é excelente para streaming de ultra-alta definição.',
+  'speedTestInsightDownloadHd':
+      'A velocidade de download está pronta para streaming e navegação em HD suaves.',
+  'speedTestInsightDownloadStruggle':
+      'A velocidade de download pode ser difícil com streaming em HD e downloads grandes.',
   'speedTestInsightIpDetected': 'IP público detectado.',
-  'speedTestInsightIpNotDetected': 'O IP público não pôde ser detectado durante esta execução.',
-  'speedTestInsightLatencyHigh': 'A alta latência pode causar atraso durante jogos ou videochamadas.',
-  'speedTestInsightLatencyLow': 'A latência é baixa o suficiente para jogos e chamadas responsivas.',
-  'speedTestInsightLatencyReasonable': 'A latência é razoável para navegação e streaming diários.',
-  'speedTestInsightUploadGood': 'A velocidade de upload suporta videochamadas nítidas e backups rápidos.',
-  'speedTestInsightUploadImpact': 'A velocidade de upload pode afetar a transmissão ao vivo ou os backups na nuvem.',
+  'speedTestInsightIpNotDetected':
+      'O IP público não pôde ser detectado durante esta execução.',
+  'speedTestInsightLatencyHigh':
+      'A alta latência pode causar atraso durante jogos ou videochamadas.',
+  'speedTestInsightLatencyLow':
+      'A latência é baixa o suficiente para jogos e chamadas responsivas.',
+  'speedTestInsightLatencyReasonable':
+      'A latência é razoável para navegação e streaming diários.',
+  'speedTestInsightUploadGood':
+      'A velocidade de upload suporta videochamadas nítidas e backups rápidos.',
+  'speedTestInsightUploadImpact':
+      'A velocidade de upload pode afetar a transmissão ao vivo ou os backups na nuvem.',
   'speedTestIpLabel': 'PI',
   'speedTestMeasuring': 'Medindo…',
   'speedTestNetworkScoreLabel': 'Network score: {score}/100',
-  'speedTestNoData': 'Não conseguimos capturar dados suficientes. Tente executar o teste novamente.',
+  'speedTestNoData':
+      'Não conseguimos capturar dados suficientes. Tente executar o teste novamente.',
   'speedTestNotAvailable': 'Não disponível',
   'speedTestPending': 'Pendente…',
   'speedTestPreparingLocal': 'Preparando teste de rede local…',
   'speedTestPreparingShort': 'Preparando…',
-  'speedTestPreparingTunnel': 'Preparando seu túnel seguro para uma leitura precisa…',
+  'speedTestPreparingTunnel':
+      'Preparando seu túnel seguro para uma leitura precisa…',
   'speedTestReady': 'Preparar',
   'speedTestResult': 'Resultado',
-  'speedTestResultIntro': 'Veja como foi o desempenho da sua conexão na última execução.',
+  'speedTestResultIntro':
+      'Veja como foi o desempenho da sua conexão na última execução.',
   'speedTestResultsOverview': 'Visão geral dos resultados',
   'speedTestRetryTest': 'Tentar novamente o teste',
   'speedTestRunAgain': 'Executar novamente',
@@ -626,7 +749,8 @@ const Map<String, String> kAppStringsPtBr = {
   'tutorialSession': 'O tempo da sua sessão é mostrado aqui.',
   'tutorialSkip': 'Pular',
   'tutorialSpeed': 'Meça velocidade, ping e IP.',
-  'tutorialWatchAd': 'Assista a um pequeno anúncio para desbloquear 60 minutos.',
+  'tutorialWatchAd':
+      'Assista a um pequeno anúncio para desbloquear 60 minutos.',
   'unlockSecureAccess': 'Desbloqueie o acesso seguro',
   'viewAll': 'Ver tudo',
   'watchAdToStart': 'Assista ao anúncio para começar',

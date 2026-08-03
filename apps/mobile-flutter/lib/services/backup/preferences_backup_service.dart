@@ -24,6 +24,7 @@ class PreferencesBackupService {
   }
 }
 
-final preferencesBackupServiceProvider = Provider<PreferencesBackupService>((ref) {
+final preferencesBackupServiceProvider =
+    Provider<PreferencesBackupService>((ref) {
   return PreferencesBackupService(ref);
 });

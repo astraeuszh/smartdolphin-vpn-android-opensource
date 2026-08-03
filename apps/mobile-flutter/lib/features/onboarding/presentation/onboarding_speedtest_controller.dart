@@ -64,11 +64,16 @@ class OnboardingSpeedTestState {
       progress: progress ?? this.progress,
       downloadMbps: downloadMbps ?? this.downloadMbps,
       uploadMbps: uploadMbps ?? this.uploadMbps,
-      latency: identical(latency, _sentinel) ? this.latency : latency as Duration?,
-      errorMessage:
-          identical(errorMessage, _sentinel) ? this.errorMessage : errorMessage as String?,
-      showUnavailableBanner: showUnavailableBanner ?? this.showUnavailableBanner,
-      summary: identical(summary, _sentinel) ? this.summary : summary as SpeedTestSummary?,
+      latency:
+          identical(latency, _sentinel) ? this.latency : latency as Duration?,
+      errorMessage: identical(errorMessage, _sentinel)
+          ? this.errorMessage
+          : errorMessage as String?,
+      showUnavailableBanner:
+          showUnavailableBanner ?? this.showUnavailableBanner,
+      summary: identical(summary, _sentinel)
+          ? this.summary
+          : summary as SpeedTestSummary?,
     );
   }
 
@@ -148,11 +153,13 @@ class OnboardingSpeedTestController
           );
           _activeTest?.complete();
         },
-        onCompleted: ({required downloadMbps, required uploadMbps, required pingMs}) {
+        onCompleted: (
+            {required downloadMbps, required uploadMbps, required pingMs}) {
           final summary = SpeedTestSummary(
             downloadMbps: downloadMbps,
             uploadMbps: uploadMbps,
-            latency: pingMs > 0 ? Duration(milliseconds: pingMs) : state.latency,
+            latency:
+                pingMs > 0 ? Duration(milliseconds: pingMs) : state.latency,
           );
           state = state.copyWith(
             status: OnboardingSpeedTestStatus.completed,
@@ -162,10 +169,14 @@ class OnboardingSpeedTestController
             summary: summary,
             errorMessage: null,
           );
-          _ref.read(onboardingControllerProvider.notifier).setSpeedTestSummary(summary);
+          _ref
+              .read(onboardingControllerProvider.notifier)
+              .setSpeedTestSummary(summary);
           _activeTest?.complete();
           unawaited(
-            _ref.read(analyticsServiceProvider).logEvent('speedtest_completed', {
+            _ref
+                .read(analyticsServiceProvider)
+                .logEvent('speedtest_completed', {
               'download_mbps': downloadMbps,
               'upload_mbps': uploadMbps,
               'latency_ms': summary.latency?.inMilliseconds,
@@ -203,8 +214,8 @@ class OnboardingSpeedTestController
   }
 }
 
-final onboardingSpeedTestControllerProvider =
-    StateNotifierProvider<OnboardingSpeedTestController, OnboardingSpeedTestState>((ref) {
+final onboardingSpeedTestControllerProvider = StateNotifierProvider<
+    OnboardingSpeedTestController, OnboardingSpeedTestState>((ref) {
   final service = ref.watch(speedTestServiceProvider);
   return OnboardingSpeedTestController(ref, service);
 });

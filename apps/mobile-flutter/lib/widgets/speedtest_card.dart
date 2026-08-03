@@ -116,7 +116,8 @@ class _SpeedTestCardState extends State<SpeedTestCard> {
           children: [
             Text(
               l10n.speedTestCardTitle,
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
@@ -137,7 +138,9 @@ class _SpeedTestCardState extends State<SpeedTestCard> {
             ] else ...[
               const SizedBox(height: 12),
               Text(
-                summary == null ? l10n.runSpeedTest : l10n.speedTestCardComplete,
+                summary == null
+                    ? l10n.runSpeedTest
+                    : l10n.speedTestCardComplete,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.6),
                 ),
@@ -214,11 +217,11 @@ class _MetricGrid extends StatelessWidget {
     final lossText =
         loss != null ? '${(loss * 100).toStringAsFixed(2)}%' : '--';
     final latency = summary.minRttMs;
-    final latencyText = latency != null
-        ? '${latency.toStringAsFixed(1)} ms'
-        : '--';
-    final serverLocation =
-        [summary.serverCity, summary.serverCountry].where((e) => e.trim().isNotEmpty).join(', ');
+    final latencyText =
+        latency != null ? '${latency.toStringAsFixed(1)} ms' : '--';
+    final serverLocation = [summary.serverCity, summary.serverCountry]
+        .where((e) => e.trim().isNotEmpty)
+        .join(', ');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -270,7 +273,8 @@ class _MetricRow extends StatelessWidget {
           ),
           Text(
             value,
-            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),

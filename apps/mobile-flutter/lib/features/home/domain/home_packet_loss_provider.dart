@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/lifecycle/app_foreground_provider.dart';
 import '../../../platform/android/network_stats_channel.dart';
 import '../../../services/vpn/clash_api_client.dart';
 import '../../servers/domain/server_providers.dart';
@@ -29,6 +30,10 @@ String? _activeNodeHost(Ref ref) {
 /// packet loss and was causing false bad readings on otherwise reachable nodes.
 final homePacketLossProvider =
     StreamProvider.autoDispose<double?>((ref) async* {
+  if (!ref.watch(appForegroundProvider)) {
+    yield null;
+    return;
+  }
   while (true) {
     final connected =
         ref.read(sessionControllerProvider).status == SessionStatus.connected;
