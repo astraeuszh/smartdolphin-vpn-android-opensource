@@ -1,24 +1,24 @@
 import 'dart:convert';
 
 /// Canonical node table and sing-box config generation for Dolphin-Core.
-const String kVlessUuid = 'e6171791-01a9-47b9-8371-e5c8a1b84ffb';
+const String kVlessUuid = '00000000-0000-4000-8000-000000000000';
 // sing-box expects the URL-safe Base64 form of the X25519 public key.
-const String kRealityPbk = '-vjbn6uLtRHtqFwM9GOX2tLJasW8F9fS5MsQdf9cfGo';
-const String kRealityShort = 'd4cd34b97f9631a6';
-const String kRealitySni = 'dl.google.com';
+const String kRealityPbk = 'REPLACE_WITH_REALITY_PUBLIC_KEY';
+const String kRealityShort = '0000000000000000';
+const String kRealitySni = 'example.com';
 const String kHy2Password = 'REDACTED_HYSTERIA_PASSWORD';
 const String kWgPrivateKey = 'REDACTED_WIREGUARD_PRIVATE_KEY';
 // WireGuard outbound peer_public_key is the server interface public key.
 // The corresponding client public key (derived from kWgPrivateKey) is
 // registered on the server as an allowed peer.
 const String kWgPeerPubKey = 'REDACTED_WIREGUARD_PEER_PUBLIC_KEY';
-const String kWgLocalAddr = '10.7.0.2/32';
+const String kWgLocalAddr = '10.0.0.2/32';
 
 const List<String> kNodeIpCidrs = [
-  '206.245.157.199/32',
-  '23.27.134.86/32',
-  '194.87.10.236/32',
-  '2605:e440:16::334/128',
+  '203.0.113.10/32',
+  '203.0.113.11/32',
+  '203.0.113.12/32',
+  '2001:db8::10/128',
 ];
 
 enum SdProtocol { reality, hysteria2, wireguard }

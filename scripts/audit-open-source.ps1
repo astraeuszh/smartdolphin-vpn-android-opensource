@@ -24,17 +24,18 @@ $files = Get-ChildItem -Path $root -Recurse -File -Force | Where-Object {
   $_.FullName -notmatch '\\(\.git|\.dart_tool|\.gradle|build|archive|artifacts|\.audit)\\' -and $extensions -contains $_.Extension
 }
 
-$findings = foreach ($file in $files) {
+$findings = [System.Collections.Generic.List[object]]::new()
+foreach ($file in $files) {
   foreach ($pattern in $patterns) {
     Select-String -LiteralPath $file.FullName -Pattern $pattern.Regex -AllMatches | ForEach-Object {
       foreach ($match in $_.Matches) {
-        [PSCustomObject]@{
+        [void]$findings.Add([PSCustomObject]@{
           Scope = 'working-tree'
           Rule = $pattern.Name
           Path = $file.FullName.Substring($root.Length + 1)
           Line = $_.LineNumber
           Match = $match.Value
-        }
+        })
       }
     }
   }
@@ -42,18 +43,26 @@ $findings = foreach ($file in $files) {
 
 if ($IncludeHistory) {
   $commits = git -C $root rev-list --all
+  $historyPatterns = @(
+    @{ Name = 'private-key'; Regex = 'BEGIN [A-Z ]*PRIVATE KEY' },
+    @{ Name = 'generic-secret-assignment'; Regex = 'api[_-]?key|secret|password|client[_-]?secret|access[_-]?token' },
+    @{ Name = 'bearer-token'; Regex = 'bearer[[:space:]]+[A-Za-z0-9._-]{16,}' },
+    @{ Name = 'ipv4-address'; Regex = '([0-9]{1,3}[.]){3}[0-9]{1,3}' },
+    @{ Name = 'public-url'; Regex = 'https?://[^[:space:]]+' },
+    @{ Name = 'project-identifier'; Regex = 'astraeus[.]smartdolphin|smartdolphinvpn|smartdolphin' }
+  )
   foreach ($commit in $commits) {
-    foreach ($pattern in $patterns) {
-      git -C $root grep -n -I -E $pattern.Regex $commit -- ':!*.lock' 2>$null | ForEach-Object {
+    foreach ($pattern in $historyPatterns) {
+      git -C $root grep -n -I -i -E $pattern.Regex $commit -- ':!*.lock' 2>$null | ForEach-Object {
         $parts = $_ -split ':', 4
         if ($parts.Count -eq 4) {
-          [PSCustomObject]@{
+          [void]$findings.Add([PSCustomObject]@{
             Scope = "history:$commit"
             Rule = $pattern.Name
             Path = $parts[1]
             Line = $parts[2]
             Match = $parts[3]
-          }
+          })
         }
       }
     }
